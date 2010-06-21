@@ -816,6 +816,7 @@ class OpInstanceCreate(OpCode):
     ("src_path", None, ht.TMaybeString),
     ("start", True, ht.TBool),
     ("wait_for_sync", True, ht.TBool),
+    ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
     ]
 
 

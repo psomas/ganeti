@@ -1387,6 +1387,7 @@ add_opts = [
   OS_OPT,
   FORCE_VARIANT_OPT,
   NO_INSTALL_OPT,
+  TAG_ADD_OPT,
   ]
 
 commands = {

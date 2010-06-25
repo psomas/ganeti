@@ -783,7 +783,7 @@ def _ExpandInstanceName(cfg, name):
 
 def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
                           memory, vcpus, nics, disk_template, disks,
-                          bep, hvp, hypervisor_name):
+                          bep, hvp, hypervisor_name, tags):
   """Builds instance related env variables for hooks
 
   This builds the hook environment from individual variables.
@@ -815,6 +815,8 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
   @param hvp: the hypervisor parameters for the instance
   @type hypervisor_name: string
   @param hypervisor_name: the hypervisor for the instance
+  @type tags: list
+  @param tags: list of instance tags as strings
   @rtype: dict
   @return: the hook environment for this instance
 
@@ -861,6 +863,11 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
     disk_count = 0
 
   env["INSTANCE_DISK_COUNT"] = disk_count
+
+  if not tags:
+    tags = []
+
+  env["INSTANCE_TAGS"] = " ".join(tags)
 
   for source, kind in [(bep, "BE"), (hvp, "HV")]:
     for key, value in source.items():
@@ -925,6 +932,7 @@ def _BuildInstanceHookEnvByObject(lu, instance, override=None):
     'bep': bep,
     'hvp': hvp,
     'hypervisor_name': instance.hypervisor,
+    'tags': instance.tags,
   }
   if override:
     args.update(override)
@@ -7517,6 +7525,7 @@ class LUInstanceCreate(LogicalUnit):
       bep=self.be_full,
       hvp=self.hv_full,
       hypervisor_name=self.op.hypervisor,
+      tags=self.op.tags,
     ))
 
     nl = ([self.cfg.GetMasterNode(), self.op.pnode] +

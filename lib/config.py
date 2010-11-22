@@ -49,6 +49,7 @@ from ganeti import serializer
 from ganeti import uidpool
 from ganeti import netutils
 from ganeti import runtime
+from ganeti import ippool
 
 
 _config_lock = locking.SharedLock("ConfigWriter")
@@ -148,8 +149,10 @@ class ConfigWriter:
     self._temporary_macs = TemporaryReservationManager()
     self._temporary_secrets = TemporaryReservationManager()
     self._temporary_lvs = TemporaryReservationManager()
+    self._temporary_ips = TemporaryReservationManager()
     self._all_rms = [self._temporary_ids, self._temporary_macs,
-                     self._temporary_secrets, self._temporary_lvs]
+                     self._temporary_secrets, self._temporary_lvs,
+                     self._temporary_ips]
     # Note: in order to prevent errors when resolving our name in
     # _DistributeConfig, we compute it here once and reuse it; it's
     # better to raise an error before starting to modify the config
@@ -213,6 +216,104 @@ class ConfigWriter:
       raise errors.ReservationError("mac already in use")
     else:
       self._temporary_macs.Reserve(ec_id, mac)
+
+  def _UnlockedCommitIp(self, link, address):
+    """Commit a reserved IP address to an IP pool.
+
+    The IP address is taken from the IP pool designated by link and marked
+    as reserved.
+
+    """
+    if link is None:
+      nicparams = self._config_data.cluster.nicparams[constants.VALUE_DEFAULT]
+      link = nicparams[constants.NIC_LINK]
+
+    if link not in self._config_data.cluster.networks or\
+      "4" not in self._config_data.cluster.networks[link]:
+      return False
+
+    netdict = self._config_data.cluster.networks[link]["4"]
+    network = ippool.IPv4Network.fromdict(netdict)
+    try:
+      addr = network.reserve(address)
+    except ippool.IPv4PoolError, err:
+      raise errors.ConfigurationError("Unable to reserve IP: %s", str(err))
+
+    self._config_data.cluster.networks[link]["4"] = network.todict()
+
+  @locking.ssynchronized(_config_lock)
+  def CommitIp(self, link, address):
+    """Commit a reserved IP to an IP pool
+
+    This is just a wrapper around _UnlockedCommitIp.
+
+    """
+    self._UnlockedCommitIp(self, link)
+    self._WriteConfig()
+
+  def _UnlockedReleaseIp(self, link, address):
+    """Give a specific IP address back to an IP pool.
+
+    The IP address is returned to the IP pool designated by pool_id and marked
+    as reserved.
+
+    """
+    if link is None:
+      nicparams = self._config_data.cluster.nicparams[constants.VALUE_DEFAULT]
+      link = nicparams[constants.NIC_LINK]
+
+    if link not in self._config_data.cluster.networks or\
+      "4" not in self._config_data.cluster.networks[link]:
+      return
+
+    netdict = self._config_data.cluster.networks[link]["4"]
+    network = ippool.IPv4Network.fromdict(netdict)
+    network.release(address)
+    self._config_data.cluster.networks[link]["4"] = network.todict()
+
+  @locking.ssynchronized(_config_lock)
+  def ReleaseIp(self, link, address):
+    """Give a specified IP address back to an IP pool.
+
+    This is just a wrapper around _UnlockedReleaseIp.
+
+    """
+    self._UnlockedReleaseIp(link, address)
+    self._WriteConfig()
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GenerateIp(self, link, ec_id):
+    """Find a free IPv4 address for an instance.
+
+    """
+    if link is None:
+      nicparams = self._config_data.cluster.nicparams[constants.VALUE_DEFAULT]
+      link = nicparams[constants.NIC_LINK]
+
+    if link not in self._config_data.cluster.networks or\
+      "4" not in self._config_data.cluster.networks[link]:
+      raise errors.OpPrereqError("No network defined on link %s exists" % link,
+                                 errors.ECODE_INVAL)
+    netdict = self._config_data.cluster.networks[link]["4"]
+    network = ippool.IPv4Network.fromdict(netdict)
+    return self._temporary_ips.Generate([], network.generate_free(), ec_id)
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def ReserveIp(self, link, address, ec_id):
+    """Reserve a given IPv4 address for use by an instance.
+
+    """
+    if link is None:
+      nicparams = self._config_data.cluster.nicparams[constants.VALUE_DEFAULT]
+      link = nicparams[constants.NIC_LINK]
+
+    if link not in self._config_data.cluster.networks or\
+      "4" not in self._config_data.cluster.networks[link]:
+      return
+    netdict = self._config_data.cluster.networks[link]["4"]
+    network = ippool.IPv4Network.fromdict(netdict)
+    network.reserve(address)
+    return self._temporary_ips.Reserve(address, ec_id)
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
@@ -1087,6 +1188,9 @@ class ConfigWriter:
         raise errors.ConfigurationError("Cannot add instance %s:"
                                         " MAC address '%s' already in use." %
                                         (instance.name, nic.mac))
+      # Commit all IP addresses to the respective address pools
+      self._UnlockedCommitIp(nic.nicparams.get(constants.NIC_LINK, None),
+                             nic.ip)
 
     self._EnsureUUID(instance, ec_id)
 
@@ -1141,6 +1245,10 @@ class ConfigWriter:
     """
     if instance_name not in self._config_data.instances:
       raise errors.ConfigurationError("Unknown instance '%s'" % instance_name)
+    for nic in self._config_data.instances[instance_name].nics:
+      # Return all IP addresses to the respective address pools
+      self._UnlockedReleaseIp(nic.nicparams.get(constants.NIC_LINK, None),
+                              nic.ip)
     del self._config_data.instances[instance_name]
     self._config_data.cluster.serial_no += 1
     self._WriteConfig()

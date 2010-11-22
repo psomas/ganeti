@@ -1087,6 +1087,7 @@ class Cluster(TaggableObject):
     "blacklisted_os",
     "primary_ip_family",
     "prealloc_wipe_disks",
+    "networks",
     ] + _TIMESTAMPS + _UUID
 
   def UpgradeConfig(self):
@@ -1172,6 +1173,10 @@ class Cluster(TaggableObject):
     # shared_file_storage_dir added before 2.5
     if self.shared_file_storage_dir is None:
       self.shared_file_storage_dir = ""
+
+    # Network management
+    if self.networks is None:
+      self.networks = {}
 
   def ToDict(self):
     """Custom function for cluster.

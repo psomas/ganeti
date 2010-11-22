@@ -7720,45 +7720,6 @@ class LUInstanceCreate(LogicalUnit):
       if nic_mode is None:
         nic_mode = cluster.nicparams[constants.PP_DEFAULT][constants.NIC_MODE]
 
-      # in routed mode, for the first nic, the default ip is 'auto'
-      if nic_mode == constants.NIC_MODE_ROUTED and idx == 0:
-        default_ip_mode = constants.VALUE_AUTO
-      else:
-        default_ip_mode = constants.VALUE_NONE
-
-      # ip validity checks
-      ip = nic.get("ip", default_ip_mode)
-      if ip is None or ip.lower() == constants.VALUE_NONE:
-        nic_ip = None
-      elif ip.lower() == constants.VALUE_AUTO:
-        if not self.op.name_check:
-          raise errors.OpPrereqError("IP address set to auto but name checks"
-                                     " have been skipped",
-                                     errors.ECODE_INVAL)
-        nic_ip = self.hostname1.ip
-      else:
-        if not netutils.IPAddress.IsValid(ip):
-          raise errors.OpPrereqError("Invalid IP address '%s'" % ip,
-                                     errors.ECODE_INVAL)
-        nic_ip = ip
-
-      # TODO: check the ip address for uniqueness
-      if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip:
-        raise errors.OpPrereqError("Routed nic mode requires an ip address",
-                                   errors.ECODE_INVAL)
-
-      # MAC address verification
-      mac = nic.get("mac", constants.VALUE_AUTO)
-      if mac not in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
-        mac = utils.NormalizeAndValidateMac(mac)
-
-        try:
-          self.cfg.ReserveMAC(mac, self.proc.GetECId())
-        except errors.ReservationError:
-          raise errors.OpPrereqError("MAC address %s already in use"
-                                     " in cluster" % mac,
-                                     errors.ECODE_NOTUNIQUE)
-
       # bridge verification
       bridge = nic.get("bridge", None)
       link = nic.get("link", None)
@@ -7776,6 +7737,60 @@ class LUInstanceCreate(LogicalUnit):
         nicparams[constants.NIC_MODE] = nic_mode_req
       if link:
         nicparams[constants.NIC_LINK] = link
+
+      # in routed mode, for the first nic, the default ip is 'auto'
+      if nic_mode == constants.NIC_MODE_ROUTED and idx == 0:
+        default_ip_mode = constants.VALUE_AUTO
+      else:
+        default_ip_mode = constants.VALUE_NONE
+
+      # ip validity checks
+      ip = nic.get("ip", default_ip_mode)
+      if ip is None or ip.lower() == constants.VALUE_NONE:
+        nic_ip = None
+      elif ip.lower() == constants.VALUE_AUTO:
+        if not self.op.name_check:
+          raise errors.OpPrereqError("IP address set to auto but name checks"
+                                     " have been skipped",
+                                     errors.ECODE_INVAL)
+        nic_ip = self.hostname1.ip
+        try:
+          self.cfg.ReserveIp(link, nic_ip, self.proc.GetECId())
+        except errors.ReservationError:
+          raise errors.OpPrereqError("IP address %s already in use"
+                                     " in cluster" % nic_ip,
+                                     errors.ECODE_NOTUNIQUE)
+      elif ip.lower() == constants.NIC_IP_POOL:
+        nic_ip = self.cfg.GenerateIp(link, self.proc.GetECId())
+        logging.info("Chose ip %s from pool %s" % (nic_ip, link))
+      else:
+        if not netutils.IPAddress.IsValid(ip):
+          raise errors.OpPrereqError("Invalid IP address '%s'" % ip,
+                                     errors.ECODE_INVAL)
+        nic_ip = ip
+        try:
+          self.cfg.ReserveIp(link, nic_ip, self.proc.GetECId())
+        except errors.ReservationError:
+          raise errors.OpPrereqError("IP address %s already in use"
+                                     " in cluster" % nic_ip,
+                                     errors.ECODE_NOTUNIQUE)
+
+      # TODO: check the ip address for uniqueness
+      if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip:
+        raise errors.OpPrereqError("Routed nic mode requires an ip address",
+                                   errors.ECODE_INVAL)
+
+      # MAC address verification
+      mac = nic.get("mac", constants.VALUE_AUTO)
+      if mac not in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
+        mac = utils.NormalizeAndValidateMac(mac)
+
+        try:
+          self.cfg.ReserveMAC(mac, self.proc.GetECId())
+        except errors.ReservationError:
+          raise errors.OpPrereqError("MAC address %s already in use"
+                                     " in cluster" % mac,
+                                     errors.ECODE_NOTUNIQUE)
 
       check_params = cluster.SimpleFillNIC(nicparams)
       objects.NIC.CheckParameterSyntax(check_params)

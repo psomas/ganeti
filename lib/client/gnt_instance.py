@@ -1285,10 +1285,12 @@ def SetInstanceParams(opts, args):
     except (TypeError, ValueError):
       pass
     if disk_op == constants.DDM_ADD:
-      if 'size' not in disk_dict:
-        raise errors.OpPrereqError("Missing required parameter 'size'",
+      if ("size" not in disk_dict and "adopt" not in disk_dict) or \
+         ("size" in disk_dict and "adopt" in disk_dict):
+        raise errors.OpPrereqError("Please specify either size or adopt",
                                    errors.ECODE_INVAL)
-      disk_dict['size'] = utils.ParseUnit(disk_dict['size'])
+      if "size" in disk_dict:
+        disk_dict['size'] = utils.ParseUnit(disk_dict['size'])
 
   if (opts.disk_template and
       opts.disk_template in constants.DTS_INT_MIRROR and

@@ -9258,6 +9258,8 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.hvparams:
       _CheckGlobalHvParams(self.op.hvparams)
 
+    instance = self.instance = self.cfg.GetInstanceInfo(self.op.instance_name)
+
     # Disk validation
     disk_addremove = 0
     for disk_op, disk_dict in self.op.disks:
@@ -9275,20 +9277,34 @@ class LUInstanceSetParams(LogicalUnit):
           raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
 
       if disk_op == constants.DDM_ADD:
+        if "adopt" in disk_dict:
+          has_adopt = True
+        else:
+          has_adopt = False
+
+        if has_adopt:
+          if instance.disk_template not in constants.DTS_MAY_ADOPT:
+            raise errors.OpPrereqError("Disk adoption is not supported for the"
+                                       " '%s' disk template" %
+                                       instance.disk_template,
+                                       errors.ECODE_INVAL)
+        self.adopt_disks = has_adopt
+
         mode = disk_dict.setdefault('mode', constants.DISK_RDWR)
         if mode not in constants.DISK_ACCESS_SET:
           raise errors.OpPrereqError("Invalid disk access mode '%s'" % mode,
                                      errors.ECODE_INVAL)
-        size = disk_dict.get('size', None)
-        if size is None:
-          raise errors.OpPrereqError("Required disk parameter size missing",
-                                     errors.ECODE_INVAL)
-        try:
-          size = int(size)
-        except (TypeError, ValueError), err:
-          raise errors.OpPrereqError("Invalid disk size parameter: %s" %
-                                     str(err), errors.ECODE_INVAL)
-        disk_dict['size'] = size
+        if not has_adopt:
+          size = disk_dict.get('size', None)
+          if size is None:
+            raise errors.OpPrereqError("Required disk parameter size missing",
+                                       errors.ECODE_INVAL)
+          try:
+            size = int(size)
+          except (TypeError, ValueError), err:
+            raise errors.OpPrereqError("Invalid disk size parameter: %s" %
+                                       str(err), errors.ECODE_INVAL)
+          disk_dict['size'] = size
       else:
         # modification of disk
         if 'size' in disk_dict:
@@ -9438,7 +9454,7 @@ class LUInstanceSetParams(LogicalUnit):
     """
     # checking the new params on the primary/secondary nodes
 
-    instance = self.instance = self.cfg.GetInstanceInfo(self.op.instance_name)
+    instance = self.instance
     cluster = self.cluster = self.cfg.GetClusterInfo()
     assert self.instance is not None, \
       "Cannot retrieve locked instance %s" % self.op.instance_name
@@ -9648,7 +9664,7 @@ class LUInstanceSetParams(LogicalUnit):
       raise errors.OpPrereqError("Disk operations not supported for"
                                  " diskless instances",
                                  errors.ECODE_INVAL)
-    for disk_op, _ in self.op.disks:
+    for disk_op, disk_dict in self.op.disks:
       if disk_op == constants.DDM_REMOVE:
         if len(instance.disks) == 1:
           raise errors.OpPrereqError("Cannot remove the last disk of"
@@ -9667,6 +9683,53 @@ class LUInstanceSetParams(LogicalUnit):
                                      " are 0 to %d" %
                                      (disk_op, len(instance.disks)),
                                      errors.ECODE_INVAL)
+
+      if disk_op == constants.DDM_ADD and self.adopt_disks:
+        if instance.disk_template == constants.DT_PLAIN:
+          # Check the adoption data
+          vg = disk_dict.get("vg", self.cfg.GetVGName())
+          lv_name = vg + "/" + disk_dict["adopt"]
+          try:
+            # FIXME: lv_name here is "vg/lv" need to ensure that other calls
+            # to ReserveLV uses the same syntax
+            self.cfg.ReserveLV(lv_name, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("LV named %s used by another instance" %
+                                       lv_name, errors.ECODE_NOTUNIQUE)
+
+          vg_names = self.rpc.call_vg_list([instance.primary_node])
+          vg_names = vg_names[instance.primary_node]
+          vg_names.Raise("Cannot get VG information from node %s" %
+                         instance.primary_node)
+
+          node_lvs = self.rpc.call_lv_list([instance.primary_node],
+                                           vg_names.payload.keys()
+                                          )[instance.primary_node]
+          node_lvs.Raise("Cannot get LV information from node %s" %
+                         instance.primary_node)
+          node_lvs = node_lvs.payload
+
+          if lv_name not in node_lvs:
+            raise errors.OpPrereqError("Logical volume: %s not present "
+                                       " on node %s" %
+                                       (lv_name, instance.primary_node),
+                                       errors.ECODE_INVAL)
+          if node_lvs[lv_name][2]:
+            raise errors.OpPrereqError("Logical volume %s is online, cannot"
+                                       " adopt." % lv_name,
+                                       errors.ECODE_STATE)
+          # update the size of disk based on what is found
+          disk_dict["size"] = int(float(node_lvs[lv_name][0]))
+
+        elif instance.disk_template == constants.DT_BLOCK:
+          disk = disk_dict["adopt"]
+          node_disks = self.rpc.call_bdev_sizes([instance.primary_node],
+                                                [disk])[instance.primary_node]
+          node_disks = node_disks.payload
+          if disk not in node_disks:
+            raise errors.OpPrereqError("Missing block device %s" % disk,
+                                       errors.ECODE_INVAL)
+          disk_dict["size"] = int(float(node_disks[disk]))
 
     return
 
@@ -9805,21 +9868,35 @@ class LUInstanceSetParams(LogicalUnit):
         instance.disks.append(new_disk)
         info = _GetInstanceInfoText(instance)
 
-        logging.info("Creating volume %s for instance %s",
-                     new_disk.iv_name, instance.name)
-        # Note: this needs to be kept in sync with _CreateDisks
-        #HARDCODE
-        for node in instance.all_nodes:
-          f_create = node == instance.primary_node
-          try:
-            _CreateBlockDev(self, node, instance, new_disk,
-                            f_create, info, f_create)
-          except errors.OpExecError, err:
-            self.LogWarning("Failed to create volume %s (%s) on"
-                            " node %s: %s",
-                            new_disk.iv_name, new_disk, node, err)
-        result.append(("disk/%d" % disk_idx_base, "add:size=%s,mode=%s" %
-                       (new_disk.size, new_disk.mode)))
+        if self.adopt_disks:
+          if instance.disk_template == constants.DT_PLAIN:
+            # rename LV to the a newly-generated name; we need to construct
+            # 'fake' LV disk with the old data, plus the new unique_id
+            tmp_disk = objects.Disk.FromDict(disk_dict)
+            rename_to = tmp_disk.logical_id
+            tmp_disk.logical_id = (tmp_disk.logical_id[0], disk_dict["adopt"])
+            self.cfg.SetDiskID(tmp_disk, instance.primary_node)
+            result = self.rpc.call_blockdev_rename(instance.primary_node,
+                                                   [(tmp_disk, rename_to)])
+            result.Raise("Failed to rename adopted LV")
+          result.append(("disk/%d" % disk_idx_base, "add:adopt=%s,mode=%s" %
+                         (disk_dict["adopt"], new_disk.mode)))
+        else:
+          logging.info("Creating volume %s for instance %s",
+                       new_disk.iv_name, instance.name)
+          # Note: this needs to be kept in sync with _CreateDisks
+          #HARDCODE
+          for node in instance.all_nodes:
+            f_create = node == instance.primary_node
+            try:
+              _CreateBlockDev(self, node, instance, new_disk,
+                              f_create, info, f_create)
+            except errors.OpExecError, err:
+              self.LogWarning("Failed to create volume %s (%s) on"
+                              " node %s: %s",
+                              new_disk.iv_name, new_disk, node, err)
+          result.append(("disk/%d" % disk_idx_base, "add:size=%s,mode=%s" %
+                         (new_disk.size, new_disk.mode)))
       else:
         # change a given disk
         instance.disks[disk_op].mode = disk_dict['mode']

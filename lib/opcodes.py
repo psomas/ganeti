@@ -117,6 +117,20 @@ def RequireFileStorage():
                                errors.ECODE_INVAL)
 
 
+def RequireSharedFileStorage():
+  """Checks that shared file storage is enabled.
+
+  While it doesn't really fit into this module, L{utils} was deemed too large
+  of a dependency to be imported for just one or two functions.
+
+  @raise errors.OpPrereqError: when shared file storage is disabled
+
+  """
+  if not constants.ENABLE_SHARED_FILE_STORAGE:
+    raise errors.OpPrereqError("Shared file storage disabled at"
+                               " configure time", errors.ECODE_INVAL)
+
+
 def _CheckDiskTemplate(template):
   """Ensure a given disk template is valid.
 
@@ -128,6 +142,8 @@ def _CheckDiskTemplate(template):
     raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
   if template == constants.DT_FILE:
     RequireFileStorage()
+  elif template == constants.DT_SHARED_FILE:
+    RequireSharedFileStorage()
   return True
 
 

@@ -751,6 +751,7 @@ class OpNodeMigrate(OpCode):
     _PNodeName,
     _PMigrationMode,
     _PMigrationLive,
+    ("iallocator", None, ht.TMaybeString),
     ]
 
 
@@ -896,6 +897,8 @@ class OpInstanceFailover(OpCode):
     _PInstanceName,
     _PShutdownTimeout,
     ("ignore_consistency", False, ht.TBool),
+    ("iallocator", None, ht.TMaybeString),
+    ("target_node", None, ht.TMaybeString),
     ]
 
 
@@ -915,6 +918,8 @@ class OpInstanceMigrate(OpCode):
     _PMigrationMode,
     _PMigrationLive,
     ("cleanup", False, ht.TBool),
+    ("iallocator", None, ht.TMaybeString),
+    ("target_node", None, ht.TMaybeString),
     ]
 
 

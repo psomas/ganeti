@@ -11438,7 +11438,6 @@ class IAllocator(object):
         "vcpus": beinfo[constants.BE_VCPUS],
         "memory": beinfo[constants.BE_MEMORY],
         "os": iinfo.os,
-        "nodes": [iinfo.primary_node] + list(iinfo.secondary_nodes),
         "nics": nic_data,
         "disks": [{"size": dsk.size, "mode": dsk.mode} for dsk in iinfo.disks],
         "disk_template": iinfo.disk_template,
@@ -11446,6 +11445,13 @@ class IAllocator(object):
         }
       pir["disk_space_total"] = _ComputeDiskSize(iinfo.disk_template,
                                                  pir["disks"])
+      # hail's relocation mode does not work without secondaries,
+      # as it exclusively tries replace-secondary moves. So, let's trick hail
+      # by specifying our primary and secondary node to be the same.
+      if iinfo.disk_template in constants.DTS_EXT_MIRROR:
+        pir["nodes"] = [iinfo.primary_node, iinfo.primary_node]
+      else:
+        pir["nodes"] = [iinfo.primary_node] + list(iinfo.secondary_nodes)
       instance_data[iinfo.name] = pir
 
     return instance_data

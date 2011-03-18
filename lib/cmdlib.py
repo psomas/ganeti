@@ -5905,8 +5905,7 @@ class LUInstanceMigrate(LogicalUnit):
     self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_REPLACE
 
     self._migrater = TLMigrateInstance(self, self.op.instance_name,
-                                       self.op.cleanup, self.op.iallocator,
-                                       self.op.target_node)
+                                       self.op.cleanup)
     self.tasklets = [self._migrater]
 
   def DeclareLocks(self, level):
@@ -6152,8 +6151,7 @@ class LUNodeMigrate(LogicalUnit):
       logging.debug("Migrating instance %s", inst.name)
       names.append(inst.name)
 
-      tasklets.append(TLMigrateInstance(self, inst.name, False,
-                                        self.op.iallocator, None))
+      tasklets.append(TLMigrateInstance(self, inst.name, False))
 
       if inst.disk_template in constants.DTS_EXT_MIRROR:
         # We need to lock all nodes, as the iallocator will choose the
@@ -6199,8 +6197,7 @@ class TLMigrateInstance(Tasklet):
       this variable is initalized only after CheckPrereq has run
 
   """
-  def __init__(self, lu, instance_name, cleanup,
-               iallocator=None, target_node=None):
+  def __init__(self, lu, instance_name, cleanup):
     """Initializes this class.
 
     """
@@ -6210,8 +6207,6 @@ class TLMigrateInstance(Tasklet):
     self.instance_name = instance_name
     self.cleanup = cleanup
     self.live = False # will be overridden later
-    self.iallocator = iallocator
-    self.target_node = target_node
 
   def CheckPrereq(self):
     """Check prerequisites.
@@ -6232,16 +6227,18 @@ class TLMigrateInstance(Tasklet):
     if instance.disk_template in constants.DTS_EXT_MIRROR:
       _CheckIAllocatorOrNode(self.lu, "iallocator", "target_node")
 
-      if self.iallocator:
+      if self.lu.op.iallocator:
         self._RunAllocator()
+      else:
+        # We set set self.target_node as it is required by
+        # BuildHooksEnv
+        self.target_node = self.lu.op.target_node
 
-      # self.target_node is already populated, either directly or by the
-      # iallocator run
       target_node = self.target_node
 
       if len(self.lu.tasklets) == 1:
         # It is safe to remove locks only when we're the only tasklet in the LU
-        nodes_keep = [instance.primary_node, self.target_node]
+        nodes_keep = [instance.primary_node, target_node]
         nodes_rel = [node for node in self.lu.acquired_locks[locking.LEVEL_NODE]
                      if node not in nodes_keep]
         self.lu.context.glm.release(locking.LEVEL_NODE, nodes_rel)
@@ -6292,21 +6289,21 @@ class TLMigrateInstance(Tasklet):
                                     self.instance.primary_node],
                      )
 
-    ial.Run(self.iallocator)
+    ial.Run(self.lu.op.iallocator)
 
     if not ial.success:
       raise errors.OpPrereqError("Can't compute nodes using"
                                  " iallocator '%s': %s" %
-                                 (self.iallocator, ial.info),
+                                 (self.lu.op.iallocator, ial.info),
                                  errors.ECODE_NORES)
     if len(ial.result) != ial.required_nodes:
       raise errors.OpPrereqError("iallocator '%s' returned invalid number"
                                  " of nodes (%s), required %s" %
-                                 (self.iallocator, len(ial.result),
+                                 (self.lu.op.iallocator, len(ial.result),
                                   ial.required_nodes), errors.ECODE_FAULT)
     self.target_node = ial.result[0]
     self.lu.LogInfo("Selected nodes for instance %s via iallocator %s: %s",
-                 self.instance_name, self.iallocator,
+                 self.instance_name, self.lu.op.iallocator,
                  utils.CommaJoin(ial.result))
 
     if self.lu.op.live is not None and self.lu.op.mode is not None:

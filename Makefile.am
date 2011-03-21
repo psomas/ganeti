@@ -14,6 +14,7 @@ SHELL=/bin/bash
 
 ACLOCAL_AMFLAGS = -I autotools
 BUILD_BASH_COMPLETION = $(top_srcdir)/autotools/build-bash-completion
+BUILD_ZSH_COMPLETION = $(top_srcdir)/autotools/build-zsh-completion
 RUN_IN_TEMPDIR = $(top_srcdir)/autotools/run-in-tempdir
 CHECK_PYTHON_CODE = $(top_srcdir)/autotools/check-python-code
 CHECK_MAN = $(top_srcdir)/autotools/check-man
@@ -101,6 +102,7 @@ CLEANFILES = \
 	daemons/ganeti-cleaner \
 	devel/upload \
 	doc/examples/bash_completion \
+	doc/examples/zsh_completion \
 	doc/examples/ganeti.initd \
 	doc/examples/ganeti-kvm-poweroff.initd \
 	doc/examples/ganeti.cron \
@@ -300,6 +302,7 @@ noinst_DATA = \
 	devel/upload \
 	doc/html \
 	doc/examples/bash_completion \
+	doc/examples/zsh_completion \
 	doc/examples/ganeti.cron \
 	doc/examples/ganeti.initd \
 	doc/examples/ganeti-kvm-poweroff.initd \
@@ -380,6 +383,7 @@ EXTRA_DIST = \
 	epydoc.conf.in \
 	pylintrc \
 	autotools/build-bash-completion \
+	autotools/build-zsh-completion \
 	autotools/check-python-code \
 	autotools/check-man \
 	autotools/check-news \
@@ -567,6 +571,7 @@ srclink_files = \
 
 check_python_code = \
 	$(BUILD_BASH_COMPLETION) \
+	$(BUILD_ZSH_COMPLETION) \
 	$(all_python_code)
 
 lint_python_code = \
@@ -576,6 +581,7 @@ lint_python_code = \
 	$(dist_tools_SCRIPTS) \
 	$(pkglib_python_scripts) \
 	$(BUILD_BASH_COMPLETION) \
+	$(BUILD_ZSH_COMPLETION) \
 	$(PYTHON_BOOTSTRAP)
 
 test/daemon-util_unittest.bash: daemons/daemon-util
@@ -603,6 +609,10 @@ doc/examples/hooks/%: doc/examples/hooks/%.in $(REPLACE_VARS_SED)
 doc/examples/bash_completion: $(BUILD_BASH_COMPLETION) $(RUN_IN_TEMPDIR) \
 	lib/cli.py $(gnt_scripts) $(client_PYTHON) tools/burnin
 	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_BASH_COMPLETION) > $@
+
+doc/examples/zsh_completion: $(BUILD_BASH_COMPLETION) $(RUN_IN_TEMPDIR) \
+	lib/cli.py $(gnt_scripts) $(client_PYTHON)
+	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_ZSH_COMPLETION) > $@
 
 doc/%.png: doc/%.dot
 	@test -n "$(DOT)" || { echo 'dot' not found during configure; exit 1; }

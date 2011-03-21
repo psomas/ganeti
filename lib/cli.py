@@ -217,6 +217,9 @@ __all__ = [
   "OPT_COMPL_ONE_NODE",
   "OPT_COMPL_ONE_NODEGROUP",
   "OPT_COMPL_ONE_OS",
+  "OPT_COMPL_NIC_PARAMS",
+  "OPT_COMPL_DISK_PARAMS",
+  "OPT_COMPL_BACKEND_PARAMS",
   "cli_option",
   "SplitNodeOption",
   "CalculateOSNames",
@@ -553,7 +556,10 @@ def check_bool(option, opt, value): # pylint: disable-msg=W0613
  OPT_COMPL_ONE_OS,
  OPT_COMPL_ONE_IALLOCATOR,
  OPT_COMPL_INST_ADD_NODES,
- OPT_COMPL_ONE_NODEGROUP) = range(100, 107)
+ OPT_COMPL_ONE_NODEGROUP,
+ OPT_COMPL_NIC_PARAMS,
+ OPT_COMPL_DISK_PARAMS,
+ OPT_COMPL_BACKEND_PARAMS) = range(100, 110)
 
 OPT_COMPL_ALL = frozenset([
   OPT_COMPL_MANY_NODES,
@@ -563,6 +569,9 @@ OPT_COMPL_ALL = frozenset([
   OPT_COMPL_ONE_IALLOCATOR,
   OPT_COMPL_INST_ADD_NODES,
   OPT_COMPL_ONE_NODEGROUP,
+  OPT_COMPL_NIC_PARAMS,
+  OPT_COMPL_DISK_PARAMS,
+  OPT_COMPL_BACKEND_PARAMS,
   ])
 
 
@@ -706,7 +715,8 @@ NO_INSTALL_OPT = cli_option("--no-install", dest="no_install",
 
 BACKEND_OPT = cli_option("-B", "--backend-parameters", dest="beparams",
                          type="keyval", default={},
-                         help="Backend parameters")
+                         help="Backend parameters",
+                         completion_suggest=OPT_COMPL_BACKEND_PARAMS)
 
 HVOPTS_OPT =  cli_option("-H", "--hypervisor-parameters", type="keyval",
                          default={}, dest="hvparams",
@@ -734,10 +744,12 @@ NONAMECHECK_OPT = cli_option("--no-name-check", dest="name_check",
 
 NET_OPT = cli_option("--net",
                      help="NIC parameters", default=[],
-                     dest="nics", action="append", type="identkeyval")
+                     dest="nics", action="append", type="identkeyval",
+                     completion_suggest=OPT_COMPL_NIC_PARAMS)
 
 DISK_OPT = cli_option("--disk", help="Disk parameters", default=[],
-                      dest="disks", action="append", type="identkeyval")
+                      dest="disks", action="append", type="identkeyval",
+                      completion_suggest=OPT_COMPL_DISK_PARAMS)
 
 DISKIDX_OPT = cli_option("--disks", dest="disks", default=None,
                          help="Comma-separated list of disks"
@@ -936,7 +948,8 @@ ENABLED_HV_OPT = cli_option("--enabled-hypervisors",
 
 NIC_PARAMS_OPT = cli_option("-N", "--nic-parameters", dest="nicparams",
                             type="keyval", default={},
-                            help="NIC parameters")
+                            help="NIC parameters",
+                            completion_suggest=OPT_COMPL_NIC_PARAMS)
 
 CP_SIZE_OPT = cli_option("-C", "--candidate-pool-size", default=None,
                          dest="candidate_pool_size", type="int",

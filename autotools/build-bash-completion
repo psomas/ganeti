@@ -378,7 +378,7 @@ class CompletionWriter:
           sw.Write("done")
 
           WriteCompReply(sw, "-P \"$pfx\" -W \"$tmp\"", cur="\"$curvalue\"")
-        else:
+        elif suggest not in cli.OPT_COMPL_ALL:
           WriteCompReply(sw, "-W %s" % utils.ShellQuote(suggest), cur=cur)
       finally:
         sw.DecIndent()

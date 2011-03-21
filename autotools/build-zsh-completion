@@ -1,0 +1,523 @@
+#!/usr/bin/python
+#
+
+# Copyright (C) 2011 Google Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+
+"""Script to generate zsh completion script for Ganeti.
+
+"""
+
+# pylint: disable-msg=C0103
+# [C0103] Invalid name build-zsh-completion
+
+import os
+import re
+from cStringIO import StringIO
+
+from ganeti import constants
+from ganeti import cli
+from ganeti import utils
+from ganeti import build
+
+# _autoconf shouldn't be imported from anywhere except constants.py, but we're
+# making an exception here because this script is only used at build time.
+from ganeti import _autoconf
+
+def WritePreamble(sw):
+  """Writes the script preamble.
+
+  Helper functions should be written here.
+
+  """
+  sw.Write("#compdef %s" % " ".join(_autoconf.GNT_SCRIPTS))
+  sw.Write("")
+  sw.Write("# This script is automatically generated at build time.")
+  sw.Write("# Do not modify manually.")
+
+  sw.Write("_ganeti_dbglog() {")
+  sw.IncIndent()
+  try:
+    sw.Write("if [[ -n \"$GANETI_COMPL_LOG\" ]]; then")
+    sw.IncIndent()
+    try:
+      sw.Write("{")
+      sw.IncIndent()
+      try:
+        sw.Write("echo ---")
+        sw.Write("echo \"$@\"")
+        sw.Write("echo")
+      finally:
+        sw.DecIndent()
+      sw.Write("} >> $GANETI_COMPL_LOG")
+    finally:
+      sw.DecIndent()
+    sw.Write("fi")
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_nodes() {")
+  sw.IncIndent()
+  try:
+    node_list_path = os.path.join(constants.DATA_DIR, "ssconf_node_list")
+    sw.Write("compadd -X 'completing nodes' ${(f)\"$(cat %s 2>/dev/null)\"}",
+             utils.ShellQuote(node_list_path))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_many_nodes() {")
+  sw.IncIndent()
+  try:
+    node_list_path = os.path.join(constants.DATA_DIR, "ssconf_node_list")
+    sw.Write("if compset -P '*,'; then")
+    sw.IncIndent()
+    try:
+      sw.Write("compadd -X 'completing nodes' -S ',' -q"
+               " ${(f)\"$(grep -vxF \"$(echo \"$IPREFIX\" |"
+               " sed 's/,/\\n/g')\" %s 2>/dev/null)\"}",
+               utils.ShellQuote(node_list_path))
+    finally:
+      sw.DecIndent()
+    sw.Write("else")
+    sw.IncIndent()
+    try:
+      sw.Write("compadd -X 'completing nodes' -S ','"
+               " -q ${(f)\"$(cat %s 2>/dev/null)\"}",
+               utils.ShellQuote(node_list_path))
+    finally:
+      sw.DecIndent()
+    sw.Write("fi")
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_instance_nodes() {")
+  sw.IncIndent()
+  sw.Write("# Complete primary and optionally secondary instance node")
+  try:
+    node_list_path = os.path.join(constants.DATA_DIR, "ssconf_node_list")
+    sw.Write("if compset -P 1 '*:'; then")
+    sw.IncIndent()
+    try:
+      sw.Write("compadd -X 'completing nodes'"
+               " ${(f)\"$(grep -vx \"${IPREFIX%%:}\" %s 2>/dev/null)\"}",
+               utils.ShellQuote(node_list_path))
+    finally:
+      sw.DecIndent()
+    sw.Write("else")
+    sw.IncIndent()
+    try:
+      sw.Write("compadd -X 'completing nodes' -S ':' -q"
+               " ${(f)\"$(cat %s 2>/dev/null)\"}",
+               utils.ShellQuote(node_list_path))
+    finally:
+      sw.DecIndent()
+  finally:
+    sw.DecIndent()
+    sw.Write("fi")
+  sw.Write("}")
+
+  sw.Write("_ganeti_instances() {")
+  sw.IncIndent()
+  try:
+    instance_list_path = os.path.join(constants.DATA_DIR,
+                                      "ssconf_instance_list")
+    sw.Write("compadd -X 'completing instances'"
+             " ${(f)\"$(cat %s 2>/dev/null)\"}",
+             utils.ShellQuote(instance_list_path))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_jobs() {")
+  sw.IncIndent()
+  try:
+    # FIXME: this is really going into the internals of the job queue
+    sw.Write("_description job expl 'job id'")
+    sw.Write("compadd ${(f)\"$(cd %s 2>/dev/null && echo job-* |"
+             " sed 's/job-//g' | xargs -n 1)\"}",
+             utils.ShellQuote(constants.QUEUE_DIR))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  for (fnname, paths) in [
+      ("os", constants.OS_SEARCH_PATH),
+      ("iallocator", constants.IALLOCATOR_SEARCH_PATH),
+      ]:
+    sw.Write("_ganeti_%s() {", fnname)
+    sw.IncIndent()
+    try:
+      # FIXME: Make querying the master for all OSes cheap
+      for path in paths:
+        sw.Write("compadd -X 'completing %s'"
+                 " ${(f)\"$( cd %s 2>/dev/null && echo * | xargs -n 1)\"}" %
+                 (fnname,
+                 utils.ShellQuote(path)))
+    finally:
+      sw.DecIndent()
+    sw.Write("}")
+
+  sw.Write("_ganeti_nodegroup() {")
+  sw.IncIndent()
+  try:
+    nodegroups_path = os.path.join(constants.DATA_DIR, "ssconf_nodegroups")
+    sw.Write("compadd -X 'completing node group'"
+             " ${(f)\"$(cat %s 2>/dev/null)\"}",
+             utils.ShellQuote(nodegroups_path))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_nic_params() {")
+  sw.IncIndent()
+  try:
+    sw.Write("compset -P 1 '*:'")
+    sw.Write("_values -X 'nic parameters' -s , 'NIC parameters' %s" %
+             " ".join(["'%s:'" % p for p in constants.INIC_PARAMS]))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_disk_params() {")
+  sw.IncIndent()
+  try:
+    sw.Write("compset -P 1 '*:'")
+    sw.Write("_values -X 'disk parameters' -s , 'disk parameters' %s" %
+             " ".join(["'%s:'" % p for p in constants.IDISK_PARAMS]))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_backend_params() {")
+  sw.IncIndent()
+  try:
+    sw.Write("_values -X 'backend parameters' -s , 'backend parameters' %s" %
+             " ".join(["'%s:'" % p for p in constants.BES_PARAMETERS]))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+
+def WriteAppendix(sw):
+  sw.Write("case $service in")
+  sw.IncIndent()
+  try:
+    for scriptname in _autoconf.GNT_SCRIPTS:
+      sw.Write("%s)" % scriptname)
+      sw.IncIndent()
+      try:
+        sw.Write("%s \"$@\"" % GetFunctionName(scriptname))
+        sw.Write(";;")
+      finally:
+        sw.DecIndent()
+
+  finally:
+    sw.DecIndent()
+  sw.Write("esac")
+
+# pylint: disable=W0212
+def WriteGntCompletion(sw, scriptname, funcname, commands=None):
+  """Writes the completion code for one command.
+
+  @type sw: ShellWriter
+  @param sw: Script writer
+  @type scriptname: string
+  @param scriptname: Name of command line program
+  @type funcname: string
+  @param funcname: Shell function name
+  @type commands: list
+  @param commands: List of all subcommands in this program
+
+  """
+  sw.Write("%s() {", funcname)
+  sw.IncIndent()
+  try:
+    sw.Write("local cmds")
+    sw.Write("local subcmd")
+    sw.Write("""if (( CURRENT == 2 )); then""")
+    sw.IncIndent()
+    try:
+      # Complete the command name
+      sw.Write("cmds=(")
+      sw.IncIndent()
+      try:
+        for cmd in sorted(commands.keys()):
+          sw.Write(utils.ShellQuote("%s:%s" %
+                                    (cmd, commands[cmd][-1])))
+      finally:
+        sw.Write(")")
+        sw.DecIndent()
+      sw.Write("_describe '%s command' cmds" % scriptname)
+    finally:
+      sw.DecIndent()
+    sw.Write("else")
+    sw.IncIndent()
+    try:
+      sw.Write("shift words")
+      sw.Write("(( CURRENT-- ))")
+      sw.Write("subcmd=\"$words[1]\"")
+      sw.Write("case \"$subcmd\" in")
+      for cmd, (_, argdef, optdef, _, _) in commands.iteritems():
+        if not (argdef or optdef):
+          continue
+
+        # TODO: Group by arguments and options
+        sw.Write("%s)", utils.ShellQuote(cmd))
+        sw.IncIndent()
+        try:
+          #CompletionWriter(optdef, argdef).WriteTo(sw)
+          sw.Write("_arguments -A \"-*\" \\")
+          sw.IncIndent()
+          try:
+            for o in optdef:
+              message = ""
+              desc = ""
+              completer = None
+              alternatives = None
+              all_names = sorted(o._short_opts + o._long_opts)
+
+              if len(all_names) > 1:
+                opt = "(%s)" % " ".join(all_names)
+                switches = []
+                for switch in all_names:
+                  switch_string = switch
+                  if o.takes_value():
+                    if switch in o._long_opts:
+                      switch_string += "="
+                  if o.action == "append":
+                    switch_string = "*" + switch_string
+                  switches.append(switch_string)
+                alternatives = "{%s}" % ",".join(switches)
+
+              else:
+                if o.action == "append":
+                  # This option can be specified multiple times.
+                  opt = "*"
+                else:
+                  opt = ""
+                opt += o.get_opt_string()
+                if o.takes_value():
+                  if o.get_opt_string() in o._long_opts:
+                    opt += "="
+
+              if o.help:
+                desc = o.help
+                desc = desc.replace("[", "\\[")
+                desc = desc.replace("]", "\\]")
+                desc = desc.replace(":", "\\:")
+                desc = "[%s]" % desc
+
+              # Only static choices implemented so far (e.g. no node list)
+              suggest = getattr(o, "completion_suggest", None)
+
+              # our custom option type
+              if o.type == "bool":
+                suggest = ["yes", "no"]
+
+              if not suggest:
+                suggest = o.choices
+
+              if o.metavar:
+                message = o.metavar.lower()
+                message = message.replace(">","")
+                message = message.replace("<","")
+                message = message.replace("[","\\[")
+                message = message.replace("]","\\]")
+                message = message.replace(":", "\\:")
+
+              if (isinstance(suggest, (int, long)) and
+                  suggest in cli.OPT_COMPL_ALL):
+                if suggest == cli.OPT_COMPL_MANY_NODES:
+                  completer = "_ganeti_many_nodes"
+                elif suggest == cli.OPT_COMPL_ONE_NODE:
+                  completer = "_ganeti_nodes"
+                elif suggest == cli.OPT_COMPL_ONE_INSTANCE:
+                  completer = "_ganeti_instances"
+                elif suggest == cli.OPT_COMPL_ONE_OS:
+                  completer = "_ganeti_os"
+                elif suggest == cli.OPT_COMPL_ONE_IALLOCATOR:
+                  completer = "_ganeti_iallocator"
+                elif suggest == cli.OPT_COMPL_INST_ADD_NODES:
+                  completer = "_ganeti_instance_nodes"
+                elif suggest == cli.OPT_COMPL_ONE_NODEGROUP:
+                  completer = "_ganeti_nodegroup"
+                elif suggest == cli.OPT_COMPL_NIC_PARAMS:
+                  completer = "_ganeti_nic_params"
+                elif suggest == cli.OPT_COMPL_DISK_PARAMS:
+                  completer = "_ganeti_disk_params"
+                elif suggest == cli.OPT_COMPL_BACKEND_PARAMS:
+                  completer = "_ganeti_backend_params"
+              elif suggest is not None:
+                completer = "(%s)" % " ".join(sorted(suggest))
+
+              if completer and not message:
+                message = " "
+
+              if completer:
+                tail = "%s:%s:%s" % (desc, message, completer)
+              else:
+                tail = desc
+                if o.takes_value():
+                  tail += ":"
+
+              if alternatives:
+                opt = utils.ShellQuote(opt)
+                opt += alternatives
+                opt += utils.ShellQuote(tail)
+              else:
+                opt = utils.ShellQuote(opt + tail)
+
+              sw.Write(opt + " \\")
+
+            # Argument completion
+            last_idx = len(argdef) - 1
+            varlen_arg_idx = None
+
+            if argdef:
+              for idx, arg in enumerate(argdef):
+                assert arg.min is not None and arg.min >= 0
+                assert not (idx < last_idx and arg.max is None)
+
+                if arg.min != arg.max or arg.max is None:
+                  if varlen_arg_idx is not None:
+                    raise Exception("Only one argument can have"
+                                    " variable length")
+                  varlen_arg_idx = idx
+
+              for idx, arg in enumerate(argdef):
+                if isinstance(arg, cli.ArgUnknown):
+                  completer = ""
+                elif isinstance(arg, cli.ArgSuggest):
+                  completer = "(%s)" % " ".join(arg.choices)
+                elif isinstance(arg, cli.ArgInstance):
+                  completer = "_ganeti_instances"
+                elif isinstance(arg, cli.ArgNode):
+                  completer = "_ganeti_nodes"
+                elif isinstance(arg, cli.ArgGroup):
+                  completer = "_ganeti_nodegroup"
+                elif isinstance(arg, cli.ArgJobId):
+                  completer = "_ganeti_jobs"
+                elif isinstance(arg, cli.ArgOs):
+                  completer = "_ganeti_os"
+                elif isinstance(arg, cli.ArgFile):
+                  completer = "_files"
+                elif isinstance(arg, cli.ArgCommand):
+                  completer = "_path_commands"
+                elif isinstance(arg, cli.ArgHost):
+                  completer = "_hosts"
+                else:
+                  raise Exception("Unknown argument type %r" % arg)
+
+                argopt = ""
+                if idx == varlen_arg_idx:
+                  if arg.min == 0:
+                    argopt = "*:: :%s" % completer
+                  else:
+                    argopt = "*: :%s" % completer
+                  sw.Write(utils.ShellQuote(argopt) + ' \\')
+
+                else:
+                  for _ in range(0, arg.min):
+                    sw.Write(utils.ShellQuote(": :%s" % completer) + ' \\')
+                  for _ in range(arg.min, arg.max):
+                    sw.Write(utils.ShellQuote(":: :%s" % completer) + ' \\')
+
+          finally:
+            sw.DecIndent()
+
+        finally:
+          sw.DecIndent()
+
+        sw.Write(";;")
+      sw.Write("esac")
+    finally:
+      sw.DecIndent()
+      sw.Write("fi")
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("")
+  #sw.Write("compdef %s %s" % (funcname, scriptname))
+  #sw.Write("")
+
+
+def GetFunctionName(name):
+  return "_" + re.sub(r"[^a-z0-9]+", "_", name.lower())
+
+
+def GetCommands(filename, module):
+  """Returns the commands defined in a module.
+
+  Aliases are also added as commands.
+
+  """
+  try:
+    commands = getattr(module, "commands")
+  except AttributeError:
+    raise Exception("Script %s doesn't have 'commands' attribute" %
+                    filename)
+
+  # Add the implicit "--help" option
+  help_option = cli.cli_option("-h", "--help", default=False,
+                               action="store_true",
+                               help="Display usage information")
+
+  for name, (_, _, optdef, _, _) in commands.items():
+    if help_option not in optdef:
+      optdef.append(help_option)
+    for opt in cli.COMMON_OPTS:
+      if opt in optdef:
+        raise Exception("Common option '%s' listed for command '%s' in %s" %
+                        (opt, name, filename))
+      optdef.append(opt)
+
+  # Use aliases
+  aliases = getattr(module, "aliases", {})
+  if aliases:
+    commands = commands.copy()
+    for name, target in aliases.iteritems():
+      commands[name] = commands[target]
+
+  return commands
+
+
+def main():
+  buf = StringIO()
+  sw = utils.ShellWriter(buf)
+
+  WritePreamble(sw)
+
+  # gnt-* scripts
+  for scriptname in _autoconf.GNT_SCRIPTS:
+    filename = "scripts/%s" % scriptname
+
+    WriteGntCompletion(sw, scriptname,
+                       GetFunctionName(scriptname),
+                       commands=GetCommands(filename,
+                                            build.LoadModule(filename)))
+
+  WriteAppendix(sw)
+  print buf.getvalue()
+
+
+if __name__ == "__main__":
+  main()

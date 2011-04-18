@@ -57,6 +57,7 @@ from ganeti import netutils
 from ganeti import query
 from ganeti import qlang
 from ganeti import opcodes
+from ganeti import network
 
 import ganeti.masterd.instance # pylint: disable-msg=W0611
 
@@ -11873,11 +11874,201 @@ class LUTestAllocator(NoHooksLU):
     return result
 
 
+# Network LUs
+class LUNetworkAdd(LogicalUnit):
+  """Logical unit for creating node groups.
+
+  """
+  HPATH = "network-add"
+  HTYPE = constants.HTYPE_NETWORK
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self.needed_locks = {
+      locking.LEVEL_NODE: locking.ALL_SET,
+    }
+    self.share_locks[locking.LEVEL_NODE] = 1
+
+  def CheckPrereq(self):
+    """Check prerequisites.
+
+    This checks that the given group name is not an existing node group
+    already.
+
+    """
+    try:
+      uuid = self.cfg.LookupNetwork(self.op.network_name)
+    except errors.OpPrereqError:
+      uuid = None
+
+    if uuid is not None:
+      raise errors.OpPrereqError("Network '%s' already defined" %
+                                 self.op.network, errors.ECODE_EXISTS)
+
+  def BuildHooksEnv(self):
+    """Build hooks env.
+
+    """
+    env = {
+      "NETWORK_NAME": self.op.network_name,
+      "NETWORK_SUBNET": self.op.network,
+      "NETWORK_GATEWAY": self.op.gateway,
+      }
+    mn = self.cfg.GetMasterNode()
+    return env, [mn], [mn]
+
+  def Exec(self, feedback_fn):
+    """Add the ip pool to the cluster.
+
+    """
+    #FIXME: error handling
+    nobj = objects.Network(name=self.op.network_name,
+                           network=self.op.network,
+                           gateway=self.op.gateway,
+                           family=4)
+
+    # Initialize the associated address pool
+    pool = network.AddressPool.InitializeNetwork(nobj)
+
+    # Check if we need to reserve the nodes and the cluster master IP
+    # These may not be allocated to any instances in routed mode, as
+    # they wouldn't function anyway.
+    for node in self.cfg.GetAllNodesInfo().values():
+      for ip in [node.primary_ip, node.secondary_ip]:
+        try:
+          pool.Reserve(ip)
+          self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
+
+        except errors.AddressPoolError:
+          pass
+
+    master_ip = self.cfg.GetClusterInfo().master_ip
+    try:
+      pool.Reserve(master_ip)
+      self.LogInfo("Reserved cluster master IP (%s)", master_ip)
+    except errors.AddressPoolError:
+      pass
+
+    if self.op.reserved_ips:
+      for ip in self.op.reserved_ips:
+        pool.Reserve(ip, external=True)
+
+    self.cfg.AddNetwork(nobj, self.proc.GetECId())
+
+
+class _NetworkQuery(_QueryBase):
+  FIELDS = query.NETWORK_FIELDS
+
+  def ExpandNames(self, lu):
+    lu.needed_locks = {}
+
+    self._all_networks = lu.cfg.GetAllNetworksInfo()
+    name_to_uuid = dict((n.name, n.uuid) for n in self._all_networks.values())
+
+    if not self.names:
+      self.wanted = [name_to_uuid[name]
+                     for name in utils.NiceSort(name_to_uuid.keys())]
+    else:
+      # Accept names to be either names or UUIDs.
+      missing = []
+      self.wanted = []
+      all_uuid = frozenset(self._all_networks.keys())
+
+      for name in self.names:
+        if name in all_uuid:
+          self.wanted.append(name)
+        elif name in name_to_uuid:
+          self.wanted.append(name_to_uuid[name])
+        else:
+          missing.append(name)
+
+      if missing:
+        raise errors.OpPrereqError("Some networks do not exist: %s" % missing,
+                                   errors.ECODE_NOENT)
+
+  def DeclareLocks(self, lu, level):
+    pass
+
+  def _GetQueryData(self, lu):
+    """Computes the list of networks and their attributes.
+
+    """
+    do_instances = query.NETQ_INST in self.requested_data
+    do_groups = do_instances or (query.NETQ_GROUP in self.requested_data)
+    do_stats = query.NETQ_STATS in self.requested_data
+
+    network_to_groups = None
+    network_to_instances = None
+    stats = None
+
+    # For NETQ_GROUP, we need to map network->[groups]
+    if do_groups:
+      all_groups = lu.cfg.GetAllNodeGroupsInfo()
+      network_to_groups = dict((uuid, []) for uuid in self.wanted)
+
+      if do_instances:
+        all_instances = lu.cfg.GetAllInstancesInfo()
+        all_nodes = lu.cfg.GetAllNodesInfo()
+        network_to_instances = dict((uuid, []) for uuid in self.wanted)
+
+      for group in all_groups.values():
+        if do_instances:
+          group_nodes = [node.name for node in all_nodes.values() if
+                         node.group == group.uuid]
+          group_instances = [instance for instance in all_instances.values()
+                             if instance.primary_node in group_nodes]
+
+        for uuid, link in group.networks.items():
+          if uuid in network_to_groups:
+            network_to_groups[uuid].append(":".join((group.name, link)))
+
+            if do_instances:
+              for instance in group_instances:
+                for nic in instance.nics:
+                  if nic.nicparams.get(constants.NIC_LINK, None) == link:
+                    network_to_instances[uuid].append(instance.name)
+                    break
+
+    if do_stats:
+      stats = {}
+      for uuid, net in self._all_networks.items():
+        if uuid in self.wanted:
+          pool = network.AddressPool(net)
+          stats[uuid] = {
+            "free_count": pool.GetFreeCount(),
+            "reserved_count": pool.GetReservedCount(),
+            "map": pool.GetMap(),
+            }
+
+    return query.NetworkQueryData([self._all_networks[uuid]
+                                   for uuid in self.wanted],
+                                   network_to_groups,
+                                   network_to_instances,
+                                   stats)
+
+
+class LUNetworkQuery(NoHooksLU):
+  """Logical unit for querying node groups.
+
+  """
+  REQ_BGL = False
+
+  def CheckArguments(self):
+    self.nq = _NetworkQuery(self.op.names, self.op.output_fields, False)
+
+  def ExpandNames(self):
+    self.nq.ExpandNames(self)
+
+  def Exec(self, feedback_fn):
+    return self.nq.OldStyleQuery(self)
+
+
 #: Query type implementations
 _QUERY_IMPL = {
   constants.QR_INSTANCE: _InstanceQuery,
   constants.QR_NODE: _NodeQuery,
   constants.QR_GROUP: _GroupQuery,
+  constants.QR_NETWORK: _NetworkQuery,
   }
 
 

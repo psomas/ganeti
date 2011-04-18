@@ -314,6 +314,7 @@ HTYPE_CLUSTER = "CLUSTER"
 HTYPE_NODE = "NODE"
 HTYPE_GROUP = "GROUP"
 HTYPE_INSTANCE = "INSTANCE"
+HTYPE_NETWORK = "NETWORK"
 
 HKR_SKIP = 0
 HKR_FAIL = 1
@@ -1014,9 +1015,10 @@ QR_INSTANCE = "instance"
 QR_NODE = "node"
 QR_LOCK = "lock"
 QR_GROUP = "group"
+QR_NETWORK = "network"
 
 #: List of resources which can be queried using L{opcodes.OpQuery}
-QR_OP_QUERY = frozenset([QR_INSTANCE, QR_NODE, QR_GROUP])
+QR_OP_QUERY = frozenset([QR_INSTANCE, QR_NODE, QR_GROUP, QR_NETWORK])
 
 #: List of resources which can be queried using Local UniX Interface
 QR_OP_LUXI = QR_OP_QUERY.union([

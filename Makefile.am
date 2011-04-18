@@ -160,7 +160,7 @@ pkgpython_PYTHON = \
 	lib/ssh.py \
 	lib/storage.py \
 	lib/uidpool.py \
-	lib/ippool.py \
+	lib/network.py \
 	lib/workerpool.py
 
 client_PYTHON = \

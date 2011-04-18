@@ -81,6 +81,9 @@ _PTags = ("tags", ht.NoDefault, ht.TListOf(ht.TNonEmptyString))
 #: Ignore consistency
 _PIgnoreConsistency = ("ignore_consistency", False, ht.TBool)
 
+#: a required network name
+_PNetworkName = ("network_name", ht.NoDefault, ht.TNonEmptyString)
+
 #: OP_ID conversion regular expression
 _OPID_RE = re.compile("([a-z])([A-Z])")
 
@@ -1284,6 +1287,26 @@ class OpTestDummy(OpCode):
     ("fail", ht.NoDefault, ht.NoType),
     ]
   WITH_LU = False
+
+
+# Network opcodes
+class OpNetworkAdd(OpCode):
+  """Add an IP network to the cluster."""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("network", None, ht.TString),
+    ("gateway", None, ht.TMaybeString),
+    ("reserved_ips", None, ht.TOr(ht.TListOf(ht.TNonEmptyString), ht.TNone)),
+    ]
+
+
+class OpNetworkQuery(OpCode):
+  """Compute the list of networks."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
+    ]
 
 
 def _GetOpList():

@@ -79,6 +79,7 @@ __all__ = [
   "FILESTORE_DRIVER_OPT",
   "FORCE_OPT",
   "FORCE_VARIANT_OPT",
+  "GATEWAY_OPT",
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
@@ -101,6 +102,7 @@ __all__ = [
   "MC_OPT",
   "MIGRATION_MODE_OPT",
   "NET_OPT",
+  "NETWORK_OPT",
   "NEW_CLUSTER_CERT_OPT",
   "NEW_CLUSTER_DOMAIN_SECRET_OPT",
   "NEW_CONFD_HMAC_KEY_OPT",
@@ -143,6 +145,7 @@ __all__ = [
   "REBOOT_TYPE_OPT",
   "REMOVE_INSTANCE_OPT",
   "REMOVE_UIDS_OPT",
+  "RESERVED_IPS_OPT",
   "RESERVED_LVS_OPT",
   "ROMAN_OPT",
   "SECONDARY_IP_OPT",
@@ -195,11 +198,13 @@ __all__ = [
   "ARGS_MANY_INSTANCES",
   "ARGS_MANY_NODES",
   "ARGS_MANY_GROUPS",
+  "ARGS_MANY_NETWORKS",
   "ARGS_NONE",
   "ARGS_ONE_INSTANCE",
   "ARGS_ONE_NODE",
   "ARGS_ONE_GROUP",
   "ARGS_ONE_OS",
+  "ARGS_ONE_NETWORK",
   "ArgChoice",
   "ArgCommand",
   "ArgFile",
@@ -207,6 +212,7 @@ __all__ = [
   "ArgHost",
   "ArgInstance",
   "ArgJobId",
+  "ArgNetwork",
   "ArgNode",
   "ArgOs",
   "ArgSuggest",
@@ -217,6 +223,7 @@ __all__ = [
   "OPT_COMPL_ONE_INSTANCE",
   "OPT_COMPL_ONE_NODE",
   "OPT_COMPL_ONE_NODEGROUP",
+  "OPT_COMPL_ONE_NETWORK",
   "OPT_COMPL_ONE_OS",
   "OPT_COMPL_NIC_PARAMS",
   "OPT_COMPL_DISK_PARAMS",
@@ -302,6 +309,11 @@ class ArgNode(_Argument):
   """
 
 
+class ArgNetwork(_Argument):
+  """Network argument.
+
+  """
+
 class ArgGroup(_Argument):
   """Node group argument.
 
@@ -340,9 +352,11 @@ class ArgOs(_Argument):
 
 ARGS_NONE = []
 ARGS_MANY_INSTANCES = [ArgInstance()]
+ARGS_MANY_NETWORKS = [ArgNetwork()]
 ARGS_MANY_NODES = [ArgNode()]
 ARGS_MANY_GROUPS = [ArgGroup()]
 ARGS_ONE_INSTANCE = [ArgInstance(min=1, max=1)]
+ARGS_ONE_NETWORK = [ArgNetwork(min=1, max=1)]
 ARGS_ONE_NODE = [ArgNode(min=1, max=1)]
 # TODO
 ARGS_ONE_GROUP = [ArgGroup(min=1, max=1)]
@@ -559,9 +573,10 @@ def check_bool(option, opt, value): # pylint: disable-msg=W0613
  OPT_COMPL_ONE_IALLOCATOR,
  OPT_COMPL_INST_ADD_NODES,
  OPT_COMPL_ONE_NODEGROUP,
+ OPT_COMPL_ONE_NETWORK,
  OPT_COMPL_NIC_PARAMS,
  OPT_COMPL_DISK_PARAMS,
- OPT_COMPL_BACKEND_PARAMS) = range(100, 110)
+ OPT_COMPL_BACKEND_PARAMS) = range(100, 111)
 
 OPT_COMPL_ALL = frozenset([
   OPT_COMPL_MANY_NODES,
@@ -571,6 +586,7 @@ OPT_COMPL_ALL = frozenset([
   OPT_COMPL_ONE_IALLOCATOR,
   OPT_COMPL_INST_ADD_NODES,
   OPT_COMPL_ONE_NODEGROUP,
+  OPT_COMPL_ONE_NETWORK,
   OPT_COMPL_NIC_PARAMS,
   OPT_COMPL_DISK_PARAMS,
   OPT_COMPL_BACKEND_PARAMS,
@@ -1184,6 +1200,18 @@ NODE_POWERED_OPT = cli_option("--node-powered", default=None,
                               type="bool", metavar=_YORNO,
                               dest="node_powered",
                               help="Specify if the SoR for node is powered")
+
+NETWORK_OPT = cli_option("--network",
+                         action="store", default=None, dest="network",
+                         help="IP network in CIDR notation")
+
+GATEWAY_OPT = cli_option("--gateway",
+                         action="store", default=None, dest="gateway",
+                         help="IP address of the router (gateway)")
+
+RESERVED_IPS_OPT = cli_option("--reserved-ips",
+                              action="store", default=None, dest="reserved_ips",
+                              help="Comma-delimited list of reserved IPs")
 
 
 #: Options provided by all commands

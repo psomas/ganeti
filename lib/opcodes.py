@@ -1068,6 +1068,7 @@ class OpGroupSetParams(OpCode):
     ("ndparams", None, ht.TMaybeDict),
     ("alloc_policy", None, ht.TOr(ht.TNone,
                                   ht.TElemOf(constants.VALID_ALLOC_POLICIES))),
+    ("network", None, ht.TOr(ht.TNone, ht.TList)),
     ]
 
 

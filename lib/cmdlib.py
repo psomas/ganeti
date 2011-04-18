@@ -10863,6 +10863,7 @@ class LUGroupSetParams(LogicalUnit):
     all_changes = [
       self.op.ndparams,
       self.op.alloc_policy,
+      self.op.network,
       ]
 
     if all_changes.count(None) == len(all_changes):
@@ -10877,6 +10878,11 @@ class LUGroupSetParams(LogicalUnit):
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
 
+    if self.op.network:
+      (self.network_action, self.network_name,
+       self.network_link) = self.op.network
+      self.network_uuid = self.cfg.LookupNetwork(self.network_name)
+
   def CheckPrereq(self):
     """Check prerequisites.
 
@@ -10886,6 +10892,30 @@ class LUGroupSetParams(LogicalUnit):
     if self.group is None:
       raise errors.OpExecError("Could not retrieve group '%s' (UUID: %s)" %
                                (self.op.group_name, self.group_uuid))
+
+    if self.op.network:
+      self.network = self.cfg.GetNetwork(self.network_uuid)
+      if self.network_action == constants.DDM_ADD:
+        if self.network_uuid in self.group.networks:
+          raise errors.OpPrereqError("Network '%s' is already mapped"
+                                     " to group '%s'" % (self.network_name,
+                                                         self.group.name),
+                                     errors.ECODE_INVAL)
+        other_networks = [n for n, link in self.group.networks.items()
+                          if link == self.network_link]
+        for other_uuid in other_networks:
+          net = self.cfg.GetNetwork(other_uuid)
+          if net.family == self.network.family:
+            raise errors.OpPrereqError("There is already another IPv%d network"
+                                       " mapped to group '%s': %s" %
+                                       (net.family, self.group.name, net.name),
+                                        errors.ECODE_INVAL)
+      elif (self.network_action == constants.DDM_REMOVE and
+            self.network_uuid not in self.group.networks):
+        raise errors.OpPrereqError("Network '%s' is not mapped"
+                                   " to group '%s'" % (self.network_name,
+                                                       self.group.name),
+                                   errors.ECODE_INVAL)
 
     if self.op.ndparams:
       new_ndparams = _GetUpdatedParams(self.group.ndparams, self.op.ndparams)
@@ -10899,6 +10929,7 @@ class LUGroupSetParams(LogicalUnit):
     env = {
       "GROUP_NAME": self.op.group_name,
       "NEW_ALLOC_POLICY": self.op.alloc_policy,
+      "NETWORK": self.op.network,
       }
     mn = self.cfg.GetMasterNode()
     return env, [mn], [mn]
@@ -10915,6 +10946,21 @@ class LUGroupSetParams(LogicalUnit):
 
     if self.op.alloc_policy:
       self.group.alloc_policy = self.op.alloc_policy
+
+    if self.op.network:
+      if self.network_action == constants.DDM_ADD:
+        self.group.networks[self.network_uuid] = self.network_link
+        try:
+          self.cfg.CommitGroupInstanceIps(self.group.uuid, self.network_uuid,
+                                          self.network_link, feedback_fn)
+        except errors.AddressPoolError, e:
+          raise errors.OpExecError("Failed to commit existing"
+                                   " instance IPs: %s" % str(e))
+      elif self.network_action == constants.DDM_REMOVE:
+        network_link = self.group.networks[self.network_uuid]
+        self.cfg.ReleaseGroupInstanceIps(self.group.uuid, self.network_uuid,
+                                         network_link, feedback_fn)
+        del self.group.networks[self.network_uuid]
 
     self.cfg.Update(self.group, feedback_fn)
     return result

@@ -452,6 +452,14 @@ Modifies the cluster parameters.
 :pre-execution: master node
 :post-execution: master node
 
+OP_NETWORK_ADD
+++++++++++++++
+
+Adds a new network definition
+:directory: network-add
+:env. vars: koko
+:pre-execution: master
+:post-execution: master
 
 Obsolete operations
 ~~~~~~~~~~~~~~~~~~~

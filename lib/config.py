@@ -1234,9 +1234,12 @@ class ConfigWriter:
         raise errors.ConfigurationError("Cannot add instance %s:"
                                         " MAC address '%s' already in use." %
                                         (instance.name, nic.mac))
-      # Commit all IP addresses to the respective address pools
-      self._UnlockedCommitIp(nic.nicparams.get(constants.NIC_LINK, None),
-                             nic.ip)
+      link = nic.nicparams.get(constants.NIC_LINK, None)
+      net_uuid = self._UnlockedGetNetworkFromNodeLink(instance.primary_node,
+                                                      link)
+      if net_uuid:
+        # Commit all IP addresses to the respective address pools
+        self._UnlockedCommitIp(net_uuid, nic.ip)
 
     self._EnsureUUID(instance, ec_id)
 
@@ -1291,10 +1294,17 @@ class ConfigWriter:
     """
     if instance_name not in self._config_data.instances:
       raise errors.ConfigurationError("Unknown instance '%s'" % instance_name)
-    for nic in self._config_data.instances[instance_name].nics:
-      # Return all IP addresses to the respective address pools
-      self._UnlockedReleaseIp(nic.nicparams.get(constants.NIC_LINK, None),
-                              nic.ip)
+
+    instance = self._UnlockedGetInstanceInfo(instance_name)
+
+    for nic in instance.nics:
+      link = nic.nicparams.get(constants.NIC_LINK, None)
+      net_uuid = self._UnlockedGetNetworkFromNodeLink(instance.primary_node,
+                                                      link)
+      if net_uuid:
+        # Return all IP addresses to the respective address pools
+        self._UnlockedReleaseIp(net_uuid, nic.ip)
+
     del self._config_data.instances[instance_name]
     self._config_data.cluster.serial_no += 1
     self._WriteConfig()

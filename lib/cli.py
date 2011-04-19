@@ -574,6 +574,13 @@ OPT_COMPL_ALL = frozenset([
   OPT_COMPL_BACKEND_PARAMS,
   ])
 
+#XXX: really fix build-bash-completion to handle these
+OPT_COMPL_PARAMS = frozenset([
+  OPT_COMPL_NIC_PARAMS,
+  OPT_COMPL_DISK_PARAMS,
+  OPT_COMPL_BACKEND_PARAMS,
+  ])
+
 
 class CliOption(Option):
   """Custom option class for optparse.

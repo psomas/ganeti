@@ -292,6 +292,10 @@ class CompletionWriter:
         suggest = opt.choices
 
       if (isinstance(suggest, (int, long)) and
+          suggest in cli.OPT_COMPL_PARAMS):
+        # We do not provide parameter completion yet
+        continue
+      elif (isinstance(suggest, (int, long)) and
           suggest in cli.OPT_COMPL_ALL):
         key = suggest
       elif suggest:
@@ -378,7 +382,7 @@ class CompletionWriter:
           sw.Write("done")
 
           WriteCompReply(sw, "-P \"$pfx\" -W \"$tmp\"", cur="\"$curvalue\"")
-        elif suggest not in cli.OPT_COMPL_ALL:
+        else:
           WriteCompReply(sw, "-W %s" % utils.ShellQuote(suggest), cur=cur)
       finally:
         sw.DecIndent()

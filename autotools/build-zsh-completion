@@ -180,8 +180,19 @@ def WritePreamble(sw):
   try:
     nodegroups_path = os.path.join(constants.DATA_DIR, "ssconf_nodegroups")
     sw.Write("compadd -X 'completing node group'"
-             " ${(f)\"$(cat %s 2>/dev/null)\"}",
+             " ${(f)\"$(cat %s | xargs -n 1 | sort 2>/dev/null)\"}",
              utils.ShellQuote(nodegroups_path))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
+  sw.Write("_ganeti_network() {")
+  sw.IncIndent()
+  try:
+    networks_path = os.path.join(constants.DATA_DIR, "ssconf_networks")
+    sw.Write("compadd -X 'completing networks'"
+             " ${(f)\"$(cat %s | xargs -n 1 | sort 2>/dev/null)\"}",
+             utils.ShellQuote(networks_path))
   finally:
     sw.DecIndent()
   sw.Write("}")
@@ -359,6 +370,8 @@ def WriteGntCompletion(sw, scriptname, funcname, commands=None):
                   completer = "_ganeti_instance_nodes"
                 elif suggest == cli.OPT_COMPL_ONE_NODEGROUP:
                   completer = "_ganeti_nodegroup"
+                elif suggest == cli.OPT_COMPL_ONE_NETWORK:
+                  completer = "_ganeti_network"
                 elif suggest == cli.OPT_COMPL_NIC_PARAMS:
                   completer = "_ganeti_nic_params"
                 elif suggest == cli.OPT_COMPL_DISK_PARAMS:
@@ -413,6 +426,8 @@ def WriteGntCompletion(sw, scriptname, funcname, commands=None):
                   completer = "_ganeti_nodes"
                 elif isinstance(arg, cli.ArgGroup):
                   completer = "_ganeti_nodegroup"
+                elif isinstance(arg, cli.ArgNetwork):
+                  completer = "_ganeti_network"
                 elif isinstance(arg, cli.ArgJobId):
                   completer = "_ganeti_jobs"
                 elif isinstance(arg, cli.ArgOs):

@@ -193,7 +193,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _MIGRATION_STATUS_RE = re.compile('Migration\s+status:\s+(\w+)',
                                     re.M | re.I)
   _MIGRATION_INFO_MAX_BAD_ANSWERS = 5
-  _MIGRATION_INFO_RETRY_DELAY = 2
+  _MIGRATION_INFO_RETRY_DELAY = 1
 
   _VERSION_RE = re.compile(r"\b(\d+)\.(\d+)\.(\d+)\b")
 

@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+from glob import glob
+
+from ganeti import constants
+from ganeti import serializer
+from ganeti import utils
+from ganeti.hypervisor.hv_kvm import KVMHypervisor
+
+if len(sys.argv) == 1:
+  root = KVMHypervisor._CONF_DIR
+else:
+  root = sys.argv[1]
+
+for path in glob(os.path.join(root, "*.runtime")):
+  try:
+    data = utils.ReadFile(path)
+  except EnvironmentError, e:
+    print "Failed to read file %s: %s" % (path, str(e))
+    continue
+
+  try:
+    kvm_cmd, nics, hvparams = serializer.Load(data)
+  except Exception, e:
+    print "Failed to parse file %s: %s" % (path, str(e))
+    continue
+
+  # Replace the run_as parameter or remove it completely
+  if "run_as" in hvparams:
+    if hvparams["run_as"]:
+      print "Replacing 'run_as' in %s with 'security_model' = 'user'" % path
+      hvparams["security_model"] = "user"
+      hvparams["security_domain"] = hvparams["run_as"]
+    else:
+      print "Removing 'run_as' from %s" % path
+
+    del hvparams["run_as"]
+
+  try:
+    utils.WriteFile(path,
+                    data=serializer.Dump((kvm_cmd, nics, hvparams)),
+                    backup=True)
+  except EnvironmentError, e:
+    print "Failed to write %s" % path

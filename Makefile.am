@@ -361,6 +361,8 @@ dist_tools_SCRIPTS = \
 	tools/cfgshell \
 	tools/cfgupgrade \
 	tools/cfgupgrade12 \
+	tools/cfgupgrade_grnet \
+	tools/upgrade-kvm-runtime \
 	tools/cluster-merge \
 	tools/lvmstrap \
 	tools/move-instance \

@@ -6277,6 +6277,25 @@ class TLMigrateInstance(Tasklet):
                    prereq=True, ecode=errors.ECODE_STATE)
 
 
+    if self.lu.op.live is not None and self.lu.op.mode is not None:
+      raise errors.OpPrereqError("Only one of the 'live' and 'mode'"
+                                 " parameters are accepted",
+                                 errors.ECODE_INVAL)
+    if self.lu.op.live is not None:
+      if self.lu.op.live:
+        self.lu.op.mode = constants.HT_MIGRATION_LIVE
+      else:
+        self.lu.op.mode = constants.HT_MIGRATION_NONLIVE
+      # reset the 'live' parameter to None so that repeated
+      # invocations of CheckPrereq do not raise an exception
+      self.lu.op.live = None
+    elif self.lu.op.mode is None:
+      # read the default value from the hypervisor
+      i_hv = self.cfg.GetClusterInfo().FillHV(self.instance, skip_globals=False)
+      self.lu.op.mode = i_hv[constants.HV_MIGRATION_MODE]
+
+    self.live = self.lu.op.mode == constants.HT_MIGRATION_LIVE
+
   def _RunAllocator(self):
     """Run the allocator based on input opcode.
 
@@ -6305,25 +6324,6 @@ class TLMigrateInstance(Tasklet):
     self.lu.LogInfo("Selected nodes for instance %s via iallocator %s: %s",
                  self.instance_name, self.lu.op.iallocator,
                  utils.CommaJoin(ial.result))
-
-    if self.lu.op.live is not None and self.lu.op.mode is not None:
-      raise errors.OpPrereqError("Only one of the 'live' and 'mode'"
-                                 " parameters are accepted",
-                                 errors.ECODE_INVAL)
-    if self.lu.op.live is not None:
-      if self.lu.op.live:
-        self.lu.op.mode = constants.HT_MIGRATION_LIVE
-      else:
-        self.lu.op.mode = constants.HT_MIGRATION_NONLIVE
-      # reset the 'live' parameter to None so that repeated
-      # invocations of CheckPrereq do not raise an exception
-      self.lu.op.live = None
-    elif self.lu.op.mode is None:
-      # read the default value from the hypervisor
-      i_hv = self.cfg.GetClusterInfo().FillHV(self.instance, skip_globals=False)
-      self.lu.op.mode = i_hv[constants.HV_MIGRATION_MODE]
-
-    self.live = self.lu.op.mode == constants.HT_MIGRATION_LIVE
 
   def _WaitUntilSync(self):
     """Poll with custom rpc for disk sync.

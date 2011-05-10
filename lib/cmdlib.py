@@ -5929,7 +5929,7 @@ class LUInstanceMigrate(LogicalUnit):
     """
     instance = self._migrater.instance
     source_node = instance.primary_node
-    target_node = self._migrater.target_node
+    target_node = self.op.target_node
     env = _BuildInstanceHookEnvByObject(self, instance)
     env["MIGRATE_LIVE"] = self._migrater.live
     env["MIGRATE_CLEANUP"] = self.op.cleanup

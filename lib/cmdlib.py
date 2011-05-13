@@ -6235,6 +6235,10 @@ class TLMigrateInstance(Tasklet):
         self.target_node = self.lu.op.target_node
 
       target_node = self.target_node
+      if self.target_node == instance.primary_node:
+        raise errors.OpPrereqError("Cannot migrate instance %s"
+                                   " to its primary (%s)" %
+                                   (instance.name, instance.primary_node))
 
       if len(self.lu.tasklets) == 1:
         # It is safe to remove locks only when we're the only tasklet in the LU

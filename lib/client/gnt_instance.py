@@ -638,8 +638,17 @@ def RecreateDisks(opts, args):
   else:
     opts.disks = []
 
+  if opts.node:
+    pnode, snode = SplitNodeOption(opts.node)
+    nodes = [pnode]
+    if snode is not None:
+      nodes.append(snode)
+  else:
+    nodes = []
+
   op = opcodes.OpInstanceRecreateDisks(instance_name=instance_name,
-                                       disks=opts.disks)
+                                       disks=opts.disks,
+                                       nodes=nodes)
   SubmitOrSend(op, opts)
   return 0
 
@@ -748,7 +757,7 @@ def ReplaceDisks(opts, args):
   cnt = [opts.on_primary, opts.on_secondary, opts.auto,
          new_2ndary is not None, iallocator is not None].count(True)
   if cnt != 1:
-    raise errors.OpPrereqError("One and only one of the -p, -s, -a, -n and -i"
+    raise errors.OpPrereqError("One and only one of the -p, -s, -a, -n and -I"
                                " options must be passed", errors.ECODE_INVAL)
   elif opts.on_primary:
     mode = constants.REPLACE_DISK_PRI
@@ -889,7 +898,8 @@ def MoveInstance(opts, args):
 
   op = opcodes.OpInstanceMove(instance_name=instance_name,
                               target_node=opts.node,
-                              shutdown_timeout=opts.shutdown_timeout)
+                              shutdown_timeout=opts.shutdown_timeout,
+                              ignore_consistency=opts.ignore_consistency)
   SubmitOrSend(op, opts, cl=cl)
   return 0
 
@@ -1159,7 +1169,8 @@ def ShowInstanceConfig(opts, args):
     return 1
 
   retcode = 0
-  op = opcodes.OpInstanceQueryData(instances=args, static=opts.static)
+  op = opcodes.OpInstanceQueryData(instances=args, static=opts.static,
+                                   use_locking=not opts.static)
   result = SubmitOpCode(op, opts=opts)
   if not result:
     ToStdout("No instances.")
@@ -1309,7 +1320,8 @@ def SetInstanceParams(opts, args):
                                    os_name=opts.os,
                                    osparams=opts.osparams,
                                    force_variant=opts.force_variant,
-                                   force=opts.force)
+                                   force=opts.force,
+                                   wait_for_sync=opts.wait_for_sync)
 
   # even if here we process the result, we allow submit only
   result = SubmitOrSend(op, opts)
@@ -1405,7 +1417,7 @@ commands = {
   'move': (
     MoveInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, SUBMIT_OPT, SINGLE_NODE_OPT, SHUTDOWN_TIMEOUT_OPT,
-     DRY_RUN_OPT, PRIORITY_OPT],
+     DRY_RUN_OPT, PRIORITY_OPT, IGNORE_CONSIST_OPT],
     "[-f] <instance>", "Move instance to an arbitrary node"
     " (only for instances of type file and lv)"),
   'info': (
@@ -1455,7 +1467,7 @@ commands = {
     SetInstanceParams, ARGS_ONE_INSTANCE,
     [BACKEND_OPT, DISK_OPT, FORCE_OPT, HVOPTS_OPT, NET_OPT, SUBMIT_OPT,
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
-     OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT],
+     OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT],
     "<instance>", "Alters the parameters of an instance"),
   'shutdown': (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],
@@ -1488,7 +1500,7 @@ commands = {
     "[-f] <instance>", "Deactivate an instance's disks"),
   'recreate-disks': (
     RecreateDisks, ARGS_ONE_INSTANCE,
-    [SUBMIT_OPT, DISKIDX_OPT, DRY_RUN_OPT, PRIORITY_OPT],
+    [SUBMIT_OPT, DISKIDX_OPT, NODE_PLACEMENT_OPT, DRY_RUN_OPT, PRIORITY_OPT],
     "<instance>", "Recreate an instance's disks"),
   'grow-disk': (
     GrowDisk,

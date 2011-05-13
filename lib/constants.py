@@ -432,9 +432,17 @@ EXPORT_MODES = frozenset([
   EXPORT_MODE_REMOTE,
   ])
 
-# lock recalculate mode
+# Lock recalculate mode
 LOCKS_REPLACE = 'replace'
 LOCKS_APPEND = 'append'
+
+# Lock timeout (sum) before we should go into blocking acquire (still
+# can be reset by priority change); computed as max time (10 hours)
+# before we should actually go into blocking acquire given that we
+# start from default priority level; in seconds
+LOCK_ATTEMPTS_TIMEOUT = 10 * 3600 / 20.0
+LOCK_ATTEMPTS_MAXWAIT = 15.0
+LOCK_ATTEMPTS_MINWAIT = 1.0
 
 # instance creation modes
 INSTANCE_CREATE = "create"
@@ -591,8 +599,11 @@ ENFORCEABLE_TYPES = frozenset([
 # HV parameter names (global namespace)
 HV_BOOT_ORDER = "boot_order"
 HV_CDROM_IMAGE_PATH = "cdrom_image_path"
+HV_KVM_CDROM2_IMAGE_PATH = "cdrom2_image_path"
+HV_KVM_FLOPPY_IMAGE_PATH = "floppy_image_path"
 HV_NIC_TYPE = "nic_type"
 HV_DISK_TYPE = "disk_type"
+HV_KVM_CDROM_DISK_TYPE = "cdrom_disk_type"
 HV_VNC_BIND_ADDRESS = "vnc_bind_address"
 HV_VNC_PASSWORD_FILE = "vnc_password_file"
 HV_VNC_TLS = "vnc_tls"
@@ -628,9 +639,12 @@ HV_BLOCKDEV_PREFIX = "blockdev_prefix"
 
 HVS_PARAMETER_TYPES = {
   HV_BOOT_ORDER: VTYPE_STRING,
+  HV_KVM_FLOPPY_IMAGE_PATH: VTYPE_STRING,
   HV_CDROM_IMAGE_PATH: VTYPE_STRING,
+  HV_KVM_CDROM2_IMAGE_PATH: VTYPE_STRING,
   HV_NIC_TYPE: VTYPE_STRING,
   HV_DISK_TYPE: VTYPE_STRING,
+  HV_KVM_CDROM_DISK_TYPE: VTYPE_STRING,
   HV_VNC_PASSWORD_FILE: VTYPE_STRING,
   HV_VNC_BIND_ADDRESS: VTYPE_STRING,
   HV_VNC_TLS: VTYPE_BOOL,
@@ -644,7 +658,7 @@ HVS_PARAMETER_TYPES = {
   HV_KERNEL_PATH: VTYPE_STRING,
   HV_KERNEL_ARGS: VTYPE_STRING,
   HV_INITRD_PATH: VTYPE_STRING,
-  HV_ROOT_PATH: VTYPE_STRING,
+  HV_ROOT_PATH: VTYPE_MAYBE_STRING,
   HV_SERIAL_CONSOLE: VTYPE_BOOL,
   HV_USB_MOUSE: VTYPE_STRING,
   HV_DEVICE_MODEL: VTYPE_STRING,
@@ -737,11 +751,13 @@ IDISK_SIZE = "size"
 IDISK_MODE = "mode"
 IDISK_ADOPT = "adopt"
 IDISK_VG = "vg"
+IDISK_METAVG = "metavg"
 IDISK_PARAMS_TYPES = {
   IDISK_SIZE: VTYPE_SIZE,
   IDISK_MODE: VTYPE_STRING,
   IDISK_ADOPT: VTYPE_STRING,
   IDISK_VG: VTYPE_STRING,
+  IDISK_METAVG: VTYPE_STRING,
   }
 IDISK_PARAMS = frozenset(IDISK_PARAMS_TYPES.keys())
 
@@ -828,11 +844,13 @@ HT_MOUSE_TABLET = "tablet"
 HT_KVM_VALID_MOUSE_TYPES = frozenset([HT_MOUSE_MOUSE, HT_MOUSE_TABLET])
 
 # Boot order
+HT_BO_FLOPPY = "floppy"
 HT_BO_CDROM = "cdrom"
 HT_BO_DISK = "disk"
 HT_BO_NETWORK = "network"
 
-HT_KVM_VALID_BO_TYPES = frozenset([HT_BO_CDROM, HT_BO_DISK, HT_BO_NETWORK])
+HT_KVM_VALID_BO_TYPES = frozenset([HT_BO_FLOPPY, HT_BO_CDROM,
+                                   HT_BO_DISK, HT_BO_NETWORK])
 
 # Security models
 HT_SM_NONE = "none"
@@ -876,6 +894,7 @@ NV_VERSION = "version"
 NV_VGLIST = "vglist"
 NV_VMNODES = "vmnodes"
 NV_OOB_PATHS = "oob-paths"
+NV_BRIDGES = "bridges"
 
 # SSL certificate check constants (in days)
 SSL_CERT_EXPIRATION_WARN = 30
@@ -1124,10 +1143,13 @@ HVC_DEFAULTS = {
     HV_VNC_X509: '',
     HV_VNC_X509_VERIFY: False,
     HV_VNC_PASSWORD_FILE: '',
+    HV_KVM_FLOPPY_IMAGE_PATH: '',
     HV_CDROM_IMAGE_PATH: '',
+    HV_KVM_CDROM2_IMAGE_PATH: '',
     HV_BOOT_ORDER: HT_BO_DISK,
     HV_NIC_TYPE: HT_NIC_PARAVIRTUAL,
     HV_DISK_TYPE: HT_DISK_PARAVIRTUAL,
+    HV_KVM_CDROM_DISK_TYPE: '',
     HV_USB_MOUSE: '',
     HV_MIGRATION_PORT: 8102,
     HV_MIGRATION_BANDWIDTH: 32, # MiB/s

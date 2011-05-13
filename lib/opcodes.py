@@ -78,6 +78,9 @@ _PTagKind = ("kind", ht.NoDefault, ht.TElemOf(constants.VALID_TAG_TYPES))
 #: List of tag strings
 _PTags = ("tags", ht.NoDefault, ht.TListOf(ht.TNonEmptyString))
 
+#: Ignore consistency
+_PIgnoreConsistency = ("ignore_consistency", False, ht.TBool)
+
 #: OP_ID conversion regular expression
 _OPID_RE = re.compile("([a-z])([A-Z])")
 
@@ -712,8 +715,8 @@ class OpRepairNodeStorage(OpCode):
   OP_PARAMS = [
     _PNodeName,
     _PStorageType,
+    _PIgnoreConsistency,
     ("name", ht.NoDefault, ht.TNonEmptyString),
-    ("ignore_consistency", False, ht.TBool),
     ]
 
 
@@ -896,7 +899,7 @@ class OpInstanceFailover(OpCode):
   OP_PARAMS = [
     _PInstanceName,
     _PShutdownTimeout,
-    ("ignore_consistency", False, ht.TBool),
+    _PIgnoreConsistency,
     ("iallocator", None, ht.TMaybeString),
     ("target_node", None, ht.TMaybeString),
     ]
@@ -937,6 +940,7 @@ class OpInstanceMove(OpCode):
   OP_PARAMS = [
     _PInstanceName,
     _PShutdownTimeout,
+    _PIgnoreConsistency,
     ("target_node", ht.NoDefault, ht.TNonEmptyString),
     ]
 
@@ -973,6 +977,7 @@ class OpInstanceRecreateDisks(OpCode):
   OP_PARAMS = [
     _PInstanceName,
     ("disks", ht.EmptyList, ht.TListOf(ht.TPositiveInt)),
+    ("nodes", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
     ]
 
 
@@ -990,6 +995,7 @@ class OpInstanceQueryData(OpCode):
   OP_PARAMS = [
     ("instances", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
     ("static", False, ht.TBool),
+    ("use_locking", False, ht.TBool),
     ]
 
 
@@ -1008,6 +1014,7 @@ class OpInstanceSetParams(OpCode):
     ("os_name", None, ht.TMaybeString),
     ("force_variant", False, ht.TBool),
     ("osparams", None, ht.TMaybeDict),
+    ("wait_for_sync", True, ht.TBool),
     ]
 
 

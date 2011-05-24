@@ -7713,52 +7713,6 @@ class LUInstanceCreate(LogicalUnit):
     if self.op.identify_defaults:
       self._RevertToDefaults(cluster)
 
-    # disk checks/pre-build
-    self.disks = []
-    for disk in self.op.disks:
-      mode = disk.get("mode", constants.DISK_RDWR)
-      if mode not in constants.DISK_ACCESS_SET:
-        raise errors.OpPrereqError("Invalid disk access mode '%s'" %
-                                   mode, errors.ECODE_INVAL)
-      size = disk.get("size", None)
-      if size is None:
-        raise errors.OpPrereqError("Missing disk size", errors.ECODE_INVAL)
-      try:
-        size = int(size)
-      except (TypeError, ValueError):
-        raise errors.OpPrereqError("Invalid disk size '%s'" % size,
-                                   errors.ECODE_INVAL)
-      vg = disk.get("vg", self.cfg.GetVGName())
-      new_disk = {"size": size, "mode": mode, "vg": vg}
-      if "adopt" in disk:
-        new_disk["adopt"] = disk["adopt"]
-      self.disks.append(new_disk)
-
-    #### allocator run
-    # We run the iallocator here, so that we can use the primary node
-    # together with the network link for IP address reservation
-
-    if self.op.iallocator is not None:
-      self._RunAllocator()
-
-    #### node related checks
-
-    # check primary node
-    self.pnode = pnode = self.cfg.GetNodeInfo(self.op.pnode)
-    assert self.pnode is not None, \
-      "Cannot retrieve locked node %s" % self.op.pnode
-    if pnode.offline:
-      raise errors.OpPrereqError("Cannot use offline primary node '%s'" %
-                                 pnode.name, errors.ECODE_STATE)
-    if pnode.drained:
-      raise errors.OpPrereqError("Cannot use drained primary node '%s'" %
-                                 pnode.name, errors.ECODE_STATE)
-    if not pnode.vm_capable:
-      raise errors.OpPrereqError("Cannot use non-vm_capable primary node"
-                                 " '%s'" % pnode.name, errors.ECODE_STATE)
-
-    self.secondaries = []
-
     # NIC buildup
     self.nics = []
     for idx, nic in enumerate(self.op.nics):
@@ -7766,24 +7720,6 @@ class LUInstanceCreate(LogicalUnit):
       nic_mode = nic_mode_req
       if nic_mode is None:
         nic_mode = cluster.nicparams[constants.PP_DEFAULT][constants.NIC_MODE]
-
-      # bridge verification
-      bridge = nic.get("bridge", None)
-      link = nic.get("link", None)
-      if bridge and link:
-        raise errors.OpPrereqError("Cannot pass 'bridge' and 'link'"
-                                   " at the same time", errors.ECODE_INVAL)
-      elif bridge and nic_mode == constants.NIC_MODE_ROUTED:
-        raise errors.OpPrereqError("Cannot pass 'bridge' on a routed nic",
-                                   errors.ECODE_INVAL)
-      elif bridge:
-        link = bridge
-
-      nicparams = {}
-      if nic_mode_req:
-        nicparams[constants.NIC_MODE] = nic_mode_req
-      if link:
-        nicparams[constants.NIC_LINK] = link
 
       # in routed mode, for the first nic, the default ip is 'auto'
       if nic_mode == constants.NIC_MODE_ROUTED and idx == 0:
@@ -7807,10 +7743,9 @@ class LUInstanceCreate(LogicalUnit):
           raise errors.OpPrereqError("IP address %s already in use"
                                      " in cluster" % nic_ip,
                                      errors.ECODE_NOTUNIQUE)
-      elif ip.lower() == constants.NIC_IP_POOL:
-        nic_ip = self.cfg.GenerateIp(self.pnode.name, link, self.proc.GetECId())
-        self.LogInfo("Chose IP %s from pool %s", nic_ip, link)
-      else:
+      elif ip.lower() != constants.NIC_IP_POOL:
+        # We defer pool operations until later, so that the iallocator has
+        # filled in the instance's node(s)
         if not netutils.IPAddress.IsValid(ip):
           raise errors.OpPrereqError("Invalid IP address '%s'" % ip,
                                      errors.ECODE_INVAL)
@@ -7839,6 +7774,24 @@ class LUInstanceCreate(LogicalUnit):
                                      " in cluster" % mac,
                                      errors.ECODE_NOTUNIQUE)
 
+      # bridge verification
+      bridge = nic.get("bridge", None)
+      link = nic.get("link", None)
+      if bridge and link:
+        raise errors.OpPrereqError("Cannot pass 'bridge' and 'link'"
+                                   " at the same time", errors.ECODE_INVAL)
+      elif bridge and nic_mode == constants.NIC_MODE_ROUTED:
+        raise errors.OpPrereqError("Cannot pass 'bridge' on a routed nic",
+                                   errors.ECODE_INVAL)
+      elif bridge:
+        link = bridge
+
+      nicparams = {}
+      if nic_mode_req:
+        nicparams[constants.NIC_MODE] = nic_mode_req
+      if link:
+        nicparams[constants.NIC_LINK] = link
+
       check_params = cluster.SimpleFillNIC(nicparams)
       objects.NIC.CheckParameterSyntax(check_params)
       self.nics.append(objects.NIC(mac=mac, ip=nic_ip, nicparams=nicparams))
@@ -7864,25 +7817,6 @@ class LUInstanceCreate(LogicalUnit):
       if "adopt" in disk:
         new_disk["adopt"] = disk["adopt"]
       self.disks.append(new_disk)
-
-    # ip ping checks (we use the same ip that was resolved in ExpandNames)
-    if self.op.ip_check:
-      if netutils.TcpPing(self.check_ip, constants.DEFAULT_NODED_PORT):
-        raise errors.OpPrereqError("IP %s of instance %s already in use" %
-                                   (self.check_ip, self.op.instance_name),
-                                   errors.ECODE_NOTUNIQUE)
-
-    #### mac address generation
-    # By generating here the mac address both the allocator and the hooks get
-    # the real final mac address rather than the 'auto' or 'generate' value.
-    # There is a race condition between the generation and the instance object
-    # creation, which means that we know the mac is valid now, but we're not
-    # sure it will be when we actually add the instance. If things go bad
-    # adding the instance will abort because of a duplicate mac, and the
-    # creation job will fail.
-    for nic in self.nics:
-      if nic.mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
-        nic.mac = self.cfg.GenerateMAC(self.proc.GetECId())
 
     if self.op.mode == constants.INSTANCE_IMPORT:
 
@@ -7922,6 +7856,56 @@ class LUInstanceCreate(LogicalUnit):
             nic.mac = export_info.get(constants.INISECT_INS, nic_mac_ini)
 
     # ENDIF: self.op.mode == constants.INSTANCE_IMPORT
+
+    # ip ping checks (we use the same ip that was resolved in ExpandNames)
+    if self.op.ip_check:
+      if netutils.TcpPing(self.check_ip, constants.DEFAULT_NODED_PORT):
+        raise errors.OpPrereqError("IP %s of instance %s already in use" %
+                                   (self.check_ip, self.op.instance_name),
+                                   errors.ECODE_NOTUNIQUE)
+
+    #### mac address generation
+    # By generating here the mac address both the allocator and the hooks get
+    # the real final mac address rather than the 'auto' or 'generate' value.
+    # There is a race condition between the generation and the instance object
+    # creation, which means that we know the mac is valid now, but we're not
+    # sure it will be when we actually add the instance. If things go bad
+    # adding the instance will abort because of a duplicate mac, and the
+    # creation job will fail.
+    for nic in self.nics:
+      if nic.mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
+        nic.mac = self.cfg.GenerateMAC(self.proc.GetECId())
+
+    #### allocator run
+
+    if self.op.iallocator is not None:
+      self._RunAllocator()
+
+    #### node related checks
+
+    # check primary node
+    self.pnode = pnode = self.cfg.GetNodeInfo(self.op.pnode)
+    assert self.pnode is not None, \
+      "Cannot retrieve locked node %s" % self.op.pnode
+    if pnode.offline:
+      raise errors.OpPrereqError("Cannot use offline primary node '%s'" %
+                                 pnode.name, errors.ECODE_STATE)
+    if pnode.drained:
+      raise errors.OpPrereqError("Cannot use drained primary node '%s'" %
+                                 pnode.name, errors.ECODE_STATE)
+    if not pnode.vm_capable:
+      raise errors.OpPrereqError("Cannot use non-vm_capable primary node"
+                                 " '%s'" % pnode.name, errors.ECODE_STATE)
+
+    self.secondaries = []
+
+    # Fill in any IPs from IP pools. This must happen here, because we need to
+    # know the nic's primary node, as specified by the iallocator
+    for nic in self.nics:
+      if nic.ip.lower() == constants.NIC_IP_POOL:
+        nic.ip = self.cfg.GenerateIp(self.pnode.name, nic.link,
+                                     self.proc.GetECId())
+        self.LogInfo("Chose IP %s from pool %s", nic.ip, link)
 
     # mirror node verification
     if self.op.disk_template in constants.DTS_INT_MIRROR:

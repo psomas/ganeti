@@ -172,7 +172,7 @@ def ShowNetworkConfig(opts, args):
       for inst in instances:
         ToStdout("    %s", inst)
     else:
-      ToStdOut("  not used by any instances")
+      ToStdout("  not used by any instances")
 
 
 def SetNetworkParams(opts, args):

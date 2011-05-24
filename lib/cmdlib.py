@@ -7737,25 +7737,14 @@ class LUInstanceCreate(LogicalUnit):
                                      " have been skipped",
                                      errors.ECODE_INVAL)
         nic_ip = self.hostname1.ip
-        try:
-          self.cfg.ReserveIp(self.pnode.name, link, nic_ip, self.proc.GetECId())
-        except errors.ReservationError:
-          raise errors.OpPrereqError("IP address %s already in use"
-                                     " in cluster" % nic_ip,
-                                     errors.ECODE_NOTUNIQUE)
-      elif ip.lower() != constants.NIC_IP_POOL:
+      else:
         # We defer pool operations until later, so that the iallocator has
         # filled in the instance's node(s)
-        if not netutils.IPAddress.IsValid(ip):
+        if (ip.lower() != constants.NIC_IP_POOL and not
+            netutils.IPAddress.IsValid(ip)):
           raise errors.OpPrereqError("Invalid IP address '%s'" % ip,
                                      errors.ECODE_INVAL)
         nic_ip = ip
-        try:
-          self.cfg.ReserveIp(self.pnode.name, link, nic_ip, self.proc.GetECId())
-        except errors.ReservationError:
-          raise errors.OpPrereqError("IP address %s already in use"
-                                     " in cluster" % nic_ip,
-                                     errors.ECODE_NOTUNIQUE)
 
       # TODO: check the ip address for uniqueness
       if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip:
@@ -7902,10 +7891,20 @@ class LUInstanceCreate(LogicalUnit):
     # Fill in any IPs from IP pools. This must happen here, because we need to
     # know the nic's primary node, as specified by the iallocator
     for nic in self.nics:
-      if nic.ip.lower() == constants.NIC_IP_POOL:
-        nic.ip = self.cfg.GenerateIp(self.pnode.name, nic.link,
-                                     self.proc.GetECId())
-        self.LogInfo("Chose IP %s from pool %s", nic.ip, link)
+      if nic.ip is not None:
+        link = nic.nicparams[constants.NIC_LINK]
+        if nic.ip.lower() == constants.NIC_IP_POOL:
+          nic.ip = self.cfg.GenerateIp(self.pnode.name, link,
+                                       self.proc.GetECId())
+          self.LogInfo("Chose IP %s from pool %s", nic.ip, link)
+        else:
+          try:
+            self.cfg.ReserveIp(self.pnode.name, link,
+                               nic.ip, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("IP address %s already in use"
+                                       " in cluster" % nic.ip,
+                                       errors.ECODE_NOTUNIQUE)
 
     # mirror node verification
     if self.op.disk_template in constants.DTS_INT_MIRROR:

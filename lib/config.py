@@ -1312,7 +1312,8 @@ class ConfigWriter:
     instance = self._UnlockedGetInstanceInfo(instance_name)
 
     for nic in instance.nics:
-      link = nic.nicparams.get(constants.NIC_LINK, None)
+      nicparams = self._config_data.cluster.SimpleFillNIC(nic.nicparams)
+      link = nicparams[constants.NIC_LINK]
       net_uuid = self._UnlockedGetNetworkFromNodeLink(instance.primary_node,
                                                       link)
       if net_uuid:

@@ -106,6 +106,12 @@ class TemporaryReservationManager:
       all_reserved.update(holder_reserved)
     return all_reserved
 
+  def GetECReserved(self, ec_id):
+    ec_reserved = set()
+    if ec_id in self._ec_reserved:
+      ec_reserved.update(self._ec_reserved[ec_id])
+    return ec_reserved
+
   def Generate(self, existing, generate_one_fn, ec_id):
     """Generate a new resource of this type
 
@@ -216,6 +222,13 @@ class ConfigWriter:
       raise errors.ReservationError("mac already in use")
     else:
       self._temporary_macs.Reserve(ec_id, mac)
+
+  def _UnlockedCommitReservedIps(self, ec_id):
+    """Commit all reserved IP address to their respective pools
+
+    """
+    for address, net_uuid in self._temporary_ips.GetECReserved(ec_id):
+      self._UnlockedCommitIp(net_uuid, address)
 
   def _UnlockedCommitIp(self, net_uuid, address):
     """Commit a reserved IP address to an IP pool.
@@ -332,7 +345,10 @@ class ConfigWriter:
     net_uuid = self._UnlockedGetNetworkFromNodeLink(node_name, link)
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
-    return self._temporary_ips.Generate([], pool.GenerateFree(), ec_id)
+    gen_free = pool.GenerateFree()
+    gen_one = lambda: (gen_free(), net_uuid)
+    address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
+    return address
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveIp(self, node_name, link, address, ec_id):
@@ -346,7 +362,7 @@ class ConfigWriter:
       pool.Reserve(address)
     except errors.AddressPoolError:
       raise errors.ReservationError("IP address already in use")
-    return self._temporary_ips.Reserve(address, ec_id)
+    return self._temporary_ips.Reserve((address, net_uuid), ec_id)
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
@@ -1234,12 +1250,6 @@ class ConfigWriter:
         raise errors.ConfigurationError("Cannot add instance %s:"
                                         " MAC address '%s' already in use." %
                                         (instance.name, nic.mac))
-      link = nic.nicparams.get(constants.NIC_LINK, None)
-      net_uuid = self._UnlockedGetNetworkFromNodeLink(instance.primary_node,
-                                                      link)
-      if net_uuid:
-        # Commit all IP addresses to the respective address pools
-        self._UnlockedCommitIp(net_uuid, nic.ip)
 
     self._EnsureUUID(instance, ec_id)
 
@@ -1248,6 +1258,7 @@ class ConfigWriter:
     self._config_data.instances[instance.name] = instance
     self._config_data.cluster.serial_no += 1
     self._UnlockedReleaseDRBDMinors(instance.name)
+    self._UnlockedCommitReservedIps(ec_id)
     self._WriteConfig()
 
   def _EnsureUUID(self, item, ec_id):
@@ -2015,7 +2026,7 @@ class ConfigWriter:
     return self._config_data.HasAnyDiskOfType(dev_type)
 
   @locking.ssynchronized(_config_lock)
-  def Update(self, target, feedback_fn):
+  def Update(self, target, feedback_fn, ec_id=None):
     """Notify function to be called after updates.
 
     This function must be called when an object (as returned by
@@ -2061,6 +2072,12 @@ class ConfigWriter:
 
     if isinstance(target, objects.Instance):
       self._UnlockedReleaseDRBDMinors(target.name)
+      if ec_id is not None:
+        # Commit all reserved IPs
+        self._UnlockedCommitReservedIps(ec_id)
+        # Drop the IP reservations so that we can call Update() multiple times
+        # from within the same LU
+        self._temporary_ips.DropECReservations(ec_id)
 
     self._WriteConfig(feedback_fn=feedback_fn)
 

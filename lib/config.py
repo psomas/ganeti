@@ -297,12 +297,15 @@ class ConfigWriter:
     pool.Release(address)
 
   @locking.ssynchronized(_config_lock)
-  def ReleaseIp(self, net_uuid, address):
+  def ReleaseIp(self, node_name, link, address):
     """Give a specified IP address back to an IP pool.
 
     This is just a wrapper around _UnlockedReleaseIp.
 
     """
+    net_uuid = self._UnlockedGetNetworkFromNodeLink(node_name, link)
+    if not net_uuid:
+      return
     self._UnlockedReleaseIp(net_uuid, address)
     self._WriteConfig()
 

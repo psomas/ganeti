@@ -7892,7 +7892,8 @@ class LUInstanceCreate(LogicalUnit):
     # know the nic's primary node, as specified by the iallocator
     for nic in self.nics:
       if nic.ip is not None:
-        link = nic.nicparams[constants.NIC_LINK]
+        filled_params = cluster.SimpleFillNIC(nic.nicparams)
+        link = filled_params[constants.NIC_LINK]
         if nic.ip.lower() == constants.NIC_IP_POOL:
           nic.ip = self.cfg.GenerateIp(self.pnode.name, link,
                                        self.proc.GetECId())
@@ -9514,7 +9515,8 @@ class LUInstanceSetParams(LogicalUnit):
         if nic_ip.lower() == constants.VALUE_NONE:
           nic_dict['ip'] = None
         else:
-          if not netutils.IPAddress.IsValid(nic_ip):
+          if (nic_ip.lower() != constants.NIC_IP_POOL and not
+              netutils.IPAddress.IsValid(nic_ip)):
             raise errors.OpPrereqError("Invalid IP address '%s'" % nic_ip,
                                        errors.ECODE_INVAL)
 
@@ -9754,11 +9756,17 @@ class LUInstanceSetParams(LogicalUnit):
     # NIC processing
     self.nic_pnew = {}
     self.nic_pinst = {}
+    self.release_ips = []
+    cluster_info = self.cfg.GetClusterInfo()
     for nic_op, nic_dict in self.op.nics:
       if nic_op == constants.DDM_REMOVE:
         if not instance.nics:
           raise errors.OpPrereqError("Instance has no NICs, cannot remove",
                                      errors.ECODE_INVAL)
+        filled_params = cluster_info.SimpleFillNIC(instance.nics[-1].nicparams)
+        old_nic_ip = instance.nics[-1].ip
+        old_nic_link = filled_params[constants.NIC_LINK]
+        self.release_ips.append((old_nic_ip, old_nic_link, pnode))
         continue
       if nic_op != constants.DDM_ADD:
         # an existing nic
@@ -9773,6 +9781,8 @@ class LUInstanceSetParams(LogicalUnit):
                                      errors.ECODE_INVAL)
         old_nic_params = instance.nics[nic_op].nicparams
         old_nic_ip = instance.nics[nic_op].ip
+        filled_params = cluster_info.SimpleFillNIC(old_nic_params)
+        old_nic_link = filled_params[constants.NIC_LINK]
       else:
         old_nic_params = {}
         old_nic_ip = None
@@ -9792,6 +9802,7 @@ class LUInstanceSetParams(LogicalUnit):
       self.nic_pinst[nic_op] = new_nic_params
       self.nic_pnew[nic_op] = new_filled_nic_params
       new_nic_mode = new_filled_nic_params[constants.NIC_MODE]
+      new_nic_link = new_filled_nic_params[constants.NIC_LINK]
 
       if new_nic_mode == constants.NIC_MODE_BRIDGED:
         nic_bridge = new_filled_nic_params[constants.NIC_LINK]
@@ -9802,6 +9813,7 @@ class LUInstanceSetParams(LogicalUnit):
             self.warn.append(msg)
           else:
             raise errors.OpPrereqError(msg, errors.ECODE_ENVIRON)
+      nic_ip = None
       if new_nic_mode == constants.NIC_MODE_ROUTED:
         if 'ip' in nic_dict:
           nic_ip = nic_dict['ip']
@@ -9826,6 +9838,22 @@ class LUInstanceSetParams(LogicalUnit):
             raise errors.OpPrereqError("MAC address %s already in use"
                                        " in cluster" % nic_mac,
                                        errors.ECODE_NOTUNIQUE)
+
+      if nic_ip is not None:
+        if nic_ip.lower() == constants.NIC_IP_POOL:
+          nic_dict["ip"] = self.cfg.GenerateIp(pnode, new_nic_link,
+                                               self.proc.GetECId())
+          nic_ip = nic_dict["ip"]
+          self.LogInfo("Chose IP %s from pool %s", nic_ip, new_nic_link)
+        elif nic_ip != old_nic_ip:
+          try:
+            self.cfg.ReserveIp(pnode, new_nic_link, nic_ip, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("IP address %s already in use"
+                                       " in cluster" % nic_ip,
+                                       errors.ECODE_NOTUNIQUE)
+      if old_nic_ip is not None and nic_ip != old_nic_ip:
+        self.release_ips.append((old_nic_ip, old_nic_link, pnode))
 
     # DISK processing
     if self.op.disks and instance.disk_template == constants.DT_DISKLESS:
@@ -10135,7 +10163,11 @@ class LUInstanceSetParams(LogicalUnit):
       for key, val in self.op.osparams.iteritems():
         result.append(("os/%s" % key, val))
 
-    self.cfg.Update(instance, feedback_fn)
+    self.cfg.Update(instance, feedback_fn, ec_id=self.proc.GetECId())
+
+    for ip, link, node in self.release_ips:
+      self.LogInfo("Releasing IP %s on pool %s", ip, link)
+      self.cfg.ReleaseIp(node, link, ip)
 
     return result
 

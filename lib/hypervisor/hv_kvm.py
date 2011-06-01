@@ -183,9 +183,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     constants.HV_VNC_X509: hv_base.OPT_DIR_CHECK,
     constants.HV_VNC_X509_VERIFY: hv_base.NO_CHECK,
     constants.HV_VNC_PASSWORD_FILE: hv_base.OPT_FILE_CHECK,
-    constants.HV_CDROM_IMAGE_PATH: hv_base.OPT_FILE_OR_URL_CHECK,
     constants.HV_KVM_FLOPPY_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
-    constants.HV_CDROM_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
+    constants.HV_CDROM_IMAGE_PATH: hv_base.OPT_FILE_OR_URL_CHECK,
     constants.HV_KVM_CDROM2_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
     constants.HV_BOOT_ORDER:
       hv_base.ParamInSet(True, constants.HT_KVM_VALID_BO_TYPES),

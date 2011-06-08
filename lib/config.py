@@ -350,7 +350,14 @@ class ConfigWriter:
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
     gen_free = pool.GenerateFree()
-    gen_one = lambda: (gen_free(), net_uuid)
+
+    def gen_one():
+      try:
+        ip = gen_free()
+      except StopIteration:
+        return None
+      return (ip, net_uuid)
+
     address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
     return address
 

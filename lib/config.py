@@ -125,6 +125,7 @@ class TemporaryReservationManager:
       new_resource = generate_one_fn()
       if new_resource is not None and new_resource not in all_elems:
         break
+      retries -= 1
     else:
       raise errors.ConfigurationError("Not able generate new resource"
                                       " (last tried: %s)" % new_resource)

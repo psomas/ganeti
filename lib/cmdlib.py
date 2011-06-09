@@ -7903,13 +7903,18 @@ class LUInstanceCreate(LogicalUnit):
 
     # Fill in any IPs from IP pools. This must happen here, because we need to
     # know the nic's primary node, as specified by the iallocator
-    for nic in self.nics:
+    for idx, nic in enumerate(self.nics):
       if nic.ip is not None:
         filled_params = cluster.SimpleFillNIC(nic.nicparams)
         link = filled_params[constants.NIC_LINK]
         if nic.ip.lower() == constants.NIC_IP_POOL:
-          nic.ip = self.cfg.GenerateIp(self.pnode.name, link,
-                                       self.proc.GetECId())
+          try:
+            nic.ip = self.cfg.GenerateIp(self.pnode.name, link,
+                                         self.proc.GetECId())
+          except errors.ConfigurationError:
+            raise errors.OpPrereqError("Unable to get a free IP for NIC %d"
+                                       " from the address pool" % idx,
+                                       errors.ECODE_STATE)
           self.LogInfo("Chose IP %s from pool %s", nic.ip, link)
         else:
           try:
@@ -9855,8 +9860,13 @@ class LUInstanceSetParams(LogicalUnit):
 
       if nic_ip is not None:
         if nic_ip.lower() == constants.NIC_IP_POOL:
-          nic_dict["ip"] = self.cfg.GenerateIp(pnode, new_nic_link,
-                                               self.proc.GetECId())
+          try:
+            nic_dict["ip"] = self.cfg.GenerateIp(pnode, new_nic_link,
+                                                 self.proc.GetECId())
+          except errors.ConfigurationError:
+            raise errors.OpPrereqError("Unable to get a free IP"
+                                       " from the address pool",
+                                       errors.ECODE_STATE)
           nic_ip = nic_dict["ip"]
           self.LogInfo("Chose IP %s from pool %s", nic_ip, new_nic_link)
         elif nic_ip != old_nic_ip:

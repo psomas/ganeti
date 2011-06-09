@@ -140,11 +140,12 @@ def ShowNetworkConfig(opts, args):
   cl = GetClient()
   result = cl.QueryNetworks(fields=["name", "network", "gateway",
                                     "free_count", "reserved_count",
-                                    "map", "group_links", "inst_list"],
+                                    "map", "group_links", "inst_list",
+                                    "external_reservations"],
                             names=args, use_locking=False)
 
   for (name, network, gateway, free_count, reserved_count,
-       map, group_links, instances) in result:
+       map, group_links, instances, ext_res) in result:
     size = free_count + reserved_count
     ToStdout("Network name: %s", name)
     ToStdout("  subnet: %s", network)
@@ -158,6 +159,11 @@ def ShowNetworkConfig(opts, args):
       ToStdout("     %s %s %d", str(idx).rjust(3), line.ljust(64), idx + 63)
       idx += 64
     ToStdout("         (X) used    (.) free")
+
+    if ext_res:
+      ToStdout("  externally reserved IPs:")
+      for line in wrap(ext_res, width=64):
+        ToStdout("    %s" % line)
 
     if group_links:
       ToStdout("  connected to node groups:")

@@ -1343,6 +1343,7 @@ _NETWORK_STATS_FIELDS = {
   "free_count": ("FreeCount", QFT_NUMBER),
   "reserved_count": ("ReservedCount", QFT_NUMBER),
   "map": ("Map", QFT_TEXT),
+  "external_reservations": ("ExternalReservations", QFT_TEXT),
   }
 
 

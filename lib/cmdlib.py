@@ -12146,6 +12146,7 @@ class _NetworkQuery(_QueryBase):
             "free_count": pool.GetFreeCount(),
             "reserved_count": pool.GetReservedCount(),
             "map": pool.GetMap(),
+            "external_reservations": ", ".join(pool.GetExternalReservations()),
             }
 
     return query.NetworkQueryData([self._all_networks[uuid]

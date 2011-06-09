@@ -162,6 +162,11 @@ class AddressPool(object):
 
     return _iter_free().next
 
+  def GetExternalReservations(self):
+    """Returns a list of all externally reserved addresses"""
+    idxs = self.ext_reservations.search("1")
+    return [str(self.network[idx]) for idx in idxs]
+
   @classmethod
   def InitializeNetwork(cls, net):
     """Initialize an L{objects.Network} object

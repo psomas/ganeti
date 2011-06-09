@@ -12104,6 +12104,7 @@ class _NetworkQuery(_QueryBase):
     do_instances = query.NETQ_INST in self.requested_data
     do_groups = do_instances or (query.NETQ_GROUP in self.requested_data)
     do_stats = query.NETQ_STATS in self.requested_data
+    cluster = lu.cfg.GetClusterInfo()
 
     network_to_groups = None
     network_to_instances = None
@@ -12113,6 +12114,8 @@ class _NetworkQuery(_QueryBase):
     if do_groups:
       all_groups = lu.cfg.GetAllNodeGroupsInfo()
       network_to_groups = dict((uuid, []) for uuid in self.wanted)
+      default_nicpp = cluster.nicparams[constants.PP_DEFAULT]
+      default_link = default_nicpp[constants.NIC_LINK]
 
       if do_instances:
         all_instances = lu.cfg.GetAllInstancesInfo()
@@ -12133,7 +12136,8 @@ class _NetworkQuery(_QueryBase):
             if do_instances:
               for instance in group_instances:
                 for nic in instance.nics:
-                  if nic.nicparams.get(constants.NIC_LINK, None) == link:
+                  if nic.nicparams.get(constants.NIC_LINK,
+                                       default_link) == link:
                     network_to_instances[uuid].append(instance.name)
                     break
 

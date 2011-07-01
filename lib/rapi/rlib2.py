@@ -800,6 +800,7 @@ def _ParseInstanceCreateRequestVersion1(data, dry_run):
                                                  default=None),
     iallocator=baserlib.CheckParameter(data, "iallocator", default=None),
     hypervisor=baserlib.CheckParameter(data, "hypervisor", default=None),
+    tags=baserlib.CheckParameter(data, "tags", default=[]),
     hvparams=hvparams,
     beparams=beparams,
     dry_run=dry_run,

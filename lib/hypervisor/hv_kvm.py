@@ -607,10 +607,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         options = "%s,format=raw" % options
       if boot_cdrom:
         kvm_cmd.extend(['-boot', 'd'])
-        if cdrom_disk_type != constants.HT_DISK_IDE:
-          options = '%s,boot=on,if=%s' % (options, constants.HT_DISK_IDE)
-        else:
-          options = '%s,boot=on' % options
+        # We default to IDE in order for CDROM booting to be usable
+        # Also, there is no need to pass boot=on, as IDE doesn't need
+        # extboot functionality to boot
+        options = '%s,if=%s' % (options, constants.HT_DISK_IDE)
       else:
         if cdrom_disk_type == constants.HT_DISK_PARAVIRTUAL:
           if_val = ',if=virtio'

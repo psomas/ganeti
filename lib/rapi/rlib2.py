@@ -785,7 +785,7 @@ def _ParseInstanceCreateRequestVersion1(data, dry_run):
     src_node=baserlib.CheckParameter(data, "src_node", default=None),
     src_path=baserlib.CheckParameter(data, "src_path", default=None),
     start=baserlib.CheckParameter(data, "start", default=True),
-    wait_for_sync=True,
+    wait_for_sync=baserlib.CheckParameter(data, "wait_for_sync", default=True),
     ip_check=baserlib.CheckParameter(data, "ip_check", default=True),
     name_check=baserlib.CheckParameter(data, "name_check", default=True),
     file_storage_dir=baserlib.CheckParameter(data, "file_storage_dir",

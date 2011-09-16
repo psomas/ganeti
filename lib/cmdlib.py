@@ -8230,8 +8230,9 @@ class LUInstanceCreate(LogicalUnit):
     if iobj.disk_template != constants.DT_DISKLESS and not self.adopt_disks:
       if self.op.mode == constants.INSTANCE_CREATE:
         if not self.op.no_install:
-          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
-              self.op.wait_for_sync):
+          pause_sync = (iobj.disk_template in constants.DTS_INT_MIRROR and
+                        not self.op.wait_for_sync)
+          if pause_sync:
             feedback_fn("* pausing disk sync to install instance OS")
             result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
                                                               iobj.disks, True)
@@ -8242,10 +8243,10 @@ class LUInstanceCreate(LogicalUnit):
 
           feedback_fn("* running the instance OS create scripts...")
           # FIXME: pass debug option from opcode to backend
-          result = self.rpc.call_instance_os_add(pnode_name, iobj, False,
-                                                 self.op.debug_level)
-          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
-              self.op.wait_for_sync):
+          os_add_result = \
+            self.rpc.call_instance_os_add(pnode_name, iobj, False,
+                                          self.op.debug_level)
+          if pause_sync:
             feedback_fn("* resuming disk sync")
             result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
                                                               iobj.disks, False)
@@ -8254,8 +8255,8 @@ class LUInstanceCreate(LogicalUnit):
                 logging.warn("resume-sync of instance %s for disk %d failed",
                              instance, idx)
 
-          result.Raise("Could not add os for instance %s"
-                       " on node %s" % (instance, pnode_name))
+          os_add_result.Raise("Could not add os for instance %s"
+                              " on node %s" % (instance, pnode_name))
 
       elif self.op.mode == constants.INSTANCE_IMPORT:
         feedback_fn("* running the instance OS import scripts...")

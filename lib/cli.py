@@ -70,6 +70,7 @@ __all__ = [
   "DRAINED_OPT",
   "DRY_RUN_OPT",
   "DRBD_HELPER_OPT",
+  "DST_NODE_OPT",
   "EARLY_RELEASE_OPT",
   "ENABLED_HV_OPT",
   "ERROR_CODES_OPT",
@@ -78,8 +79,10 @@ __all__ = [
   "FILESTORE_DRIVER_OPT",
   "FORCE_OPT",
   "FORCE_VARIANT_OPT",
+  "GATEWAY_OPT",
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
+  "GLOBAL_SHARED_FILEDIR_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -99,6 +102,7 @@ __all__ = [
   "MC_OPT",
   "MIGRATION_MODE_OPT",
   "NET_OPT",
+  "NETWORK_OPT",
   "NEW_CLUSTER_CERT_OPT",
   "NEW_CLUSTER_DOMAIN_SECRET_OPT",
   "NEW_CONFD_HMAC_KEY_OPT",
@@ -142,6 +146,7 @@ __all__ = [
   "REBOOT_TYPE_OPT",
   "REMOVE_INSTANCE_OPT",
   "REMOVE_UIDS_OPT",
+  "RESERVED_IPS_OPT",
   "RESERVED_LVS_OPT",
   "ROMAN_OPT",
   "SECONDARY_IP_OPT",
@@ -155,6 +160,7 @@ __all__ = [
   "SUBMIT_OPT",
   "STATIC_OPT",
   "SYNC_OPT",
+  "TAG_ADD_OPT",
   "TAG_SRC_OPT",
   "TIMEOUT_OPT",
   "UIDPOOL_OPT",
@@ -194,11 +200,13 @@ __all__ = [
   "ARGS_MANY_INSTANCES",
   "ARGS_MANY_NODES",
   "ARGS_MANY_GROUPS",
+  "ARGS_MANY_NETWORKS",
   "ARGS_NONE",
   "ARGS_ONE_INSTANCE",
   "ARGS_ONE_NODE",
   "ARGS_ONE_GROUP",
   "ARGS_ONE_OS",
+  "ARGS_ONE_NETWORK",
   "ArgChoice",
   "ArgCommand",
   "ArgFile",
@@ -206,6 +214,7 @@ __all__ = [
   "ArgHost",
   "ArgInstance",
   "ArgJobId",
+  "ArgNetwork",
   "ArgNode",
   "ArgOs",
   "ArgSuggest",
@@ -216,7 +225,11 @@ __all__ = [
   "OPT_COMPL_ONE_INSTANCE",
   "OPT_COMPL_ONE_NODE",
   "OPT_COMPL_ONE_NODEGROUP",
+  "OPT_COMPL_ONE_NETWORK",
   "OPT_COMPL_ONE_OS",
+  "OPT_COMPL_NIC_PARAMS",
+  "OPT_COMPL_DISK_PARAMS",
+  "OPT_COMPL_BACKEND_PARAMS",
   "cli_option",
   "SplitNodeOption",
   "CalculateOSNames",
@@ -298,6 +311,11 @@ class ArgNode(_Argument):
   """
 
 
+class ArgNetwork(_Argument):
+  """Network argument.
+
+  """
+
 class ArgGroup(_Argument):
   """Node group argument.
 
@@ -336,9 +354,11 @@ class ArgOs(_Argument):
 
 ARGS_NONE = []
 ARGS_MANY_INSTANCES = [ArgInstance()]
+ARGS_MANY_NETWORKS = [ArgNetwork()]
 ARGS_MANY_NODES = [ArgNode()]
 ARGS_MANY_GROUPS = [ArgGroup()]
 ARGS_ONE_INSTANCE = [ArgInstance(min=1, max=1)]
+ARGS_ONE_NETWORK = [ArgNetwork(min=1, max=1)]
 ARGS_ONE_NODE = [ArgNode(min=1, max=1)]
 # TODO
 ARGS_ONE_GROUP = [ArgGroup(min=1, max=1)]
@@ -554,7 +574,11 @@ def check_bool(option, opt, value): # pylint: disable-msg=W0613
  OPT_COMPL_ONE_OS,
  OPT_COMPL_ONE_IALLOCATOR,
  OPT_COMPL_INST_ADD_NODES,
- OPT_COMPL_ONE_NODEGROUP) = range(100, 107)
+ OPT_COMPL_ONE_NODEGROUP,
+ OPT_COMPL_ONE_NETWORK,
+ OPT_COMPL_NIC_PARAMS,
+ OPT_COMPL_DISK_PARAMS,
+ OPT_COMPL_BACKEND_PARAMS) = range(100, 111)
 
 OPT_COMPL_ALL = frozenset([
   OPT_COMPL_MANY_NODES,
@@ -564,6 +588,17 @@ OPT_COMPL_ALL = frozenset([
   OPT_COMPL_ONE_IALLOCATOR,
   OPT_COMPL_INST_ADD_NODES,
   OPT_COMPL_ONE_NODEGROUP,
+  OPT_COMPL_ONE_NETWORK,
+  OPT_COMPL_NIC_PARAMS,
+  OPT_COMPL_DISK_PARAMS,
+  OPT_COMPL_BACKEND_PARAMS,
+  ])
+
+#XXX: really fix build-bash-completion to handle these
+OPT_COMPL_PARAMS = frozenset([
+  OPT_COMPL_NIC_PARAMS,
+  OPT_COMPL_DISK_PARAMS,
+  OPT_COMPL_BACKEND_PARAMS,
   ])
 
 
@@ -623,6 +658,10 @@ IGNORE_OFFLINE_OPT = cli_option("--ignore-offline", dest="ignore_offline",
                                   action="store_true", default=False,
                                   help=("Ignore offline nodes and do as much"
                                         " as possible"))
+
+TAG_ADD_OPT = cli_option("--tags", dest="tags",
+                         default=None, help="Comma-separated list of instance"
+                                            " tags")
 
 TAG_SRC_OPT = cli_option("--from", dest="tags_source",
                          default=None, help="File with tag names")
@@ -707,7 +746,8 @@ NO_INSTALL_OPT = cli_option("--no-install", dest="no_install",
 
 BACKEND_OPT = cli_option("-B", "--backend-parameters", dest="beparams",
                          type="keyval", default={},
-                         help="Backend parameters")
+                         help="Backend parameters",
+                         completion_suggest=OPT_COMPL_BACKEND_PARAMS)
 
 HVOPTS_OPT =  cli_option("-H", "--hypervisor-parameters", type="keyval",
                          default={}, dest="hvparams",
@@ -735,10 +775,12 @@ NONAMECHECK_OPT = cli_option("--no-name-check", dest="name_check",
 
 NET_OPT = cli_option("--net",
                      help="NIC parameters", default=[],
-                     dest="nics", action="append", type="identkeyval")
+                     dest="nics", action="append", type="identkeyval",
+                     completion_suggest=OPT_COMPL_NIC_PARAMS)
 
 DISK_OPT = cli_option("--disk", help="Disk parameters", default=[],
-                      dest="disks", action="append", type="identkeyval")
+                      dest="disks", action="append", type="identkeyval",
+                      completion_suggest=OPT_COMPL_DISK_PARAMS)
 
 DISKIDX_OPT = cli_option("--disks", dest="disks", default=None,
                          help="Comma-separated list of disks"
@@ -839,6 +881,11 @@ REMOVE_INSTANCE_OPT = cli_option("--remove-instance", dest="remove_instance",
                                  action="store_true", default=False,
                                  help="Remove the instance from the cluster")
 
+DST_NODE_OPT = cli_option("-n", "--target-node", dest="dst_node",
+                               help="Specifies the new node for the instance",
+                               metavar="NODE", default=None,
+                               completion_suggest=OPT_COMPL_ONE_NODE)
+
 NEW_SECONDARY_OPT = cli_option("-n", "--new-secondary", dest="dst_node",
                                help="Specifies the new secondary node",
                                metavar="NODE", default=None,
@@ -932,7 +979,8 @@ ENABLED_HV_OPT = cli_option("--enabled-hypervisors",
 
 NIC_PARAMS_OPT = cli_option("-N", "--nic-parameters", dest="nicparams",
                             type="keyval", default={},
-                            help="NIC parameters")
+                            help="NIC parameters",
+                            completion_suggest=OPT_COMPL_NIC_PARAMS)
 
 CP_SIZE_OPT = cli_option("-C", "--candidate-pool-size", default=None,
                          dest="candidate_pool_size", type="int",
@@ -971,6 +1019,15 @@ GLOBAL_FILEDIR_OPT = cli_option("--file-storage-dir", dest="file_storage_dir",
                                 constants.DEFAULT_FILE_STORAGE_DIR,
                                 metavar="DIR",
                                 default=constants.DEFAULT_FILE_STORAGE_DIR)
+
+GLOBAL_SHARED_FILEDIR_OPT = cli_option("--shared-file-storage-dir",
+                            dest="shared_file_storage_dir",
+                            help="Specify the default directory (cluster-"
+                            "wide) for storing the shared file-based"
+                            " disks [%s]" %
+                            constants.DEFAULT_SHARED_FILE_STORAGE_DIR,
+                            metavar="SHAREDDIR",
+                            default=constants.DEFAULT_SHARED_FILE_STORAGE_DIR)
 
 NOMODIFY_ETCHOSTS_OPT = cli_option("--no-etc-hosts", dest="modify_etc_hosts",
                                    help="Don't modify /etc/hosts",
@@ -1155,6 +1212,17 @@ NO_REMEMBER_OPT = cli_option("--no-remember",
                              action="store_true", default=False,
                              help="Perform but do not record the change"
                              " in the configuration")
+NETWORK_OPT = cli_option("--network",
+                         action="store", default=None, dest="network",
+                         help="IP network in CIDR notation")
+
+GATEWAY_OPT = cli_option("--gateway",
+                         action="store", default=None, dest="gateway",
+                         help="IP address of the router (gateway)")
+
+RESERVED_IPS_OPT = cli_option("--reserved-ips",
+                              action="store", default=None, dest="reserved_ips",
+                              help="Comma-delimited list of reserved IPs")
 
 
 #: Options provided by all commands
@@ -1179,6 +1247,7 @@ COMMON_CREATE_OPTS = [
   OSPARAMS_OPT,
   OS_SIZE_OPT,
   SUBMIT_OPT,
+  TAG_ADD_OPT,
   DRY_RUN_OPT,
   PRIORITY_OPT,
   ]
@@ -2060,6 +2129,11 @@ def GenericInstanceCreate(mode, opts, args):
                                    " disk %d" % didx)
       disks[didx] = ddict
 
+  if opts.tags is not None:
+    tags = opts.tags.split(",")
+  else:
+    tags = []
+
   utils.ForceDictType(opts.beparams, constants.BES_PARAMETER_TYPES)
   utils.ForceDictType(hvparams, constants.HVS_PARAMETER_TYPES)
 
@@ -2103,6 +2177,7 @@ def GenericInstanceCreate(mode, opts, args):
                                 force_variant=force_variant,
                                 src_node=src_node,
                                 src_path=src_path,
+                                tags=tags,
                                 no_install=no_install,
                                 identify_defaults=identify_defaults)
 

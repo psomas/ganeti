@@ -58,6 +58,7 @@ from ganeti import netutils
 from ganeti import query
 from ganeti import qlang
 from ganeti import opcodes
+from ganeti import network
 
 import ganeti.masterd.instance # pylint: disable-msg=W0611
 
@@ -783,7 +784,7 @@ def _ExpandInstanceName(cfg, name):
 
 def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
                           memory, vcpus, nics, disk_template, disks,
-                          bep, hvp, hypervisor_name):
+                          bep, hvp, hypervisor_name, tags):
   """Builds instance related env variables for hooks
 
   This builds the hook environment from individual variables.
@@ -815,6 +816,8 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
   @param hvp: the hypervisor parameters for the instance
   @type hypervisor_name: string
   @param hypervisor_name: the hypervisor for the instance
+  @type tags: list
+  @param tags: list of instance tags as strings
   @rtype: dict
   @return: the hook environment for this instance
 
@@ -861,6 +864,11 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
     disk_count = 0
 
   env["INSTANCE_DISK_COUNT"] = disk_count
+
+  if not tags:
+    tags = []
+
+  env["INSTANCE_TAGS"] = " ".join(tags)
 
   for source, kind in [(bep, "BE"), (hvp, "HV")]:
     for key, value in source.items():
@@ -925,6 +933,7 @@ def _BuildInstanceHookEnvByObject(lu, instance, override=None):
     'bep': bep,
     'hvp': hvp,
     'hypervisor_name': instance.hypervisor,
+    'tags': instance.tags,
   }
   if override:
     args.update(override)
@@ -1036,7 +1045,7 @@ def _GetStorageTypeArgs(cfg, storage_type):
   # Special case for file storage
   if storage_type == constants.ST_FILE:
     # storage.FileStorage wants a list of storage directories
-    return [[cfg.GetFileStorageDir()]]
+    return [[cfg.GetFileStorageDir(), cfg.GetSharedFileStorageDir()]]
 
   return []
 
@@ -2358,7 +2367,7 @@ class LUClusterVerify(LogicalUnit):
                utils.CommaJoin(inst_config.secondary_nodes),
                code=self.ETYPE_WARNING)
 
-      if inst_config.disk_template in constants.DTS_NET_MIRROR:
+      if inst_config.disk_template in constants.DTS_INT_MIRROR:
         pnode = inst_config.primary_node
         instance_nodes = utils.NiceSort(inst_config.all_nodes)
         instance_groups = {}
@@ -4411,7 +4420,7 @@ class LUNodeSetParams(LogicalUnit):
       if self.needed_locks[locking.LEVEL_NODE] is not locking.ALL_SET:
         for instance_name in self.acquired_locks[locking.LEVEL_INSTANCE]:
           instance = self.context.cfg.GetInstanceInfo(instance_name)
-          i_mirrored = instance.disk_template in constants.DTS_NET_MIRROR
+          i_mirrored = instance.disk_template in constants.DTS_INT_MIRROR
           if i_mirrored and self.op.node_name in instance.all_nodes:
             instances_keep.append(instance_name)
             self.affected_instances.append(instance)
@@ -4718,6 +4727,7 @@ class LUClusterQuery(NoHooksLU):
       "volume_group_name": cluster.volume_group_name,
       "drbd_usermode_helper": cluster.drbd_usermode_helper,
       "file_storage_dir": cluster.file_storage_dir,
+      "shared_file_storage_dir": cluster.shared_file_storage_dir,
       "maintain_node_health": cluster.maintain_node_health,
       "ctime": cluster.ctime,
       "mtime": cluster.mtime,
@@ -5627,7 +5637,7 @@ class LUInstanceRename(LogicalUnit):
     old_name = inst.name
 
     rename_file_storage = False
-    if (inst.disk_template == constants.DT_FILE and
+    if (inst.disk_template in (constants.DT_FILE, constants.DT_SHARED_FILE) and
         self.op.new_name != inst.name):
       old_file_storage_dir = os.path.dirname(inst.disks[0].logical_id[1])
       rename_file_storage = True
@@ -5778,14 +5788,34 @@ class LUInstanceFailover(LogicalUnit):
   HTYPE = constants.HTYPE_INSTANCE
   REQ_BGL = False
 
+  def CheckArguments(self):
+    """Check the arguments.
+
+    """
+    self.iallocator = getattr(self.op, "iallocator", None)
+    self.target_node = getattr(self.op, "target_node", None)
+
   def ExpandNames(self):
     self._ExpandAndLockInstance()
+
+    if self.op.target_node is not None:
+      self.op.target_node = _ExpandNodeName(self.cfg, self.op.target_node)
+
     self.needed_locks[locking.LEVEL_NODE] = []
     self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_REPLACE
 
   def DeclareLocks(self, level):
     if level == locking.LEVEL_NODE:
-      self._LockInstancesNodes()
+      instance = self.context.cfg.GetInstanceInfo(self.op.instance_name)
+      if instance.disk_template in constants.DTS_EXT_MIRROR:
+        if self.op.target_node is None:
+          self.needed_locks[locking.LEVEL_NODE] = locking.ALL_SET
+        else:
+          self.needed_locks[locking.LEVEL_NODE] = [instance.primary_node,
+                                                   self.op.target_node]
+        del self.recalculate_locks[locking.LEVEL_NODE]
+      else:
+        self._LockInstancesNodes()
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -5795,15 +5825,19 @@ class LUInstanceFailover(LogicalUnit):
     """
     instance = self.instance
     source_node = instance.primary_node
-    target_node = instance.secondary_nodes[0]
     env = {
       "IGNORE_CONSISTENCY": self.op.ignore_consistency,
       "SHUTDOWN_TIMEOUT": self.op.shutdown_timeout,
       "OLD_PRIMARY": source_node,
-      "OLD_SECONDARY": target_node,
-      "NEW_PRIMARY": target_node,
-      "NEW_SECONDARY": source_node,
+      "NEW_PRIMARY": self.op.target_node,
       }
+
+    if instance.disk_template in constants.DTS_INT_MIRROR:
+      env["OLD_SECONDARY"] = instance.secondary_nodes[0]
+      env["NEW_SECONDARY"] = source_node
+    else:
+      env["OLD_SECONDARY"] = env["NEW_SECONDARY"] = ""
+
     env.update(_BuildInstanceHookEnvByObject(self, instance))
     nl = [self.cfg.GetMasterNode()] + list(instance.secondary_nodes)
     nl_post = list(nl)
@@ -5821,19 +5855,47 @@ class LUInstanceFailover(LogicalUnit):
       "Cannot retrieve locked instance %s" % self.op.instance_name
 
     bep = self.cfg.GetClusterInfo().FillBE(instance)
-    if instance.disk_template not in constants.DTS_NET_MIRROR:
+    if instance.disk_template not in constants.DTS_MIRRORED:
       raise errors.OpPrereqError("Instance's disk layout is not"
-                                 " network mirrored, cannot failover.",
+                                 " mirrored, cannot failover.",
                                  errors.ECODE_STATE)
 
-    secondary_nodes = instance.secondary_nodes
-    if not secondary_nodes:
-      raise errors.ProgrammerError("no secondary node but using "
-                                   "a mirrored disk template")
+    if instance.disk_template in constants.DTS_EXT_MIRROR:
+      _CheckIAllocatorOrNode(self, "iallocator", "target_node")
+      if self.op.iallocator:
+        self._RunAllocator()
+        # Release all unnecessary node locks
+        nodes_keep = [instance.primary_node, self.op.target_node]
+        nodes_rel = [node for node in self.acquired_locks[locking.LEVEL_NODE]
+                     if node not in nodes_keep]
+        self.context.glm.release(locking.LEVEL_NODE, nodes_rel)
+        self.acquired_locks[locking.LEVEL_NODE] = nodes_keep
 
-    target_node = secondary_nodes[0]
+      # self.op.target_node is already populated, either directly or by the
+      # iallocator run
+      target_node = self.op.target_node
+
+    else:
+      secondary_nodes = instance.secondary_nodes
+      if not secondary_nodes:
+        raise errors.ConfigurationError("No secondary node but using"
+                                        " %s disk template" %
+                                        instance.disk_template)
+      target_node = secondary_nodes[0]
+
+      if self.op.iallocator or (self.op.target_node and
+                                self.op.target_node != target_node):
+        raise errors.OpPrereqError("Instances with disk template %s cannot"
+                                   " be failed over to arbitrary nodes"
+                                   " (neither an iallocator nor a target"
+                                   " node can be passed)" %
+                                   instance.disk_template, errors.ECODE_INVAL)
     _CheckNodeOnline(self, target_node)
     _CheckNodeNotDrained(self, target_node)
+
+    # Save target_node so that we can use it in BuildHooksEnv
+    self.op.target_node = target_node
+
     if instance.admin_up:
       # check memory requirements on the secondary node
       _CheckNodeFreeMemory(self, target_node, "failing over instance %s" %
@@ -5857,7 +5919,7 @@ class LUInstanceFailover(LogicalUnit):
     primary_node = self.cfg.GetNodeInfo(instance.primary_node)
 
     source_node = instance.primary_node
-    target_node = instance.secondary_nodes[0]
+    target_node = self.op.target_node
 
     if instance.admin_up:
       feedback_fn("* checking disk consistency between source and target")
@@ -5916,6 +5978,35 @@ class LUInstanceFailover(LogicalUnit):
         raise errors.OpExecError("Could not start instance %s on node %s: %s" %
                                  (instance.name, target_node, msg))
 
+  def _RunAllocator(self):
+    """Run the allocator based on input opcode.
+
+    """
+    ial = IAllocator(self.cfg, self.rpc,
+                     mode=constants.IALLOCATOR_MODE_RELOC,
+                     name=self.instance.name,
+                     # TODO See why hail breaks with a single node below
+                     relocate_from=[self.instance.primary_node,
+                                    self.instance.primary_node],
+                     )
+
+    ial.Run(self.op.iallocator)
+
+    if not ial.success:
+      raise errors.OpPrereqError("Can't compute nodes using"
+                                 " iallocator '%s': %s" %
+                                 (self.op.iallocator, ial.info),
+                                 errors.ECODE_NORES)
+    if len(ial.result) != ial.required_nodes:
+      raise errors.OpPrereqError("iallocator '%s' returned invalid number"
+                                 " of nodes (%s), required %s" %
+                                 (self.op.iallocator, len(ial.result),
+                                  ial.required_nodes), errors.ECODE_FAULT)
+    self.op.target_node = ial.result[0]
+    self.LogInfo("Selected nodes for instance %s via iallocator %s: %s",
+                 self.instance.name, self.op.iallocator,
+                 utils.CommaJoin(ial.result))
+
 
 class LUInstanceMigrate(LogicalUnit):
   """Migrate an instance.
@@ -5931,6 +6022,9 @@ class LUInstanceMigrate(LogicalUnit):
   def ExpandNames(self):
     self._ExpandAndLockInstance()
 
+    if self.op.target_node is not None:
+      self.op.target_node = _ExpandNodeName(self.cfg, self.op.target_node)
+
     self.needed_locks[locking.LEVEL_NODE] = []
     self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_REPLACE
 
@@ -5940,7 +6034,16 @@ class LUInstanceMigrate(LogicalUnit):
 
   def DeclareLocks(self, level):
     if level == locking.LEVEL_NODE:
-      self._LockInstancesNodes()
+      instance = self.context.cfg.GetInstanceInfo(self.op.instance_name)
+      if instance.disk_template in constants.DTS_EXT_MIRROR:
+        if self.op.target_node is None:
+          self.needed_locks[locking.LEVEL_NODE] = locking.ALL_SET
+        else:
+          self.needed_locks[locking.LEVEL_NODE] = [instance.primary_node,
+                                                   self.op.target_node]
+        del self.recalculate_locks[locking.LEVEL_NODE]
+      else:
+        self._LockInstancesNodes()
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -5950,16 +6053,21 @@ class LUInstanceMigrate(LogicalUnit):
     """
     instance = self._migrater.instance
     source_node = instance.primary_node
-    target_node = instance.secondary_nodes[0]
+    target_node = self.op.target_node
     env = _BuildInstanceHookEnvByObject(self, instance)
     env["MIGRATE_LIVE"] = self._migrater.live
     env["MIGRATE_CLEANUP"] = self.op.cleanup
     env.update({
         "OLD_PRIMARY": source_node,
-        "OLD_SECONDARY": target_node,
         "NEW_PRIMARY": target_node,
-        "NEW_SECONDARY": source_node,
         })
+
+    if instance.disk_template in constants.DTS_INT_MIRROR:
+      env["OLD_SECONDARY"] = target_node
+      env["NEW_SECONDARY"] = source_node
+    else:
+      env["OLD_SECONDARY"] = env["NEW_SECONDARY"] = None
+
     nl = [self.cfg.GetMasterNode()] + list(instance.secondary_nodes)
     nl_post = list(nl)
     nl_post.append(source_node)
@@ -6149,18 +6257,19 @@ class LUNodeMigrate(LogicalUnit):
   HTYPE = constants.HTYPE_NODE
   REQ_BGL = False
 
+  def CheckArguments(self):
+    _CheckIAllocatorOrNode(self, "iallocator", "remote_node")
+
   def ExpandNames(self):
     self.op.node_name = _ExpandNodeName(self.cfg, self.op.node_name)
 
-    self.needed_locks = {
-      locking.LEVEL_NODE: [self.op.node_name],
-      }
-
-    self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_APPEND
+    self.needed_locks = {}
 
     # Create tasklets for migrating instances for all instances on this node
     names = []
     tasklets = []
+
+    self.lock_all_nodes = False
 
     for inst in _GetNodePrimaryInstances(self.cfg, self.op.node_name):
       logging.debug("Migrating instance %s", inst.name)
@@ -6168,13 +6277,25 @@ class LUNodeMigrate(LogicalUnit):
 
       tasklets.append(TLMigrateInstance(self, inst.name, False))
 
+      if inst.disk_template in constants.DTS_EXT_MIRROR:
+        # We need to lock all nodes, as the iallocator will choose the
+        # destination nodes afterwards
+        self.lock_all_nodes = True
+
     self.tasklets = tasklets
+
+    # Declare node locks
+    if self.lock_all_nodes:
+      self.needed_locks[locking.LEVEL_NODE] = locking.ALL_SET
+    else:
+      self.needed_locks[locking.LEVEL_NODE] = [self.op.node_name]
+      self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_APPEND
 
     # Declare instance locks
     self.needed_locks[locking.LEVEL_INSTANCE] = names
 
   def DeclareLocks(self, level):
-    if level == locking.LEVEL_NODE:
+    if level == locking.LEVEL_NODE and not self.lock_all_nodes:
       self._LockInstancesNodes()
 
   def BuildHooksEnv(self):
@@ -6220,19 +6341,54 @@ class TLMigrateInstance(Tasklet):
     instance_name = _ExpandInstanceName(self.lu.cfg, self.instance_name)
     instance = self.cfg.GetInstanceInfo(instance_name)
     assert instance is not None
+    self.instance = instance
 
-    if instance.disk_template != constants.DT_DRBD8:
-      raise errors.OpPrereqError("Instance's disk layout is not"
-                                 " drbd8, cannot migrate.", errors.ECODE_STATE)
+    if instance.disk_template not in constants.DTS_MIRRORED:
+      raise errors.OpPrereqError("Instance's disk layout '%s' does not allow"
+                                 " migrations" % instance.disk_template,
+                                 errors.ECODE_STATE)
 
-    secondary_nodes = instance.secondary_nodes
-    if not secondary_nodes:
-      raise errors.ConfigurationError("No secondary node but using"
-                                      " drbd8 disk template")
+    if instance.disk_template in constants.DTS_EXT_MIRROR:
+      _CheckIAllocatorOrNode(self.lu, "iallocator", "target_node")
+
+      if self.lu.op.iallocator:
+        self._RunAllocator()
+      else:
+        # We set set self.target_node as it is required by
+        # BuildHooksEnv
+        self.target_node = self.lu.op.target_node
+
+      target_node = self.target_node
+      if self.target_node == instance.primary_node:
+        raise errors.OpPrereqError("Cannot migrate instance %s"
+                                   " to its primary (%s)" %
+                                   (instance.name, instance.primary_node))
+
+      if len(self.lu.tasklets) == 1:
+        # It is safe to remove locks only when we're the only tasklet in the LU
+        nodes_keep = [instance.primary_node, target_node]
+        nodes_rel = [node for node in self.lu.acquired_locks[locking.LEVEL_NODE]
+                     if node not in nodes_keep]
+        self.lu.context.glm.release(locking.LEVEL_NODE, nodes_rel)
+        self.lu.acquired_locks[locking.LEVEL_NODE] = nodes_keep
+
+    else:
+      secondary_nodes = instance.secondary_nodes
+      if not secondary_nodes:
+        raise errors.ConfigurationError("No secondary node but using"
+                                        " %s disk template" %
+                                        instance.disk_template)
+      target_node = secondary_nodes[0]
+      if self.lu.op.iallocator or (self.lu.op.target_node and
+                                   self.lu.op.target_node != target_node):
+        raise errors.OpPrereqError("Instances with disk template %s cannot"
+                                   " be migrated over to arbitrary nodes"
+                                   " (neither an iallocator nor a target"
+                                   " node can be passed)" %
+                                   instance.disk_template, errors.ECODE_INVAL)
 
     i_be = self.cfg.GetClusterInfo().FillBE(instance)
 
-    target_node = secondary_nodes[0]
     # check memory requirements on the secondary node
     _CheckNodeFreeMemory(self.lu, target_node, "migrating instance %s" %
                          instance.name, i_be[constants.BE_MEMORY],
@@ -6248,7 +6404,6 @@ class TLMigrateInstance(Tasklet):
       result.Raise("Can't migrate, please use failover",
                    prereq=True, ecode=errors.ECODE_STATE)
 
-    self.instance = instance
 
     if self.lu.op.live is not None and self.lu.op.mode is not None:
       raise errors.OpPrereqError("Only one of the 'live' and 'mode'"
@@ -6264,10 +6419,39 @@ class TLMigrateInstance(Tasklet):
       self.lu.op.live = None
     elif self.lu.op.mode is None:
       # read the default value from the hypervisor
-      i_hv = self.cfg.GetClusterInfo().FillHV(instance, skip_globals=False)
+      i_hv = self.cfg.GetClusterInfo().FillHV(self.instance, skip_globals=False)
       self.lu.op.mode = i_hv[constants.HV_MIGRATION_MODE]
 
     self.live = self.lu.op.mode == constants.HT_MIGRATION_LIVE
+
+  def _RunAllocator(self):
+    """Run the allocator based on input opcode.
+
+    """
+    ial = IAllocator(self.cfg, self.rpc,
+                     mode=constants.IALLOCATOR_MODE_RELOC,
+                     name=self.instance_name,
+                     # TODO See why hail breaks with a single node below
+                     relocate_from=[self.instance.primary_node,
+                                    self.instance.primary_node],
+                     )
+
+    ial.Run(self.lu.op.iallocator)
+
+    if not ial.success:
+      raise errors.OpPrereqError("Can't compute nodes using"
+                                 " iallocator '%s': %s" %
+                                 (self.lu.op.iallocator, ial.info),
+                                 errors.ECODE_NORES)
+    if len(ial.result) != ial.required_nodes:
+      raise errors.OpPrereqError("iallocator '%s' returned invalid number"
+                                 " of nodes (%s), required %s" %
+                                 (self.lu.op.iallocator, len(ial.result),
+                                  ial.required_nodes), errors.ECODE_FAULT)
+    self.target_node = ial.result[0]
+    self.lu.LogInfo("Selected nodes for instance %s via iallocator %s: %s",
+                 self.instance_name, self.lu.op.iallocator,
+                 utils.CommaJoin(ial.result))
 
   def _WaitUntilSync(self):
     """Poll with custom rpc for disk sync.
@@ -6384,16 +6568,17 @@ class TLMigrateInstance(Tasklet):
                        " primary node (%s)" % source_node)
       demoted_node = target_node
 
-    self._EnsureSecondary(demoted_node)
-    try:
+    if instance.disk_template in constants.DTS_INT_MIRROR:
+      self._EnsureSecondary(demoted_node)
+      try:
+        self._WaitUntilSync()
+      except errors.OpExecError:
+        # we ignore here errors, since if the device is standalone, it
+        # won't be able to sync
+        pass
+      self._GoStandalone()
+      self._GoReconnect(False)
       self._WaitUntilSync()
-    except errors.OpExecError:
-      # we ignore here errors, since if the device is standalone, it
-      # won't be able to sync
-      pass
-    self._GoStandalone()
-    self._GoReconnect(False)
-    self._WaitUntilSync()
 
     self.feedback_fn("* done")
 
@@ -6402,6 +6587,9 @@ class TLMigrateInstance(Tasklet):
 
     """
     target_node = self.target_node
+    if self.instance.disk_template in constants.DTS_EXT_MIRROR:
+      return
+
     try:
       self._EnsureSecondary(target_node)
       self._GoStandalone()
@@ -6466,11 +6654,12 @@ class TLMigrateInstance(Tasklet):
 
     self.migration_info = migration_info = result.payload
 
-    # Then switch the disks to master/master mode
-    self._EnsureSecondary(target_node)
-    self._GoStandalone()
-    self._GoReconnect(True)
-    self._WaitUntilSync()
+    if self.instance.disk_template not in constants.DTS_EXT_MIRROR:
+      # Then switch the disks to master/master mode
+      self._EnsureSecondary(target_node)
+      self._GoStandalone()
+      self._GoReconnect(True)
+      self._WaitUntilSync()
 
     self.feedback_fn("* preparing %s to accept the instance" % target_node)
     result = self.rpc.call_accept_instance(target_node,
@@ -6489,7 +6678,6 @@ class TLMigrateInstance(Tasklet):
                                (instance.name, msg))
 
     self.feedback_fn("* migrating instance to %s" % target_node)
-    time.sleep(10)
     result = self.rpc.call_instance_migrate(source_node, instance,
                                             self.nodes_ip[target_node],
                                             self.live)
@@ -6502,7 +6690,6 @@ class TLMigrateInstance(Tasklet):
       self._RevertDiskStatus()
       raise errors.OpExecError("Could not migrate instance %s: %s" %
                                (instance.name, msg))
-    time.sleep(10)
 
     instance.primary_node = target_node
     # distribute new instance config to the other nodes
@@ -6519,11 +6706,12 @@ class TLMigrateInstance(Tasklet):
       raise errors.OpExecError("Could not finalize instance migration: %s" %
                                msg)
 
-    self._EnsureSecondary(source_node)
-    self._WaitUntilSync()
-    self._GoStandalone()
-    self._GoReconnect(False)
-    self._WaitUntilSync()
+    if self.instance.disk_template not in constants.DTS_EXT_MIRROR:
+      self._EnsureSecondary(source_node)
+      self._WaitUntilSync()
+      self._GoStandalone()
+      self._GoReconnect(False)
+      self._WaitUntilSync()
 
     self.feedback_fn("* done")
 
@@ -6536,7 +6724,13 @@ class TLMigrateInstance(Tasklet):
     self.feedback_fn = feedback_fn
 
     self.source_node = self.instance.primary_node
-    self.target_node = self.instance.secondary_nodes[0]
+
+    # FIXME: if we implement migrate-to-any in DRBD, this needs fixing
+    if self.instance.disk_template in constants.DTS_INT_MIRROR:
+      self.target_node = self.instance.secondary_nodes[0]
+      # Otherwise self.target_node has been populated either
+      # directly, or through an iallocator.
+
     self.all_nodes = [self.source_node, self.target_node]
     self.nodes_ip = {
       self.source_node: self.cfg.GetNodeInfo(self.source_node).secondary_ip,
@@ -6723,6 +6917,34 @@ def _GenerateDiskTemplate(lu, template_name,
                                                          disk_index)),
                               mode=disk["mode"])
       disks.append(disk_dev)
+  elif template_name == constants.DT_SHARED_FILE:
+    if len(secondary_nodes) != 0:
+      raise errors.ProgrammerError("Wrong template configuration")
+
+    opcodes.RequireSharedFileStorage()
+
+    for idx, disk in enumerate(disk_info):
+      disk_index = idx + base_index
+      disk_dev = objects.Disk(dev_type=constants.LD_FILE, size=disk["size"],
+                              iv_name="disk/%d" % disk_index,
+                              logical_id=(file_driver,
+                                          "%s/disk%d" % (file_storage_dir,
+                                                         disk_index)),
+                              mode=disk["mode"])
+      disks.append(disk_dev)
+  elif template_name == constants.DT_BLOCK:
+    if len(secondary_nodes) != 0:
+      raise errors.ProgrammerError("Wrong template configuration")
+
+    for idx, disk in enumerate(disk_info):
+      disk_index = idx + base_index
+      disk_dev = objects.Disk(dev_type=constants.LD_BLOCKDEV, size=disk["size"],
+                              logical_id=(constants.BLOCKDEV_DRIVER_MANUAL,
+                                          disk["adopt"]),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk["mode"])
+      disks.append(disk_dev)
+
   else:
     raise errors.ProgrammerError("Invalid disk template '%s'" % template_name)
   return disks
@@ -6842,7 +7064,7 @@ def _CreateDisks(lu, instance, to_skip=None, target_node=None):
     pnode = target_node
     all_nodes = [pnode]
 
-  if instance.disk_template == constants.DT_FILE:
+  if instance.disk_template in (constants.DT_FILE, constants.DT_SHARED_FILE):
     file_storage_dir = os.path.dirname(instance.disks[0].logical_id[1])
     result = lu.rpc.call_file_storage_dir_create(pnode, file_storage_dir)
 
@@ -6937,6 +7159,7 @@ def _ComputeDiskSizePerVG(disk_template, disks):
     # 128 MB are added for drbd metadata for each disk
     constants.DT_DRBD8: _compute(disks, 128),
     constants.DT_FILE: {},
+    constants.DT_SHARED_FILE: {},
   }
 
   if disk_template not in req_size_dict:
@@ -6957,6 +7180,8 @@ def _ComputeDiskSize(disk_template, disks):
     # 128 MB are added for drbd metadata for each disk
     constants.DT_DRBD8: sum(d["size"] + 128 for d in disks),
     constants.DT_FILE: None,
+    constants.DT_SHARED_FILE: 0,
+    constants.DT_BLOCK: 0,
   }
 
   if disk_template not in req_size_dict:
@@ -7092,6 +7317,12 @@ class LUInstanceCreate(LogicalUnit):
       if self.op.mode == constants.INSTANCE_IMPORT:
         raise errors.OpPrereqError("Disk adoption not allowed for"
                                    " instance import", errors.ECODE_INVAL)
+    else:
+      if self.op.disk_template in constants.DTS_MUST_ADOPT:
+        raise errors.OpPrereqError("Disk template %s requires disk adoption,"
+                                   " but no 'adopt' parameter given" %
+                                   self.op.disk_template,
+                                   errors.ECODE_INVAL)
 
     self.adopt_disks = has_adopt
 
@@ -7117,7 +7348,7 @@ class LUInstanceCreate(LogicalUnit):
     _CheckIAllocatorOrNode(self, "iallocator", "pnode")
 
     if self.op.pnode is not None:
-      if self.op.disk_template in constants.DTS_NET_MIRROR:
+      if self.op.disk_template in constants.DTS_INT_MIRROR:
         if self.op.snode is None:
           raise errors.OpPrereqError("The networked disk templates need"
                                      " a mirror node", errors.ECODE_INVAL)
@@ -7253,7 +7484,7 @@ class LUInstanceCreate(LogicalUnit):
                      mode=constants.IALLOCATOR_MODE_ALLOC,
                      name=self.op.instance_name,
                      disk_template=self.op.disk_template,
-                     tags=[],
+                     tags=self.op.tags,
                      os=self.op.os_type,
                      vcpus=self.be_full[constants.BE_VCPUS],
                      mem_size=self.be_full[constants.BE_MEMORY],
@@ -7309,6 +7540,7 @@ class LUInstanceCreate(LogicalUnit):
       bep=self.be_full,
       hvp=self.hv_full,
       hypervisor_name=self.op.hypervisor,
+      tags=self.op.tags,
     ))
 
     nl = ([self.cfg.GetMasterNode(), self.op.pnode] +
@@ -7508,6 +7740,10 @@ class LUInstanceCreate(LogicalUnit):
                                   ",".join(enabled_hvs)),
                                  errors.ECODE_STATE)
 
+    # Check tag validity
+    for tag in self.op.tags:
+      objects.TaggableObject.ValidateTag(tag)
+
     # check hypervisor parameter syntax (locally)
     utils.ForceDictType(self.op.hvparams, constants.HVS_PARAMETER_TYPES)
     filled_hvp = cluster.SimpleFillHV(self.op.hypervisor, self.op.os_type,
@@ -7555,7 +7791,10 @@ class LUInstanceCreate(LogicalUnit):
                                      errors.ECODE_INVAL)
         nic_ip = self.hostname1.ip
       else:
-        if not netutils.IPAddress.IsValid(ip):
+        # We defer pool operations until later, so that the iallocator has
+        # filled in the instance's node(s)
+        if (ip.lower() != constants.NIC_IP_POOL and not
+            netutils.IPAddress.IsValid(ip)):
           raise errors.OpPrereqError("Invalid IP address '%s'" % ip,
                                      errors.ECODE_INVAL)
         nic_ip = ip
@@ -7702,8 +7941,32 @@ class LUInstanceCreate(LogicalUnit):
 
     self.secondaries = []
 
+    # Fill in any IPs from IP pools. This must happen here, because we need to
+    # know the nic's primary node, as specified by the iallocator
+    for idx, nic in enumerate(self.nics):
+      if nic.ip is not None:
+        filled_params = cluster.SimpleFillNIC(nic.nicparams)
+        link = filled_params[constants.NIC_LINK]
+        if nic.ip.lower() == constants.NIC_IP_POOL:
+          try:
+            nic.ip = self.cfg.GenerateIp(self.pnode.name, link,
+                                         self.proc.GetECId())
+          except errors.ConfigurationError:
+            raise errors.OpPrereqError("Unable to get a free IP for NIC %d"
+                                       " from the address pool" % idx,
+                                       errors.ECODE_STATE)
+          self.LogInfo("Chose IP %s from pool %s", nic.ip, link)
+        else:
+          try:
+            self.cfg.ReserveIp(self.pnode.name, link,
+                               nic.ip, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("IP address %s already in use"
+                                       " in cluster" % nic.ip,
+                                       errors.ECODE_NOTUNIQUE)
+
     # mirror node verification
-    if self.op.disk_template in constants.DTS_NET_MIRROR:
+    if self.op.disk_template in constants.DTS_INT_MIRROR:
       if self.op.snode == pnode.name:
         raise errors.OpPrereqError("The secondary node cannot be the"
                                    " primary node.", errors.ECODE_INVAL)
@@ -7719,7 +7982,7 @@ class LUInstanceCreate(LogicalUnit):
       req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
       _CheckNodesFreeDiskPerVG(self, nodenames, req_sizes)
 
-    else: # instead, we must check the adoption data
+    elif self.op.disk_template == constants.DT_PLAIN: # Check the adoption data
       all_lvs = set([i["vg"] + "/" + i["adopt"] for i in self.disks])
       if len(all_lvs) != len(self.disks):
         raise errors.OpPrereqError("Duplicate volume names given for adoption",
@@ -7755,6 +8018,34 @@ class LUInstanceCreate(LogicalUnit):
       for dsk in self.disks:
         dsk["size"] = int(float(node_lvs[dsk["vg"] + "/" + dsk["adopt"]][0]))
 
+    elif self.op.disk_template == constants.DT_BLOCK:
+      # Normalize and de-duplicate device paths
+      all_disks = set([os.path.abspath(i["adopt"]) for i in self.disks])
+      if len(all_disks) != len(self.disks):
+        raise errors.OpPrereqError("Duplicate disk names given for adoption",
+                                   errors.ECODE_INVAL)
+      baddisks = [d for d in all_disks
+                  if not d.startswith(constants.ADOPTABLE_BLOCKDEV_ROOT)]
+      if baddisks:
+        raise errors.OpPrereqError("Device node(s) %s lie outside %s and"
+                                   " cannot be adopted" %
+                                   (", ".join(baddisks),
+                                    constants.ADOPTABLE_BLOCKDEV_ROOT),
+                                   errors.ECODE_INVAL)
+
+      node_disks = self.rpc.call_bdev_sizes([pnode.name],
+                                            list(all_disks))[pnode.name]
+      node_disks.Raise("Cannot get block device information from node %s" %
+                       pnode.name)
+      node_disks = node_disks.payload
+      delta = all_disks.difference(node_disks.keys())
+      if delta:
+        raise errors.OpPrereqError("Missing block device(s): %s" %
+                                   utils.CommaJoin(delta),
+                                   errors.ECODE_INVAL)
+      for dsk in self.disks:
+        dsk["size"] = int(float(node_disks[dsk["adopt"]]))
+
     _CheckHVParams(self, nodenames, self.op.hypervisor, self.op.hvparams)
 
     _CheckNodeHasOS(self, pnode.name, self.op.os_type, self.op.force_variant)
@@ -7785,6 +8076,24 @@ class LUInstanceCreate(LogicalUnit):
     else:
       network_port = None
 
+    if constants.ENABLE_FILE_STORAGE or constants.ENABLE_SHARED_FILE_STORAGE:
+      # this is needed because os.path.join does not accept None arguments
+      if self.op.file_storage_dir is None:
+        string_file_storage_dir = ""
+      else:
+        string_file_storage_dir = self.op.file_storage_dir
+
+      # build the full file storage dir path
+      if self.op.disk_template == constants.DT_SHARED_FILE:
+        get_fsd_fn = self.cfg.GetSharedFileStorageDir
+      else:
+        get_fsd_fn = self.cfg.GetFileStorageDir
+
+      file_storage_dir = utils.PathJoin(get_fsd_fn(),
+                                        string_file_storage_dir, instance)
+    else:
+      file_storage_dir = ""
+
     disks = _GenerateDiskTemplate(self,
                                   self.op.disk_template,
                                   instance, pnode_name,
@@ -7807,18 +8116,23 @@ class LUInstanceCreate(LogicalUnit):
                             osparams=self.op.osparams,
                             )
 
+    if self.op.tags:
+      for tag in self.op.tags:
+        iobj.AddTag(tag)
+
     if self.adopt_disks:
-      # rename LVs to the newly-generated names; we need to construct
-      # 'fake' LV disks with the old data, plus the new unique_id
-      tmp_disks = [objects.Disk.FromDict(v.ToDict()) for v in disks]
-      rename_to = []
-      for t_dsk, a_dsk in zip (tmp_disks, self.disks):
-        rename_to.append(t_dsk.logical_id)
-        t_dsk.logical_id = (t_dsk.logical_id[0], a_dsk["adopt"])
-        self.cfg.SetDiskID(t_dsk, pnode_name)
-      result = self.rpc.call_blockdev_rename(pnode_name,
-                                             zip(tmp_disks, rename_to))
-      result.Raise("Failed to rename adoped LVs")
+      if self.op.disk_template == constants.DT_PLAIN:
+        # rename LVs to the newly-generated names; we need to construct
+        # 'fake' LV disks with the old data, plus the new unique_id
+        tmp_disks = [objects.Disk.FromDict(v.ToDict()) for v in disks]
+        rename_to = []
+        for t_dsk, a_dsk in zip (tmp_disks, self.disks):
+          rename_to.append(t_dsk.logical_id)
+          t_dsk.logical_id = (t_dsk.logical_id[0], a_dsk["adopt"])
+          self.cfg.SetDiskID(t_dsk, pnode_name)
+        result = self.rpc.call_blockdev_rename(pnode_name,
+                                               zip(tmp_disks, rename_to))
+        result.Raise("Failed to rename adoped LVs")
     else:
       feedback_fn("* creating instance disks...")
       try:
@@ -7864,9 +8178,8 @@ class LUInstanceCreate(LogicalUnit):
       pass
     elif self.op.wait_for_sync:
       disk_abort = not _WaitForSync(self, iobj)
-    elif iobj.disk_template in constants.DTS_NET_MIRROR:
+    elif iobj.disk_template in constants.DTS_INT_MIRROR:
       # make sure the disks are not degraded (still sync-ing is ok)
-      time.sleep(15)
       feedback_fn("* checking mirrors status")
       disk_abort = not _WaitForSync(self, iobj, oneshot=True)
     else:
@@ -7883,10 +8196,30 @@ class LUInstanceCreate(LogicalUnit):
     if iobj.disk_template != constants.DT_DISKLESS and not self.adopt_disks:
       if self.op.mode == constants.INSTANCE_CREATE:
         if not self.op.no_install:
+          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
+              self.op.wait_for_sync):
+            feedback_fn("* pausing disk sync to install instance OS")
+            result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
+                                                              iobj.disks, True)
+            for idx, success in enumerate(result.payload):
+              if not success:
+                logging.warn("pause-sync of instance %s for disk %d failed",
+                             instance, idx)
+
           feedback_fn("* running the instance OS create scripts...")
           # FIXME: pass debug option from opcode to backend
           result = self.rpc.call_instance_os_add(pnode_name, iobj, False,
                                                  self.op.debug_level)
+          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
+              self.op.wait_for_sync):
+            feedback_fn("* resuming disk sync")
+            result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
+                                                              iobj.disks, False)
+            for idx, success in enumerate(result.payload):
+              if not success:
+                logging.warn("resume-sync of instance %s for disk %d failed",
+                             instance, idx)
+
           result.Raise("Could not add os for instance %s"
                        " on node %s" % (instance, pnode_name))
 
@@ -8960,9 +9293,10 @@ class LUInstanceGrowDisk(LogicalUnit):
 
     self.disk = instance.FindDisk(self.op.disk)
 
-    if instance.disk_template != constants.DT_FILE:
-      # TODO: check the free disk space for file, when that feature
-      # will be supported
+    if instance.disk_template not in (constants.DT_FILE,
+                                      constants.DT_SHARED_FILE):
+      # TODO: check the free disk space for file, when that feature will be
+      # supported
       _CheckNodesFreeDiskPerVG(self, nodenames,
                                self.disk.ComputeGrowth(self.op.amount))
 
@@ -9181,6 +9515,8 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.hvparams:
       _CheckGlobalHvParams(self.op.hvparams)
 
+    instance = self.instance = self.cfg.GetInstanceInfo(self.op.instance_name)
+
     # Disk validation
     disk_addremove = 0
     for disk_op, disk_dict in self.op.disks:
@@ -9198,20 +9534,34 @@ class LUInstanceSetParams(LogicalUnit):
           raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
 
       if disk_op == constants.DDM_ADD:
+        if "adopt" in disk_dict:
+          has_adopt = True
+        else:
+          has_adopt = False
+
+        if has_adopt:
+          if instance.disk_template not in constants.DTS_MAY_ADOPT:
+            raise errors.OpPrereqError("Disk adoption is not supported for the"
+                                       " '%s' disk template" %
+                                       instance.disk_template,
+                                       errors.ECODE_INVAL)
+        self.adopt_disks = has_adopt
+
         mode = disk_dict.setdefault('mode', constants.DISK_RDWR)
         if mode not in constants.DISK_ACCESS_SET:
           raise errors.OpPrereqError("Invalid disk access mode '%s'" % mode,
                                      errors.ECODE_INVAL)
-        size = disk_dict.get('size', None)
-        if size is None:
-          raise errors.OpPrereqError("Required disk parameter size missing",
-                                     errors.ECODE_INVAL)
-        try:
-          size = int(size)
-        except (TypeError, ValueError), err:
-          raise errors.OpPrereqError("Invalid disk size parameter: %s" %
-                                     str(err), errors.ECODE_INVAL)
-        disk_dict['size'] = size
+        if not has_adopt:
+          size = disk_dict.get('size', None)
+          if size is None:
+            raise errors.OpPrereqError("Required disk parameter size missing",
+                                       errors.ECODE_INVAL)
+          try:
+            size = int(size)
+          except (TypeError, ValueError), err:
+            raise errors.OpPrereqError("Invalid disk size parameter: %s" %
+                                       str(err), errors.ECODE_INVAL)
+          disk_dict['size'] = size
       else:
         # modification of disk
         if 'size' in disk_dict:
@@ -9228,7 +9578,7 @@ class LUInstanceSetParams(LogicalUnit):
                                  errors.ECODE_INVAL)
 
     if (self.op.disk_template and
-        self.op.disk_template in constants.DTS_NET_MIRROR and
+        self.op.disk_template in constants.DTS_INT_MIRROR and
         self.op.remote_node is None):
       raise errors.OpPrereqError("Changing the disk template to a mirrored"
                                  " one requires specifying a secondary node",
@@ -9256,7 +9606,8 @@ class LUInstanceSetParams(LogicalUnit):
         if nic_ip.lower() == constants.VALUE_NONE:
           nic_dict['ip'] = None
         else:
-          if not netutils.IPAddress.IsValid(nic_ip):
+          if (nic_ip.lower() != constants.NIC_IP_POOL and not
+              netutils.IPAddress.IsValid(nic_ip)):
             raise errors.OpPrereqError("Invalid IP address '%s'" % nic_ip,
                                        errors.ECODE_INVAL)
 
@@ -9361,7 +9712,7 @@ class LUInstanceSetParams(LogicalUnit):
     """
     # checking the new params on the primary/secondary nodes
 
-    instance = self.instance = self.cfg.GetInstanceInfo(self.op.instance_name)
+    instance = self.instance
     cluster = self.cluster = self.cfg.GetClusterInfo()
     assert self.instance is not None, \
       "Cannot retrieve locked instance %s" % self.op.instance_name
@@ -9388,7 +9739,7 @@ class LUInstanceSetParams(LogicalUnit):
                                                   self.op.disk_template),
                                    errors.ECODE_INVAL)
       _CheckInstanceDown(self, instance, "cannot change disk template")
-      if self.op.disk_template in constants.DTS_NET_MIRROR:
+      if self.op.disk_template in constants.DTS_INT_MIRROR:
         if self.op.remote_node == pnode:
           raise errors.OpPrereqError("Given new secondary node %s is the same"
                                      " as the primary node of the instance" %
@@ -9496,11 +9847,17 @@ class LUInstanceSetParams(LogicalUnit):
     # NIC processing
     self.nic_pnew = {}
     self.nic_pinst = {}
+    self.release_ips = []
+    cluster_info = self.cfg.GetClusterInfo()
     for nic_op, nic_dict in self.op.nics:
       if nic_op == constants.DDM_REMOVE:
         if not instance.nics:
           raise errors.OpPrereqError("Instance has no NICs, cannot remove",
                                      errors.ECODE_INVAL)
+        filled_params = cluster_info.SimpleFillNIC(instance.nics[-1].nicparams)
+        old_nic_ip = instance.nics[-1].ip
+        old_nic_link = filled_params[constants.NIC_LINK]
+        self.release_ips.append((old_nic_ip, old_nic_link, pnode))
         continue
       if nic_op != constants.DDM_ADD:
         # an existing nic
@@ -9515,6 +9872,8 @@ class LUInstanceSetParams(LogicalUnit):
                                      errors.ECODE_INVAL)
         old_nic_params = instance.nics[nic_op].nicparams
         old_nic_ip = instance.nics[nic_op].ip
+        filled_params = cluster_info.SimpleFillNIC(old_nic_params)
+        old_nic_link = filled_params[constants.NIC_LINK]
       else:
         old_nic_params = {}
         old_nic_ip = None
@@ -9534,6 +9893,7 @@ class LUInstanceSetParams(LogicalUnit):
       self.nic_pinst[nic_op] = new_nic_params
       self.nic_pnew[nic_op] = new_filled_nic_params
       new_nic_mode = new_filled_nic_params[constants.NIC_MODE]
+      new_nic_link = new_filled_nic_params[constants.NIC_LINK]
 
       if new_nic_mode == constants.NIC_MODE_BRIDGED:
         nic_bridge = new_filled_nic_params[constants.NIC_LINK]
@@ -9544,6 +9904,7 @@ class LUInstanceSetParams(LogicalUnit):
             self.warn.append(msg)
           else:
             raise errors.OpPrereqError(msg, errors.ECODE_ENVIRON)
+      nic_ip = None
       if new_nic_mode == constants.NIC_MODE_ROUTED:
         if 'ip' in nic_dict:
           nic_ip = nic_dict['ip']
@@ -9569,12 +9930,33 @@ class LUInstanceSetParams(LogicalUnit):
                                        " in cluster" % nic_mac,
                                        errors.ECODE_NOTUNIQUE)
 
+      if nic_ip is not None:
+        if nic_ip.lower() == constants.NIC_IP_POOL:
+          try:
+            nic_dict["ip"] = self.cfg.GenerateIp(pnode, new_nic_link,
+                                                 self.proc.GetECId())
+          except errors.ConfigurationError:
+            raise errors.OpPrereqError("Unable to get a free IP"
+                                       " from the address pool",
+                                       errors.ECODE_STATE)
+          nic_ip = nic_dict["ip"]
+          self.LogInfo("Chose IP %s from pool %s", nic_ip, new_nic_link)
+        elif nic_ip != old_nic_ip:
+          try:
+            self.cfg.ReserveIp(pnode, new_nic_link, nic_ip, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("IP address %s already in use"
+                                       " in cluster" % nic_ip,
+                                       errors.ECODE_NOTUNIQUE)
+      if old_nic_ip is not None and nic_ip != old_nic_ip:
+        self.release_ips.append((old_nic_ip, old_nic_link, pnode))
+
     # DISK processing
     if self.op.disks and instance.disk_template == constants.DT_DISKLESS:
       raise errors.OpPrereqError("Disk operations not supported for"
                                  " diskless instances",
                                  errors.ECODE_INVAL)
-    for disk_op, _ in self.op.disks:
+    for disk_op, disk_dict in self.op.disks:
       if disk_op == constants.DDM_REMOVE:
         if len(instance.disks) == 1:
           raise errors.OpPrereqError("Cannot remove the last disk of"
@@ -9593,6 +9975,53 @@ class LUInstanceSetParams(LogicalUnit):
                                      " are 0 to %d" %
                                      (disk_op, len(instance.disks)),
                                      errors.ECODE_INVAL)
+
+      if disk_op == constants.DDM_ADD and self.adopt_disks:
+        if instance.disk_template == constants.DT_PLAIN:
+          # Check the adoption data
+          vg = disk_dict.get("vg", self.cfg.GetVGName())
+          lv_name = vg + "/" + disk_dict["adopt"]
+          try:
+            # FIXME: lv_name here is "vg/lv" need to ensure that other calls
+            # to ReserveLV uses the same syntax
+            self.cfg.ReserveLV(lv_name, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("LV named %s used by another instance" %
+                                       lv_name, errors.ECODE_NOTUNIQUE)
+
+          vg_names = self.rpc.call_vg_list([instance.primary_node])
+          vg_names = vg_names[instance.primary_node]
+          vg_names.Raise("Cannot get VG information from node %s" %
+                         instance.primary_node)
+
+          node_lvs = self.rpc.call_lv_list([instance.primary_node],
+                                           vg_names.payload.keys()
+                                          )[instance.primary_node]
+          node_lvs.Raise("Cannot get LV information from node %s" %
+                         instance.primary_node)
+          node_lvs = node_lvs.payload
+
+          if lv_name not in node_lvs:
+            raise errors.OpPrereqError("Logical volume: %s not present "
+                                       " on node %s" %
+                                       (lv_name, instance.primary_node),
+                                       errors.ECODE_INVAL)
+          if node_lvs[lv_name][2]:
+            raise errors.OpPrereqError("Logical volume %s is online, cannot"
+                                       " adopt." % lv_name,
+                                       errors.ECODE_STATE)
+          # update the size of disk based on what is found
+          disk_dict["size"] = int(float(node_lvs[lv_name][0]))
+
+        elif instance.disk_template == constants.DT_BLOCK:
+          disk = disk_dict["adopt"]
+          node_disks = self.rpc.call_bdev_sizes([instance.primary_node],
+                                                [disk])[instance.primary_node]
+          node_disks = node_disks.payload
+          if disk not in node_disks:
+            raise errors.OpPrereqError("Missing block device %s" % disk,
+                                       errors.ECODE_INVAL)
+          disk_dict["size"] = int(float(node_disks[disk]))
 
     return
 
@@ -9725,7 +10154,8 @@ class LUInstanceSetParams(LogicalUnit):
           self.cfg.AddTcpUdpPort(tcp_port)
       elif disk_op == constants.DDM_ADD:
         # add a new disk
-        if instance.disk_template == constants.DT_FILE:
+        if instance.disk_template in (constants.DT_FILE,
+                                        constants.DT_SHARED_FILE):
           file_driver, file_path = instance.disks[0].logical_id
           file_path = os.path.dirname(file_path)
         else:
@@ -9742,21 +10172,35 @@ class LUInstanceSetParams(LogicalUnit):
         instance.disks.append(new_disk)
         info = _GetInstanceInfoText(instance)
 
-        logging.info("Creating volume %s for instance %s",
-                     new_disk.iv_name, instance.name)
-        # Note: this needs to be kept in sync with _CreateDisks
-        #HARDCODE
-        for node in instance.all_nodes:
-          f_create = node == instance.primary_node
-          try:
-            _CreateBlockDev(self, node, instance, new_disk,
-                            f_create, info, f_create)
-          except errors.OpExecError, err:
-            self.LogWarning("Failed to create volume %s (%s) on"
-                            " node %s: %s",
-                            new_disk.iv_name, new_disk, node, err)
-        result.append(("disk/%d" % disk_idx_base, "add:size=%s,mode=%s" %
-                       (new_disk.size, new_disk.mode)))
+        if self.adopt_disks:
+          if instance.disk_template == constants.DT_PLAIN:
+            # rename LV to the a newly-generated name; we need to construct
+            # 'fake' LV disk with the old data, plus the new unique_id
+            tmp_disk = objects.Disk.FromDict(disk_dict)
+            rename_to = tmp_disk.logical_id
+            tmp_disk.logical_id = (tmp_disk.logical_id[0], disk_dict["adopt"])
+            self.cfg.SetDiskID(tmp_disk, instance.primary_node)
+            result = self.rpc.call_blockdev_rename(instance.primary_node,
+                                                   [(tmp_disk, rename_to)])
+            result.Raise("Failed to rename adopted LV")
+          result.append(("disk/%d" % disk_idx_base, "add:adopt=%s,mode=%s" %
+                         (disk_dict["adopt"], new_disk.mode)))
+        else:
+          logging.info("Creating volume %s for instance %s",
+                       new_disk.iv_name, instance.name)
+          # Note: this needs to be kept in sync with _CreateDisks
+          #HARDCODE
+          for node in instance.all_nodes:
+            f_create = node == instance.primary_node
+            try:
+              _CreateBlockDev(self, node, instance, new_disk,
+                              f_create, info, f_create)
+            except errors.OpExecError, err:
+              self.LogWarning("Failed to create volume %s (%s) on"
+                              " node %s: %s",
+                              new_disk.iv_name, new_disk, node, err)
+          result.append(("disk/%d" % disk_idx_base, "add:size=%s,mode=%s" %
+                         (new_disk.size, new_disk.mode)))
       else:
         # change a given disk
         instance.disks[disk_op].mode = disk_dict['mode']
@@ -9825,7 +10269,11 @@ class LUInstanceSetParams(LogicalUnit):
       for key, val in self.op.osparams.iteritems():
         result.append(("os/%s" % key, val))
 
-    self.cfg.Update(instance, feedback_fn)
+    self.cfg.Update(instance, feedback_fn, ec_id=self.proc.GetECId())
+
+    for ip, link, node in self.release_ips:
+      self.LogInfo("Releasing IP %s on pool %s", ip, link)
+      self.cfg.ReleaseIp(node, link, ip)
 
     return result
 
@@ -10414,7 +10862,7 @@ class LUGroupAssignNodes(NoHooksLU):
     In particular, it returns information about newly split instances, and
     instances that were already split, and remain so after the change.
 
-    Only instances whose disk template is listed in constants.DTS_NET_MIRROR are
+    Only instances whose disk template is listed in constants.DTS_INT_MIRROR are
     considered.
 
     @type changes: list of (node_name, new_group_uuid) pairs.
@@ -10437,7 +10885,7 @@ class LUGroupAssignNodes(NoHooksLU):
       return [instance.primary_node] + list(instance.secondary_nodes)
 
     for inst in instance_data.values():
-      if inst.disk_template not in constants.DTS_NET_MIRROR:
+      if inst.disk_template not in constants.DTS_INT_MIRROR:
         continue
 
       instance_nodes = InstanceNodes(inst)
@@ -10559,6 +11007,7 @@ class LUGroupSetParams(LogicalUnit):
     all_changes = [
       self.op.ndparams,
       self.op.alloc_policy,
+      self.op.network,
       ]
 
     if all_changes.count(None) == len(all_changes):
@@ -10573,6 +11022,11 @@ class LUGroupSetParams(LogicalUnit):
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
 
+    if self.op.network:
+      (self.network_action, self.network_name,
+       self.network_link) = self.op.network
+      self.network_uuid = self.cfg.LookupNetwork(self.network_name)
+
   def CheckPrereq(self):
     """Check prerequisites.
 
@@ -10582,6 +11036,30 @@ class LUGroupSetParams(LogicalUnit):
     if self.group is None:
       raise errors.OpExecError("Could not retrieve group '%s' (UUID: %s)" %
                                (self.op.group_name, self.group_uuid))
+
+    if self.op.network:
+      self.network = self.cfg.GetNetwork(self.network_uuid)
+      if self.network_action == constants.DDM_ADD:
+        if self.network_uuid in self.group.networks:
+          raise errors.OpPrereqError("Network '%s' is already mapped"
+                                     " to group '%s'" % (self.network_name,
+                                                         self.group.name),
+                                     errors.ECODE_INVAL)
+        other_networks = [n for n, link in self.group.networks.items()
+                          if link == self.network_link]
+        for other_uuid in other_networks:
+          net = self.cfg.GetNetwork(other_uuid)
+          if net.family == self.network.family:
+            raise errors.OpPrereqError("There is already another IPv%d network"
+                                       " mapped to group '%s': %s" %
+                                       (net.family, self.group.name, net.name),
+                                        errors.ECODE_INVAL)
+      elif (self.network_action == constants.DDM_REMOVE and
+            self.network_uuid not in self.group.networks):
+        raise errors.OpPrereqError("Network '%s' is not mapped"
+                                   " to group '%s'" % (self.network_name,
+                                                       self.group.name),
+                                   errors.ECODE_INVAL)
 
     if self.op.ndparams:
       new_ndparams = _GetUpdatedParams(self.group.ndparams, self.op.ndparams)
@@ -10595,6 +11073,7 @@ class LUGroupSetParams(LogicalUnit):
     env = {
       "GROUP_NAME": self.op.group_name,
       "NEW_ALLOC_POLICY": self.op.alloc_policy,
+      "NETWORK": self.op.network,
       }
     mn = self.cfg.GetMasterNode()
     return env, [mn], [mn]
@@ -10611,6 +11090,21 @@ class LUGroupSetParams(LogicalUnit):
 
     if self.op.alloc_policy:
       self.group.alloc_policy = self.op.alloc_policy
+
+    if self.op.network:
+      if self.network_action == constants.DDM_ADD:
+        self.group.networks[self.network_uuid] = self.network_link
+        try:
+          self.cfg.CommitGroupInstanceIps(self.group.uuid, self.network_uuid,
+                                          self.network_link, feedback_fn)
+        except errors.AddressPoolError, e:
+          raise errors.OpExecError("Failed to commit existing"
+                                   " instance IPs: %s" % str(e))
+      elif self.network_action == constants.DDM_REMOVE:
+        network_link = self.group.networks[self.network_uuid]
+        self.cfg.ReleaseGroupInstanceIps(self.group.uuid, self.network_uuid,
+                                         network_link, feedback_fn)
+        del self.group.networks[self.network_uuid]
 
     self.cfg.Update(self.group, feedback_fn)
     return result
@@ -11322,7 +11816,6 @@ class IAllocator(object):
         "vcpus": beinfo[constants.BE_VCPUS],
         "memory": beinfo[constants.BE_MEMORY],
         "os": iinfo.os,
-        "nodes": [iinfo.primary_node] + list(iinfo.secondary_nodes),
         "nics": nic_data,
         "disks": [{"size": dsk.size, "mode": dsk.mode} for dsk in iinfo.disks],
         "disk_template": iinfo.disk_template,
@@ -11330,6 +11823,13 @@ class IAllocator(object):
         }
       pir["disk_space_total"] = _ComputeDiskSize(iinfo.disk_template,
                                                  pir["disks"])
+      # hail's relocation mode does not work without secondaries,
+      # as it exclusively tries replace-secondary moves. So, let's trick hail
+      # by specifying our primary and secondary node to be the same.
+      if iinfo.disk_template in constants.DTS_EXT_MIRROR:
+        pir["nodes"] = [iinfo.primary_node, iinfo.primary_node]
+      else:
+        pir["nodes"] = [iinfo.primary_node] + list(iinfo.secondary_nodes)
       instance_data[iinfo.name] = pir
 
     return instance_data
@@ -11346,7 +11846,7 @@ class IAllocator(object):
     """
     disk_space = _ComputeDiskSize(self.disk_template, self.disks)
 
-    if self.disk_template in constants.DTS_NET_MIRROR:
+    if self.disk_template in constants.DTS_INT_MIRROR:
       self.required_nodes = 2
     else:
       self.required_nodes = 1
@@ -11379,11 +11879,12 @@ class IAllocator(object):
       raise errors.ProgrammerError("Unknown instance '%s' passed to"
                                    " IAllocator" % self.name)
 
-    if instance.disk_template not in constants.DTS_NET_MIRROR:
+    if instance.disk_template not in constants.DTS_MIRRORED:
       raise errors.OpPrereqError("Can't relocate non-mirrored instances",
                                  errors.ECODE_INVAL)
 
-    if len(instance.secondary_nodes) != 1:
+    if instance.disk_template in constants.DTS_INT_MIRROR and \
+        len(instance.secondary_nodes) != 1:
       raise errors.OpPrereqError("Instance has not exactly one secondary node",
                                  errors.ECODE_STATE)
 
@@ -11563,11 +12064,206 @@ class LUTestAllocator(NoHooksLU):
     return result
 
 
+# Network LUs
+class LUNetworkAdd(LogicalUnit):
+  """Logical unit for creating node groups.
+
+  """
+  HPATH = "network-add"
+  HTYPE = constants.HTYPE_NETWORK
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self.needed_locks = {
+      locking.LEVEL_NODE: locking.ALL_SET,
+    }
+    self.share_locks[locking.LEVEL_NODE] = 1
+
+  def CheckPrereq(self):
+    """Check prerequisites.
+
+    This checks that the given group name is not an existing node group
+    already.
+
+    """
+    try:
+      uuid = self.cfg.LookupNetwork(self.op.network_name)
+    except errors.OpPrereqError:
+      uuid = None
+
+    if uuid is not None:
+      raise errors.OpPrereqError("Network '%s' already defined" %
+                                 self.op.network, errors.ECODE_EXISTS)
+
+  def BuildHooksEnv(self):
+    """Build hooks env.
+
+    """
+    env = {
+      "NETWORK_NAME": self.op.network_name,
+      "NETWORK_SUBNET": self.op.network,
+      "NETWORK_GATEWAY": self.op.gateway,
+      }
+    mn = self.cfg.GetMasterNode()
+    return env, [mn], [mn]
+
+  def Exec(self, feedback_fn):
+    """Add the ip pool to the cluster.
+
+    """
+    #FIXME: error handling
+    nobj = objects.Network(name=self.op.network_name,
+                           network=self.op.network,
+                           gateway=self.op.gateway,
+                           family=4)
+
+    # Initialize the associated address pool
+    pool = network.AddressPool.InitializeNetwork(nobj)
+
+    # Check if we need to reserve the nodes and the cluster master IP
+    # These may not be allocated to any instances in routed mode, as
+    # they wouldn't function anyway.
+    for node in self.cfg.GetAllNodesInfo().values():
+      for ip in [node.primary_ip, node.secondary_ip]:
+        try:
+          pool.Reserve(ip)
+          self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
+
+        except errors.AddressPoolError:
+          pass
+
+    master_ip = self.cfg.GetClusterInfo().master_ip
+    try:
+      pool.Reserve(master_ip)
+      self.LogInfo("Reserved cluster master IP (%s)", master_ip)
+    except errors.AddressPoolError:
+      pass
+
+    if self.op.reserved_ips:
+      for ip in self.op.reserved_ips:
+        pool.Reserve(ip, external=True)
+
+    self.cfg.AddNetwork(nobj, self.proc.GetECId())
+
+
+class _NetworkQuery(_QueryBase):
+  FIELDS = query.NETWORK_FIELDS
+
+  def ExpandNames(self, lu):
+    lu.needed_locks = {}
+
+    self._all_networks = lu.cfg.GetAllNetworksInfo()
+    name_to_uuid = dict((n.name, n.uuid) for n in self._all_networks.values())
+
+    if not self.names:
+      self.wanted = [name_to_uuid[name]
+                     for name in utils.NiceSort(name_to_uuid.keys())]
+    else:
+      # Accept names to be either names or UUIDs.
+      missing = []
+      self.wanted = []
+      all_uuid = frozenset(self._all_networks.keys())
+
+      for name in self.names:
+        if name in all_uuid:
+          self.wanted.append(name)
+        elif name in name_to_uuid:
+          self.wanted.append(name_to_uuid[name])
+        else:
+          missing.append(name)
+
+      if missing:
+        raise errors.OpPrereqError("Some networks do not exist: %s" % missing,
+                                   errors.ECODE_NOENT)
+
+  def DeclareLocks(self, lu, level):
+    pass
+
+  def _GetQueryData(self, lu):
+    """Computes the list of networks and their attributes.
+
+    """
+    do_instances = query.NETQ_INST in self.requested_data
+    do_groups = do_instances or (query.NETQ_GROUP in self.requested_data)
+    do_stats = query.NETQ_STATS in self.requested_data
+    cluster = lu.cfg.GetClusterInfo()
+
+    network_to_groups = None
+    network_to_instances = None
+    stats = None
+
+    # For NETQ_GROUP, we need to map network->[groups]
+    if do_groups:
+      all_groups = lu.cfg.GetAllNodeGroupsInfo()
+      network_to_groups = dict((uuid, []) for uuid in self.wanted)
+      default_nicpp = cluster.nicparams[constants.PP_DEFAULT]
+      default_link = default_nicpp[constants.NIC_LINK]
+
+      if do_instances:
+        all_instances = lu.cfg.GetAllInstancesInfo()
+        all_nodes = lu.cfg.GetAllNodesInfo()
+        network_to_instances = dict((uuid, []) for uuid in self.wanted)
+
+      for group in all_groups.values():
+        if do_instances:
+          group_nodes = [node.name for node in all_nodes.values() if
+                         node.group == group.uuid]
+          group_instances = [instance for instance in all_instances.values()
+                             if instance.primary_node in group_nodes]
+
+        for uuid, link in group.networks.items():
+          if uuid in network_to_groups:
+            network_to_groups[uuid].append(":".join((group.name, link)))
+
+            if do_instances:
+              for instance in group_instances:
+                for nic in instance.nics:
+                  if nic.nicparams.get(constants.NIC_LINK,
+                                       default_link) == link:
+                    network_to_instances[uuid].append(instance.name)
+                    break
+
+    if do_stats:
+      stats = {}
+      for uuid, net in self._all_networks.items():
+        if uuid in self.wanted:
+          pool = network.AddressPool(net)
+          stats[uuid] = {
+            "free_count": pool.GetFreeCount(),
+            "reserved_count": pool.GetReservedCount(),
+            "map": pool.GetMap(),
+            "external_reservations": ", ".join(pool.GetExternalReservations()),
+            }
+
+    return query.NetworkQueryData([self._all_networks[uuid]
+                                   for uuid in self.wanted],
+                                   network_to_groups,
+                                   network_to_instances,
+                                   stats)
+
+
+class LUNetworkQuery(NoHooksLU):
+  """Logical unit for querying node groups.
+
+  """
+  REQ_BGL = False
+
+  def CheckArguments(self):
+    self.nq = _NetworkQuery(self.op.names, self.op.output_fields, False)
+
+  def ExpandNames(self):
+    self.nq.ExpandNames(self)
+
+  def Exec(self, feedback_fn):
+    return self.nq.OldStyleQuery(self)
+
+
 #: Query type implementations
 _QUERY_IMPL = {
   constants.QR_INSTANCE: _InstanceQuery,
   constants.QR_NODE: _NodeQuery,
   constants.QR_GROUP: _GroupQuery,
+  constants.QR_NETWORK: _NetworkQuery,
   }
 
 

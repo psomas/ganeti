@@ -23,6 +23,7 @@
 """
 
 import os
+import re
 import logging
 import shutil
 import tempfile
@@ -466,6 +467,14 @@ def IsNormAbsPath(path):
 
   """
   return os.path.normpath(path) == path and os.path.isabs(path)
+
+
+def IsNormAbsPathOrURL(path):
+  """Check whether a path is absolute and normalized, or
+  an HTTP URL.
+
+  """
+  return IsNormAbsPath(path) or re.match(r'(https?|ftp)://', path)
 
 
 def PathJoin(*args):

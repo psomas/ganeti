@@ -84,6 +84,9 @@ _PIgnoreConsistency = ("ignore_consistency", False, ht.TBool)
 #: Do not remember instance state changes
 _PNoRemember = ("no_remember", False, ht.TBool)
 
+#: a required network name
+_PNetworkName = ("network_name", ht.NoDefault, ht.TNonEmptyString)
+
 #: OP_ID conversion regular expression
 _OPID_RE = re.compile("([a-z])([A-Z])")
 
@@ -123,6 +126,20 @@ def RequireFileStorage():
                                errors.ECODE_INVAL)
 
 
+def RequireSharedFileStorage():
+  """Checks that shared file storage is enabled.
+
+  While it doesn't really fit into this module, L{utils} was deemed too large
+  of a dependency to be imported for just one or two functions.
+
+  @raise errors.OpPrereqError: when shared file storage is disabled
+
+  """
+  if not constants.ENABLE_SHARED_FILE_STORAGE:
+    raise errors.OpPrereqError("Shared file storage disabled at"
+                               " configure time", errors.ECODE_INVAL)
+
+
 def _CheckDiskTemplate(template):
   """Ensure a given disk template is valid.
 
@@ -134,6 +151,8 @@ def _CheckDiskTemplate(template):
     raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
   if template == constants.DT_FILE:
     RequireFileStorage()
+  elif template == constants.DT_SHARED_FILE:
+    RequireSharedFileStorage()
   return True
 
 
@@ -741,6 +760,7 @@ class OpNodeMigrate(OpCode):
     _PNodeName,
     _PMigrationMode,
     _PMigrationLive,
+    ("iallocator", None, ht.TMaybeString),
     ]
 
 
@@ -799,6 +819,7 @@ class OpInstanceCreate(OpCode):
     ("src_path", None, ht.TMaybeString),
     ("start", True, ht.TBool),
     ("wait_for_sync", True, ht.TBool),
+    ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
     ]
 
 
@@ -888,6 +909,8 @@ class OpInstanceFailover(OpCode):
     _PInstanceName,
     _PShutdownTimeout,
     _PIgnoreConsistency,
+    ("iallocator", None, ht.TMaybeString),
+    ("target_node", None, ht.TMaybeString),
     ]
 
 
@@ -907,6 +930,8 @@ class OpInstanceMigrate(OpCode):
     _PMigrationMode,
     _PMigrationLive,
     ("cleanup", False, ht.TBool),
+    ("iallocator", None, ht.TMaybeString),
+    ("target_node", None, ht.TMaybeString),
     ]
 
 
@@ -1052,6 +1077,7 @@ class OpGroupSetParams(OpCode):
     ("ndparams", None, ht.TMaybeDict),
     ("alloc_policy", None, ht.TOr(ht.TNone,
                                   ht.TElemOf(constants.VALID_ALLOC_POLICIES))),
+    ("network", None, ht.TOr(ht.TNone, ht.TList)),
     ]
 
 
@@ -1267,6 +1293,26 @@ class OpTestDummy(OpCode):
     ("fail", ht.NoDefault, ht.NoType),
     ]
   WITH_LU = False
+
+
+# Network opcodes
+class OpNetworkAdd(OpCode):
+  """Add an IP network to the cluster."""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("network", None, ht.TString),
+    ("gateway", None, ht.TMaybeString),
+    ("reserved_ips", None, ht.TOr(ht.TListOf(ht.TNonEmptyString), ht.TNone)),
+    ]
+
+
+class OpNetworkQuery(OpCode):
+  """Compute the list of networks."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString)),
+    ]
 
 
 def _GetOpList():

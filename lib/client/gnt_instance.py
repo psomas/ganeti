@@ -341,7 +341,7 @@ def BatchCreate(opts, args):
                                    required_field, errors.ECODE_INVAL)
     # Validate special fields
     if spec['primary_node'] is not None:
-      if (spec['template'] in constants.DTS_NET_MIRROR and
+      if (spec['template'] in constants.DTS_INT_MIRROR and
           spec['secondary_node'] is None):
         raise errors.OpPrereqError('Template requires secondary node, but'
                                    ' there was no secondary provided.',
@@ -798,6 +798,12 @@ def FailoverInstance(opts, args):
   cl = GetClient()
   instance_name = args[0]
   force = opts.force
+  iallocator = opts.iallocator
+  target_node = opts.dst_node
+
+  if iallocator and target_node:
+    raise errors.OpPrereqError("Specify either an iallocator (-I), or a target"
+                               " node (-n) but not both", errors.ECODE_INVAL)
 
   if not force:
     _EnsureInstancesExist(cl, [instance_name])
@@ -810,7 +816,9 @@ def FailoverInstance(opts, args):
 
   op = opcodes.OpInstanceFailover(instance_name=instance_name,
                                   ignore_consistency=opts.ignore_consistency,
-                                  shutdown_timeout=opts.shutdown_timeout)
+                                  shutdown_timeout=opts.shutdown_timeout,
+                                  iallocator=iallocator,
+                                  target_node=target_node)
   SubmitOrSend(op, opts, cl=cl)
   return 0
 
@@ -830,6 +838,12 @@ def MigrateInstance(opts, args):
   cl = GetClient()
   instance_name = args[0]
   force = opts.force
+  iallocator = opts.iallocator
+  target_node = opts.dst_node
+
+  if iallocator and target_node:
+    raise errors.OpPrereqError("Specify either an iallocator (-I), or a target"
+                               " node (-n) but not both", errors.ECODE_INVAL)
 
   if not force:
     _EnsureInstancesExist(cl, [instance_name])
@@ -857,7 +871,8 @@ def MigrateInstance(opts, args):
     mode = opts.migration_mode
 
   op = opcodes.OpInstanceMigrate(instance_name=instance_name, mode=mode,
-                                 cleanup=opts.cleanup)
+                                 cleanup=opts.cleanup, iallocator=iallocator,
+                                 target_node=target_node)
   SubmitOpCode(op, cl=cl, opts=opts)
   return 0
 
@@ -1283,13 +1298,15 @@ def SetInstanceParams(opts, args):
     except (TypeError, ValueError):
       pass
     if disk_op == constants.DDM_ADD:
-      if 'size' not in disk_dict:
-        raise errors.OpPrereqError("Missing required parameter 'size'",
+      if ("size" not in disk_dict and "adopt" not in disk_dict) or \
+         ("size" in disk_dict and "adopt" in disk_dict):
+        raise errors.OpPrereqError("Please specify either size or adopt",
                                    errors.ECODE_INVAL)
-      disk_dict['size'] = utils.ParseUnit(disk_dict['size'])
+      if "size" in disk_dict:
+        disk_dict['size'] = utils.ParseUnit(disk_dict['size'])
 
   if (opts.disk_template and
-      opts.disk_template in constants.DTS_NET_MIRROR and
+      opts.disk_template in constants.DTS_INT_MIRROR and
       not opts.node):
     ToStderr("Changing the disk template to a mirrored one requires"
              " specifying a secondary node")
@@ -1390,15 +1407,15 @@ commands = {
   'failover': (
     FailoverInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, IGNORE_CONSIST_OPT, SUBMIT_OPT, SHUTDOWN_TIMEOUT_OPT,
-     DRY_RUN_OPT, PRIORITY_OPT],
+     DRY_RUN_OPT, PRIORITY_OPT, DST_NODE_OPT, IALLOCATOR_OPT],
     "[-f] <instance>", "Stops the instance and starts it on the backup node,"
-    " using the remote mirror (only for instances of type drbd)"),
+    " using the remote mirror (only for mirrored instances)"),
   'migrate': (
     MigrateInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, NONLIVE_OPT, MIGRATION_MODE_OPT, CLEANUP_OPT, DRY_RUN_OPT,
-     PRIORITY_OPT],
+     PRIORITY_OPT, DST_NODE_OPT, IALLOCATOR_OPT],
     "[-f] <instance>", "Migrate instance to its secondary node"
-    " (only for instances of type drbd)"),
+    " (only for mirrored instances)"),
   'move': (
     MoveInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, SUBMIT_OPT, SINGLE_NODE_OPT, SHUTDOWN_TIMEOUT_OPT,

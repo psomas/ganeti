@@ -130,6 +130,7 @@ def InitCluster(opts, args):
                         mac_prefix=opts.mac_prefix,
                         master_netdev=master_netdev,
                         file_storage_dir=opts.file_storage_dir,
+                        shared_file_storage_dir=opts.shared_file_storage_dir,
                         enabled_hypervisors=hvlist,
                         hvparams=hvparams,
                         beparams=beparams,
@@ -337,6 +338,8 @@ def ShowClusterConfig(opts, args):
   ToStdout("  - lvm reserved volumes: %s", reserved_lvs)
   ToStdout("  - drbd usermode helper: %s", result["drbd_usermode_helper"])
   ToStdout("  - file storage path: %s", result["file_storage_dir"])
+  ToStdout("  - shared file storage path: %s",
+           result["shared_file_storage_dir"])
   ToStdout("  - maintenance of node health: %s",
            result["maintain_node_health"])
   ToStdout("  - uid pool: %s",
@@ -892,7 +895,7 @@ commands = {
      SECONDARY_IP_OPT, VG_NAME_OPT, MAINTAIN_NODE_HEALTH_OPT,
      UIDPOOL_OPT, DRBD_HELPER_OPT, NODRBD_STORAGE_OPT,
      DEFAULT_IALLOCATOR_OPT, PRIMARY_IP_VERSION_OPT, PREALLOC_WIPE_DISKS_OPT,
-     NODE_PARAMS_OPT],
+     NODE_PARAMS_OPT, GLOBAL_SHARED_FILEDIR_OPT],
     "[opts...] <cluster_name>", "Initialises a new cluster configuration"),
   'destroy': (
     DestroyCluster, ARGS_NONE, [YES_DOIT_OPT],

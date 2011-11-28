@@ -121,6 +121,7 @@ CRYPTO_KEYS_DIR = RUN_GANETI_DIR + "/crypto"
 CRYPTO_KEYS_DIR_MODE = SECURE_DIR_MODE
 IMPORT_EXPORT_DIR = RUN_GANETI_DIR + "/import-export"
 IMPORT_EXPORT_DIR_MODE = 0755
+ADOPTABLE_BLOCKDEV_ROOT = "/dev/disk/"
 # keep RUN_GANETI_DIR first here, to make sure all get created when the node
 # daemon is started (this takes care of RUN_DIR being tmpfs)
 SUB_RUN_DIRS = [ RUN_GANETI_DIR, BDEV_CACHE_DIR, DISK_LINKS_DIR ]
@@ -145,7 +146,9 @@ SETUP_SSH = _autoconf.TOOLSDIR + "/setup-ssh"
 KVM_IFUP = _autoconf.PKGLIBDIR + "/kvm-ifup"
 ETC_HOSTS = "/etc/hosts"
 DEFAULT_FILE_STORAGE_DIR = _autoconf.FILE_STORAGE_DIR
+DEFAULT_SHARED_FILE_STORAGE_DIR = _autoconf.SHARED_FILE_STORAGE_DIR
 ENABLE_FILE_STORAGE = _autoconf.ENABLE_FILE_STORAGE
+ENABLE_SHARED_FILE_STORAGE = _autoconf.ENABLE_SHARED_FILE_STORAGE
 SYSCONFDIR = _autoconf.SYSCONFDIR
 TOOLSDIR = _autoconf.TOOLSDIR
 CONF_DIR = SYSCONFDIR + "/ganeti"
@@ -312,6 +315,7 @@ HTYPE_CLUSTER = "CLUSTER"
 HTYPE_NODE = "NODE"
 HTYPE_GROUP = "GROUP"
 HTYPE_INSTANCE = "INSTANCE"
+HTYPE_NETWORK = "NETWORK"
 
 HKR_SKIP = 0
 HKR_FAIL = 1
@@ -361,24 +365,37 @@ DT_DISKLESS = "diskless"
 DT_PLAIN = "plain"
 DT_DRBD8 = "drbd"
 DT_FILE = "file"
+DT_SHARED_FILE = "sharedfile"
+DT_BLOCK = "blockdev"
 
 # the set of network-mirrored disk templates
-DTS_NET_MIRROR = frozenset([DT_DRBD8])
+DTS_INT_MIRROR = frozenset([DT_DRBD8])
+
+# the set of externally-mirrored disk templates (e.g. SAN, NAS)
+DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK])
 
 # the set of non-lvm-based disk templates
-DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE])
+DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE, DT_SHARED_FILE, DT_BLOCK])
 
 # the set of disk templates which can be grown
-DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE])
+DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE])
 
 # the set of disk templates that allow adoption
-DTS_MAY_ADOPT = frozenset([DT_PLAIN])
+DTS_MAY_ADOPT = frozenset([DT_PLAIN, DT_BLOCK])
+
+# the set of disk templates that *must* use adoption
+DTS_MUST_ADOPT = frozenset([DT_BLOCK])
+
+# the set of disk templates that allow migrations
+DTS_MIRRORED = frozenset.union(DTS_INT_MIRROR, DTS_EXT_MIRROR)
+
 
 # logical disk types
 LD_LV = "lvm"
 LD_DRBD8 = "drbd8"
 LD_FILE = "file"
-LDS_BLOCK = frozenset([LD_LV, LD_DRBD8])
+LD_BLOCKDEV = "blockdev"
+LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV])
 
 # drbd constants
 DRBD_HMAC_ALG = "md5"
@@ -458,8 +475,8 @@ RIE_CONNECT_RETRIES = 10
 #: Give child process up to 5 seconds to exit after sending a signal
 CHILD_LINGER_TIMEOUT = 5.0
 
-DISK_TEMPLATES = frozenset([DT_DISKLESS, DT_PLAIN,
-                            DT_DRBD8, DT_FILE])
+DISK_TEMPLATES = frozenset([DT_DISKLESS, DT_PLAIN, DT_DRBD8,
+                            DT_FILE, DT_SHARED_FILE, DT_BLOCK])
 
 FILE_DRIVER = frozenset([FD_LOOP, FD_BLKTAP])
 
@@ -722,6 +739,8 @@ NIC_LINK = "link"
 
 NIC_MODE_BRIDGED = "bridged"
 NIC_MODE_ROUTED = "routed"
+
+NIC_IP_POOL = "pool"
 
 NIC_VALID_MODES = frozenset([NIC_MODE_BRIDGED, NIC_MODE_ROUTED])
 
@@ -997,9 +1016,10 @@ QR_INSTANCE = "instance"
 QR_NODE = "node"
 QR_LOCK = "lock"
 QR_GROUP = "group"
+QR_NETWORK = "network"
 
 #: List of resources which can be queried using L{opcodes.OpQuery}
-QR_OP_QUERY = frozenset([QR_INSTANCE, QR_NODE, QR_GROUP])
+QR_OP_QUERY = frozenset([QR_INSTANCE, QR_NODE, QR_GROUP, QR_NETWORK])
 
 #: List of resources which can be queried using Local UniX Interface
 QR_OP_LUXI = QR_OP_QUERY.union([
@@ -1065,6 +1085,7 @@ MAX_DISKS = 16
 SS_CLUSTER_NAME = "cluster_name"
 SS_CLUSTER_TAGS = "cluster_tags"
 SS_FILE_STORAGE_DIR = "file_storage_dir"
+SS_SHARED_FILE_STORAGE_DIR = "shared_file_storage_dir"
 SS_MASTER_CANDIDATES = "master_candidates"
 SS_MASTER_CANDIDATES_IPS = "master_candidates_ips"
 SS_MASTER_IP = "master_ip"
@@ -1082,6 +1103,7 @@ SS_HYPERVISOR_LIST = "hypervisor_list"
 SS_MAINTAIN_NODE_HEALTH = "maintain_node_health"
 SS_UID_POOL = "uid_pool"
 SS_NODEGROUPS = "nodegroups"
+SS_NETWORKS = "networks"
 
 # cluster wide default parameters
 DEFAULT_ENABLED_HYPERVISOR = HT_XEN_PVM
@@ -1291,3 +1313,6 @@ VALID_ALLOC_POLICIES = [
   ALLOC_POLICY_LAST_RESORT,
   ALLOC_POLICY_UNALLOCABLE,
   ]
+
+# Temporary external/shared storage parameters
+BLOCKDEV_DRIVER_MANUAL = "manual"

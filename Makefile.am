@@ -14,6 +14,7 @@ SHELL=/bin/bash
 
 ACLOCAL_AMFLAGS = -I autotools
 BUILD_BASH_COMPLETION = $(top_srcdir)/autotools/build-bash-completion
+BUILD_ZSH_COMPLETION = $(top_srcdir)/autotools/build-zsh-completion
 RUN_IN_TEMPDIR = $(top_srcdir)/autotools/run-in-tempdir
 CHECK_PYTHON_CODE = $(top_srcdir)/autotools/check-python-code
 CHECK_MAN = $(top_srcdir)/autotools/check-man
@@ -101,6 +102,7 @@ CLEANFILES = \
 	daemons/ganeti-cleaner \
 	devel/upload \
 	doc/examples/bash_completion \
+	doc/examples/zsh_completion \
 	doc/examples/ganeti.initd \
 	doc/examples/ganeti-kvm-poweroff.initd \
 	doc/examples/ganeti.cron \
@@ -158,6 +160,7 @@ pkgpython_PYTHON = \
 	lib/ssh.py \
 	lib/storage.py \
 	lib/uidpool.py \
+	lib/network.py \
 	lib/workerpool.py
 
 client_PYTHON = \
@@ -169,6 +172,7 @@ client_PYTHON = \
 	lib/client/gnt_instance.py \
 	lib/client/gnt_job.py \
 	lib/client/gnt_node.py \
+	lib/client/gnt_network.py \
 	lib/client/gnt_os.py
 
 hypervisor_PYTHON = \
@@ -242,6 +246,7 @@ docrst = \
 	doc/design-oob.rst \
 	doc/design-query2.rst \
 	doc/cluster-merge.rst \
+	doc/design-shared-storage.rst \
 	doc/devnotes.rst \
 	doc/glossary.rst \
 	doc/hooks.rst \
@@ -299,6 +304,7 @@ noinst_DATA = \
 	devel/upload \
 	doc/html \
 	doc/examples/bash_completion \
+	doc/examples/zsh_completion \
 	doc/examples/ganeti.cron \
 	doc/examples/ganeti.initd \
 	doc/examples/ganeti-kvm-poweroff.initd \
@@ -313,6 +319,7 @@ gnt_scripts = \
 	scripts/gnt-group \
 	scripts/gnt-instance \
 	scripts/gnt-job \
+	scripts/gnt-network \
 	scripts/gnt-node \
 	scripts/gnt-os
 
@@ -328,6 +335,7 @@ PYTHON_BOOTSTRAP = \
 	scripts/gnt-group \
 	scripts/gnt-instance \
 	scripts/gnt-job \
+	scripts/gnt-network \
 	scripts/gnt-node \
 	scripts/gnt-os
 
@@ -357,6 +365,8 @@ dist_tools_SCRIPTS = \
 	tools/cfgshell \
 	tools/cfgupgrade \
 	tools/cfgupgrade12 \
+	tools/cfgupgrade_grnet \
+	tools/upgrade-kvm-runtime \
 	tools/cluster-merge \
 	tools/lvmstrap \
 	tools/move-instance \
@@ -379,6 +389,7 @@ EXTRA_DIST = \
 	epydoc.conf.in \
 	pylintrc \
 	autotools/build-bash-completion \
+	autotools/build-zsh-completion \
 	autotools/check-python-code \
 	autotools/check-man \
 	autotools/check-news \
@@ -433,6 +444,7 @@ man_MANS = \
 	man/gnt-cluster.8 \
 	man/gnt-debug.8 \
 	man/gnt-group.8 \
+	man/gnt-network.8 \
 	man/gnt-instance.8 \
 	man/gnt-job.8 \
 	man/gnt-node.8 \
@@ -568,6 +580,7 @@ srclink_files = \
 
 check_python_code = \
 	$(BUILD_BASH_COMPLETION) \
+	$(BUILD_ZSH_COMPLETION) \
 	$(all_python_code)
 
 lint_python_code = \
@@ -577,6 +590,7 @@ lint_python_code = \
 	$(dist_tools_SCRIPTS) \
 	$(pkglib_python_scripts) \
 	$(BUILD_BASH_COMPLETION) \
+	$(BUILD_ZSH_COMPLETION) \
 	$(PYTHON_BOOTSTRAP)
 
 test/daemon-util_unittest.bash: daemons/daemon-util
@@ -604,6 +618,10 @@ doc/examples/hooks/%: doc/examples/hooks/%.in $(REPLACE_VARS_SED)
 doc/examples/bash_completion: $(BUILD_BASH_COMPLETION) $(RUN_IN_TEMPDIR) \
 	lib/cli.py $(gnt_scripts) $(client_PYTHON) tools/burnin
 	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_BASH_COMPLETION) > $@
+
+doc/examples/zsh_completion: $(BUILD_BASH_COMPLETION) $(RUN_IN_TEMPDIR) \
+	lib/cli.py $(gnt_scripts) $(client_PYTHON)
+	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_ZSH_COMPLETION) > $@
 
 doc/%.png: doc/%.dot
 	@test -n "$(DOT)" || { echo 'dot' not found during configure; exit 1; }
@@ -696,6 +714,8 @@ lib/_autoconf.py: Makefile vcs-version | lib/.dir
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \
 	  echo "FILE_STORAGE_DIR = '$(FILE_STORAGE_DIR)'"; \
 	  echo "ENABLE_FILE_STORAGE = $(ENABLE_FILE_STORAGE)"; \
+	  echo "SHARED_FILE_STORAGE_DIR = '$(SHARED_FILE_STORAGE_DIR)'"; \
+	  echo "ENABLE_SHARED_FILE_STORAGE = $(ENABLE_SHARED_FILE_STORAGE)"; \
 	  echo "IALLOCATOR_SEARCH_PATH = [$(IALLOCATOR_SEARCH_PATH)]"; \
 	  echo "KVM_PATH = '$(KVM_PATH)'"; \
 	  echo "SOCAT_PATH = '$(SOCAT)'"; \

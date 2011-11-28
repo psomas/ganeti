@@ -90,6 +90,10 @@ from ganeti.constants import (QFT_UNKNOWN, QFT_TEXT, QFT_BOOL, QFT_NUMBER,
  GQ_NODE,
  GQ_INST) = range(200, 203)
 
+(NETQ_CONFIG,
+ NETQ_GROUP,
+ NETQ_STATS,
+ NETQ_INST) = range(300, 304)
 
 FIELD_NAME_RE = re.compile(r"^[a-z0-9/._]+$")
 TITLE_RE = re.compile(r"^[^\s]+$")
@@ -1293,6 +1297,127 @@ def _BuildGroupFields():
   return _PrepareFieldList(fields, [])
 
 
+class NetworkQueryData:
+  """Data container for network data queries.
+
+  """
+  def __init__(self, networks, network_to_groups,
+               network_to_instances, stats):
+    """Initializes this class.
+
+    @param networks: List of network objects
+    @type network_to_groups: dict; network UUID as key
+    @param network_to_groups: Per-network list of groups
+    @type network_to_instances: dict; network UUID as key
+    @param network_to_instances: Per-network list of instances
+    @type stats: dict; network UUID as key
+    @param stats: Per-network usage statistics
+
+    """
+    self.networks = networks
+    self.network_to_groups = network_to_groups
+    self.network_to_instances = network_to_instances
+    self.stats = stats
+
+  def __iter__(self):
+    """Iterate over all node groups.
+
+    """
+    for net in self.networks:
+      if self.stats:
+        self.curstats = self.stats.get(net.uuid, None)
+        logging.warn(self.curstats)
+      else:
+        self.curstats = None
+      yield net
+
+
+_NETWORK_SIMPLE_FIELDS = {
+  "name": ("Network", QFT_TEXT),
+  "network": ("Subnet", QFT_TEXT),
+  "gateway": ("Gateway", QFT_TEXT),
+  }
+
+
+_NETWORK_STATS_FIELDS = {
+  "free_count": ("FreeCount", QFT_NUMBER),
+  "reserved_count": ("ReservedCount", QFT_NUMBER),
+  "map": ("Map", QFT_TEXT),
+  "external_reservations": ("ExternalReservations", QFT_TEXT),
+  }
+
+
+def _GetNetworkStatsField(field, kind, ctx, net):
+  """Gets the value of a "stats" field from L{NetworkQueryData}.
+
+  @param field: Field name
+  @param kind: Data kind, one of L{constants.QFT_ALL}
+  @type ctx: L{NetworkQueryData}
+
+  """
+
+  try:
+    value = ctx.curstats[field]
+  except KeyError:
+    return _FS_UNAVAIL
+
+  if kind == QFT_TEXT:
+    return value
+
+  assert kind in (QFT_NUMBER, QFT_UNIT)
+
+  # Try to convert into number
+  try:
+    return int(value)
+  except (ValueError, TypeError):
+    logging.exception("Failed to convert network field '%s' (value %r) to int",
+                      value, field)
+    return _FS_UNAVAIL
+
+
+def _BuildNetworkFields():
+  """Builds list of fields for network queries.
+
+  """
+  # Add simple fields
+  fields = [(_MakeField(name, title, kind), NETQ_CONFIG, _GetItemAttr(name))
+            for (name, (title, kind)) in _NETWORK_SIMPLE_FIELDS.items()]
+
+  def _GetLength(getter):
+    return lambda ctx, network: len(getter(ctx)[network.uuid])
+
+  def _GetSortedList(getter):
+    return lambda ctx, network: utils.NiceSort(getter(ctx)[network.uuid])
+
+  network_to_groups = operator.attrgetter("network_to_groups")
+  network_to_instances = operator.attrgetter("network_to_instances")
+
+  # Add fields for node groups
+  fields.extend([
+    (_MakeField("group_cnt", "Node_Groups", QFT_NUMBER),
+     NETQ_GROUP, _GetLength(network_to_groups)),
+    (_MakeField("group_links", "Group_Links", QFT_OTHER),
+     NETQ_GROUP, _GetSortedList(network_to_groups)),
+    ])
+
+  # Add fields for instances
+  fields.extend([
+    (_MakeField("inst_cnt", "Instances", QFT_NUMBER),
+     NETQ_INST, _GetLength(network_to_instances)),
+    (_MakeField("inst_list", "InstanceList", QFT_OTHER),
+     NETQ_INST, _GetSortedList(network_to_instances)),
+    ])
+
+  # Add fields for usage statistics
+  fields.extend([
+    (_MakeField(name, title, kind), NETQ_STATS,
+    compat.partial(_GetNetworkStatsField, name, kind))
+    for (name, (title, kind)) in _NETWORK_STATS_FIELDS.items()
+    ])
+
+  return _PrepareFieldList(fields, [])
+
+
 #: Fields available for node queries
 NODE_FIELDS = _BuildNodeFields()
 
@@ -1305,5 +1430,9 @@ LOCK_FIELDS = _BuildLockFields()
 #: Fields available for node group queries
 GROUP_FIELDS = _BuildGroupFields()
 
+#: Fields available for network queries
+NETWORK_FIELDS = _BuildNetworkFields()
+
 #: All available field lists
-ALL_FIELD_LISTS = [NODE_FIELDS, INSTANCE_FIELDS, LOCK_FIELDS, GROUP_FIELDS]
+ALL_FIELD_LISTS = [NODE_FIELDS, INSTANCE_FIELDS, LOCK_FIELDS,
+                   GROUP_FIELDS, NETWORK_FIELDS]

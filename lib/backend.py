@@ -651,6 +651,44 @@ def VerifyNode(what, cluster_name):
   return result
 
 
+def GetBlockDevSizes(devices):
+  """Return the size of the given block devices
+
+  @type devices: list
+  @param devices: list of block device nodes to query
+  @rtype: dict
+  @return:
+    dictionary of all block devices under /dev (key). The value is their
+    size in MiB.
+
+    {'/dev/disk/by-uuid/123456-12321231-312312-312': 124}
+
+  """
+  DEV_PREFIX = "/dev/"
+  blockdevs = {}
+
+  for devpath in devices:
+    if os.path.commonprefix([DEV_PREFIX, devpath]) != DEV_PREFIX:
+      continue
+
+    try:
+      st = os.stat(devpath)
+    except EnvironmentError, err:
+      logging.warning("Error stat()'ing device %s: %s", devpath, str(err))
+      continue
+
+    if stat.S_ISBLK(st.st_mode):
+      result = utils.RunCmd(["blockdev", "--getsize64", devpath])
+      if result.failed:
+        # We don't want to fail, just do not list this device as available
+        logging.warning("Cannot get size for block device %s", devpath)
+        continue
+
+      size = int(result.stdout) / (1024 * 1024)
+      blockdevs[devpath] = size
+  return blockdevs
+
+
 def GetVolumeList(vg_names):
   """Compute list of logical volumes and their size.
 
@@ -1210,10 +1248,21 @@ def AcceptInstance(instance, info, target):
   @param target: target host (usually ip), on this node
 
   """
+  # TODO: why is this required only for DTS_EXT_MIRROR?
+  if instance.disk_template in constants.DTS_EXT_MIRROR:
+    # Create the symlinks, as the disks are not active
+    # in any way
+    try:
+      _GatherAndLinkBlockDevs(instance)
+    except errors.BlockDeviceError, err:
+      _Fail("Block device error: %s", err, exc=True)
+
   hyper = hypervisor.GetHypervisor(instance.hypervisor)
   try:
     hyper.AcceptInstance(instance, info, target)
   except errors.HypervisorError, err:
+    if instance.disk_template in constants.DTS_EXT_MIRROR:
+      _RemoveBlockDevLinks(instance.name, instance.disks)
     _Fail("Failed to accept instance: %s", err, exc=True)
 
 
@@ -2417,15 +2466,15 @@ def BlockdevRename(devlist):
     _Fail("; ".join(msgs))
 
 
-def _TransformFileStorageDir(file_storage_dir):
+def _TransformFileStorageDir(fs_dir):
   """Checks whether given file_storage_dir is valid.
 
-  Checks wheter the given file_storage_dir is within the cluster-wide
-  default file_storage_dir stored in SimpleStore. Only paths under that
-  directory are allowed.
+  Checks wheter the given fs_dir is within the cluster-wide default
+  file_storage_dir or the shared_file_storage_dir, which are stored in
+  SimpleStore. Only paths under those directories are allowed.
 
-  @type file_storage_dir: str
-  @param file_storage_dir: the path to check
+  @type fs_dir: str
+  @param fs_dir: the path to check
 
   @return: the normalized path if valid, None otherwise
 
@@ -2433,13 +2482,15 @@ def _TransformFileStorageDir(file_storage_dir):
   if not constants.ENABLE_FILE_STORAGE:
     _Fail("File storage disabled at configure time")
   cfg = _GetConfig()
-  file_storage_dir = os.path.normpath(file_storage_dir)
-  base_file_storage_dir = cfg.GetFileStorageDir()
-  if (os.path.commonprefix([file_storage_dir, base_file_storage_dir]) !=
-      base_file_storage_dir):
+  fs_dir = os.path.normpath(fs_dir)
+  base_fstore = cfg.GetFileStorageDir()
+  base_shared = cfg.GetSharedFileStorageDir()
+  if ((os.path.commonprefix([fs_dir, base_fstore]) != base_fstore) and
+      (os.path.commonprefix([fs_dir, base_shared]) != base_shared)):
     _Fail("File storage directory '%s' is not under base file"
-          " storage directory '%s'", file_storage_dir, base_file_storage_dir)
-  return file_storage_dir
+          " storage directory '%s' or shared storage directory '%s'",
+          fs_dir, base_fstore, base_shared)
+  return fs_dir
 
 
 def CreateFileStorageDir(file_storage_dir):

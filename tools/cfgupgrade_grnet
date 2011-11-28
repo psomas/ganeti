@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+from ganeti import config
+
+
+cfg = config.ConfigWriter(cfg_file=sys.argv[1], offline=True)
+
+if "kvm" in cfg._config_data.cluster.hvparams:
+  kvm = cfg._config_data.cluster.hvparams["kvm"]
+
+  if "run_as" in kvm:
+    if kvm["run_as"]:
+      print "Found run_as HV parameter, replacing with 'user' security model"
+      kvm["security_model"] = "user"
+      kvm["security_domain"] = kvm["run_as"]
+    else:
+      print "Found empty run_as KVM HV parameter, removing"
+    del kvm["run_as"]
+
+instances = cfg._config_data.instances
+
+for name in instances:
+  instance = instances[name]
+  if "run_as" in instance.hvparams:
+    if instance.hvparams["run_as"]:
+      print "Found old 'run_as' parameter, converting to 'user' security model"
+      instance.hvparams["security_model"] = "user"
+      instance.hvparams["security_domain"] = instance.hvparams["run_as"]
+    else:
+      print "Found empty run_as KVM HV parameter, removing"
+    del instance.hvparams["run_as"]
+
+  if instance.disk_template != "blockdev":
+    continue
+
+  for disk in instance.disks:
+    if len(disk.logical_id) == 3:
+      print "Found old blockdev configuration on instance %s, fixing" % name
+      lid = disk.logical_id[2]
+      if not lid.startswith("/dev/disk/"):
+        lid = os.path.join("/dev/disk", lid)
+
+      disk.logical_id = ["manual", lid]
+      try:
+        disk.physical_id = ["manual", lid]
+      except AttributeError:
+        pass
+
+print "Verifying configuration"
+cfg.VerifyConfig()
+
+print "Writing config"
+cfg._WriteConfig()

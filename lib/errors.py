@@ -120,6 +120,12 @@ class ConfigVersionMismatch(ConfigurationError):
   pass
 
 
+class AddressPoolError(GenericError):
+  """Errors related to IP address pools.
+
+  """
+
+
 class ReservationError(GenericError):
   """Errors reserving a resource.
 

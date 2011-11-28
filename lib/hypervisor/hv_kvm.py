@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2008, 2009, 2010 Google Inc.
+# Copyright (C) 2008, 2009, 2010, 2011 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ import pwd
 import struct
 import fcntl
 import shutil
+import urllib2
 
 from ganeti import utils
 from ganeti import constants
@@ -127,6 +128,24 @@ def _OpenTap(vnet_hdr=True):
   return (ifname, tapfd)
 
 
+def _CheckUrl(url):
+  """Check if a given URL exists on the server
+
+  """
+  req = urllib2.Request(url)
+
+  # XXX: ugly but true
+  req.get_method = lambda: "HEAD"
+
+  try:
+    resp = urllib2.urlopen(req)
+  except urllib2.URLError:
+    return False
+
+  del resp
+  return True
+
+
 class KVMHypervisor(hv_base.BaseHypervisor):
   """KVM hypervisor interface"""
   CAN_MIGRATE = True
@@ -165,7 +184,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     constants.HV_VNC_X509_VERIFY: hv_base.NO_CHECK,
     constants.HV_VNC_PASSWORD_FILE: hv_base.OPT_FILE_CHECK,
     constants.HV_KVM_FLOPPY_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
-    constants.HV_CDROM_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
+    constants.HV_CDROM_IMAGE_PATH: hv_base.OPT_FILE_OR_URL_CHECK,
     constants.HV_KVM_CDROM2_IMAGE_PATH: hv_base.OPT_FILE_CHECK,
     constants.HV_BOOT_ORDER:
       hv_base.ParamInSet(True, constants.HT_KVM_VALID_BO_TYPES),
@@ -197,7 +216,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _MIGRATION_STATUS_RE = re.compile('Migration\s+status:\s+(\w+)',
                                     re.M | re.I)
   _MIGRATION_INFO_MAX_BAD_ANSWERS = 5
-  _MIGRATION_INFO_RETRY_DELAY = 2
+  _MIGRATION_INFO_RETRY_DELAY = 1
 
   _VERSION_RE = re.compile(r"\b(\d+)\.(\d+)\.(\d+)\b")
 
@@ -545,7 +564,14 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       if_val = ',if=%s' % disk_type
     # Cache mode
     disk_cache = hvp[constants.HV_DISK_CACHE]
-    if disk_cache != constants.HT_CACHE_DEFAULT:
+    if instance.disk_template in constants.DTS_EXT_MIRROR:
+      if disk_cache != "none":
+        # TODO: make this a hard error, instead of a silent overwrite
+        logging.warning("KVM: overriding disk_cache setting '%s' with 'none'"
+                        " to prevent shared storage corruption on migration",
+                        disk_cache)
+      cache_val = ",cache=none"
+    elif disk_cache != constants.HT_CACHE_DEFAULT:
       cache_val = ",cache=%s" % disk_cache
     else:
       cache_val = ""
@@ -572,13 +598,21 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     iso_image = hvp[constants.HV_CDROM_IMAGE_PATH]
     if iso_image:
-      options = ',format=raw,media=cdrom'
+      options = ',media=cdrom'
+      if re.match(r'(https?|ftp)://', iso_image):
+        # Check that the iso image is really there
+        # See https://bugs.launchpad.net/qemu/+bug/597575
+        if not _CheckUrl(iso_image):
+          raise errors.HypervisorError("ISO image %s is not accessible" %
+                                       iso_image)
+      else:
+        options = "%s,format=raw" % options
       if boot_cdrom:
         kvm_cmd.extend(['-boot', 'd'])
-        if cdrom_disk_type != constants.HT_DISK_IDE:
-          options = '%s,boot=on,if=%s' % (options, constants.HT_DISK_IDE)
-        else:
-          options = '%s,boot=on' % options
+        # We default to IDE in order for CDROM booting to be usable
+        # Also, there is no need to pass boot=on, as IDE doesn't need
+        # extboot functionality to boot
+        options = '%s,if=%s' % (options, constants.HT_DISK_IDE)
       else:
         if cdrom_disk_type == constants.HT_DISK_PARAVIRTUAL:
           if_val = ',if=virtio'

@@ -1,0 +1,5 @@
+snf-ganeti (2.4.5+ippool5-1) stable; urgency=low
+
+  * Support snf features to upstream ganeti
+
+ -- Dimitris Aragiorigs <dimara@grnet.gr>  Thu, 3 Nov 2011 18:26:01 +0300

@@ -447,6 +447,8 @@ class Disk(ConfigObject):
       return "/dev/%s/%s" % (self.logical_id[0], self.logical_id[1])
     elif self.dev_type == constants.LD_BLOCKDEV:
       return self.logical_id[1]
+    elif self.dev_type == constants.LD_RBD:
+      return "/dev/%s/%s" % (self.logical_id[0], self.logical_id[1])
     return None
 
   def ChildrenNeeded(self):
@@ -490,7 +492,7 @@ class Disk(ConfigObject):
 
     """
     if self.dev_type in [constants.LD_LV, constants.LD_FILE,
-                         constants.LD_BLOCKDEV]:
+                         constants.LD_BLOCKDEV, constants.LD_RBD]:
       result = [node]
     elif self.dev_type in constants.LDS_DRBD:
       result = [self.logical_id[0], self.logical_id[1]]
@@ -565,7 +567,8 @@ class Disk(ConfigObject):
     actual algorithms from bdev.
 
     """
-    if self.dev_type in (constants.LD_LV, constants.LD_FILE):
+    if self.dev_type in (constants.LD_LV, constants.LD_FILE,
+                         constants.LD_RBD):
       self.size += amount
     elif self.dev_type == constants.LD_DRBD8:
       if self.children:

@@ -6713,6 +6713,21 @@ class TLMigrateInstance(Tasklet):
       self._GoReconnect(False)
       self._WaitUntilSync()
 
+    # If the instance's disk template is `rbd' and there was a successfull
+    # migration, unmap the device from the source node.
+    if self.instance.disk_template == constants.DT_RBD:
+      disks = _ExpandCheckDisks(instance, instance.disks)
+      self.feedback_fn("* unmapping instance's disks from %s" % source_node)
+      for disk in disks:
+        result = self.rpc.call_blockdev_shutdown(source_node, disk)
+        msg = result.fail_msg
+        if msg:
+          self.LogWarning("Migration was successfull, but couldn't unmap the"
+                          "block device %s on source node %s: %s",
+                          disk.iv_name, source_node, msg)
+          self.LogWarning("Try to unmap the device %s manually on %s",
+                          disk.iv_name, source_node)
+
     self.feedback_fn("* done")
 
   def Exec(self, feedback_fn):
@@ -6941,6 +6956,20 @@ def _GenerateDiskTemplate(lu, template_name,
       disk_dev = objects.Disk(dev_type=constants.LD_BLOCKDEV, size=disk["size"],
                               logical_id=(constants.BLOCKDEV_DRIVER_MANUAL,
                                           disk["adopt"]),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk["mode"])
+      disks.append(disk_dev)
+  elif template_name == constants.DT_RBD:
+    if len(secondary_nodes) != 0:
+      raise errors.ProgrammerError("Wrong template configuration")
+
+    names = _GenerateUniqueNames(lu, [".rbd.disk%d" % (base_index + i)
+                                      for i in range(disk_count)])
+
+    for idx, disk in enumerate(disk_info):
+      disk_index = idx + base_index
+      disk_dev = objects.Disk(dev_type=constants.LD_RBD, size=disk["size"],
+                              logical_id=(constants.RBD_POOL, names[idx]),
                               iv_name="disk/%d" % disk_index,
                               mode=disk["mode"])
       disks.append(disk_dev)
@@ -7182,6 +7211,7 @@ def _ComputeDiskSize(disk_template, disks):
     constants.DT_FILE: None,
     constants.DT_SHARED_FILE: 0,
     constants.DT_BLOCK: 0,
+    constants.DT_RBD: 0,
   }
 
   if disk_template not in req_size_dict:
@@ -7978,9 +8008,13 @@ class LUInstanceCreate(LogicalUnit):
     nodenames = [pnode.name] + self.secondaries
 
     if not self.adopt_disks:
-      # Check lv size requirements, if not adopting
-      req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
-      _CheckNodesFreeDiskPerVG(self, nodenames, req_sizes)
+      if self.op.disk_template == constants.DT_RBD:
+        # Check if there is enough space on the RADOS cluster
+        _CheckRADOSFreeSpace(self.op.instance_name, self.disks)
+      else:
+        # Check lv size requirements, if not adopting
+        req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
+        _CheckNodesFreeDiskPerVG(self, nodenames, req_sizes)
 
     elif self.op.disk_template == constants.DT_PLAIN: # Check the adoption data
       all_lvs = set([i["vg"] + "/" + i["adopt"] for i in self.disks])
@@ -8293,6 +8327,18 @@ class LUInstanceCreate(LogicalUnit):
       result.Raise("Could not start instance")
 
     return list(iobj.all_nodes)
+
+
+def _CheckRADOSFreeSpace(name, disks):
+  """Compute disk size requirements inside the RADOS cluster
+
+  """
+  # For the RADOS cluster we assume there is always enough space
+  enough_space = True
+  if not enough_space:
+    raise errors.OpPrereqError("Not enough disk space inside the RADOS"
+                               "cluster to allocate disks for instance: %s" %
+                               (name), errors.ECODE_NORES)
 
 
 class LUInstanceConsole(NoHooksLU):
@@ -9294,7 +9340,8 @@ class LUInstanceGrowDisk(LogicalUnit):
     self.disk = instance.FindDisk(self.op.disk)
 
     if instance.disk_template not in (constants.DT_FILE,
-                                      constants.DT_SHARED_FILE):
+                                      constants.DT_SHARED_FILE,
+                                      constants.DT_RBD):
       # TODO: check the free disk space for file, when that feature will be
       # supported
       _CheckNodesFreeDiskPerVG(self, nodenames,

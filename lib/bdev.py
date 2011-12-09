@@ -2347,11 +2347,6 @@ class RADOSBlockDevice(BlockDev):
     """Shutdown the device.
 
     """
-    # Unmap the rbd device
-    # !doesn't unmap during migration because the
-    # !shutdown method is never called if the machine was up
-    # TODO: Fix cmdlib.py to shutdown the machine in the source node
-    # once the migration ends successfully
     if not self.minor and not self.Attach():
       # the rbd device doesn't exist
       return

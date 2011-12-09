@@ -1,27 +1,27 @@
 Source: snf-ganeti
 Section: admin
 Priority: extra
-Maintainer: GRNET Ganeti Team <synnefo@lists.grnet.gr>
-Uploaders: Dimitris Aragiorgis <dimara@grnet.gr>, Constantinos Venetsanopoulos <cven@grnet.gr>
+Maintainer: GRNET Ganeti Team <ganeti-dev@lists.grnet.gr>
 Build-Depends: debhelper (>= 7)
 Build-Depends-Indep: python-simplejson, python-pyparsing, python-openssl,
  python-support (>= 0.6), socat, python-pyinotify, python-pycurl,
- python-paramiko, python-ipaddr
+ python-paramiko, python-ipaddr, python-bitarray
 Standards-Version: 3.9.2
 Homepage: http://code.grnet.gr/projects/snf-ganeti/
+Vcs-Browser: https://code.grnet.gr/git/snf-ganeti
 
 Package: snf-ganeti
 Architecture: all
-Conflicts: ganeti2
+Conflicts: ganeti, ganeti2
 Replaces: ganeti2
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
  python-pyinotify, python-pycurl, python-paramiko, python-ipaddr, 
- socat, libjs-jquery
+ python-bitarray, socat, libjs-jquery
 Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
  xen-linux-system-2.6.32-5-xen-amd64 | xen-linux-system-2.6.32-5-xen-686,
- ganeti-instance-debootstrap, ndisc6
+ ganeti-instance-debootstrap, ndisc6, ceph-common
 #Breaks: ganeti-htools (<< 0.3)
 Suggests: drbd8-module-source (>= 8.0.7)
 Provides: ${python:Provides}, ganeti2

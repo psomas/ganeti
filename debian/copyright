@@ -1,17 +1,24 @@
 This package was debianized by:
 
-	Dimitris Aragiorgis <dimara@grnet.gr>  Fri, 4 Nov 2011 02:35:54 +0300.
+	Leonardo Rodrigues de Mello <l@lmello.eu.org> on Thu, 30 Aug 2007 10:38:20
+	-0300.
 
-It was then taken over for maintenance by the Grnet Ganeti Team.
+It was then taken over for official Debian maintenance by the Debian
+Ganeti Team.
 
 It was downloaded from:
 
-	https://code.grnet.gr/projects/snf-ganeti
+    http://code.google.com/p/ganeti/
 
 Upstream Authors:
-	Dimitris Aragiorgis <dimara@grnet.gr>
-	Constantinos Ven <cven@grnet.gr>
-	Vangelis Koukis <vkoukis@grnet.gr>
+
+	Iustin Pop <iustin@google.com>
+	Guido Trotter <ultrotter@google.com>
+	Alexander Schreiber <als@google.com>
+	Oleksiy Mishchenko <oleksiy@google.com>
+	Roman Marxer <roman@google.com>
+	Michael Hanselmann <hansmi@google.com>
+	Magnus Ringman <bmr@google.com>
 
 Copyright:
 

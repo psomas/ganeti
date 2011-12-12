@@ -367,18 +367,19 @@ DT_DRBD8 = "drbd"
 DT_FILE = "file"
 DT_SHARED_FILE = "sharedfile"
 DT_BLOCK = "blockdev"
+DT_RBD = "rbd"
 
 # the set of network-mirrored disk templates
 DTS_INT_MIRROR = frozenset([DT_DRBD8])
 
 # the set of externally-mirrored disk templates (e.g. SAN, NAS)
-DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK])
+DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK, DT_RBD])
 
 # the set of non-lvm-based disk templates
-DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE, DT_SHARED_FILE, DT_BLOCK])
+DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE, DT_SHARED_FILE, DT_BLOCK, DT_RBD])
 
 # the set of disk templates which can be grown
-DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE])
+DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE, DT_RBD])
 
 # the set of disk templates that allow adoption
 DTS_MAY_ADOPT = frozenset([DT_PLAIN, DT_BLOCK])
@@ -395,7 +396,11 @@ LD_LV = "lvm"
 LD_DRBD8 = "drbd8"
 LD_FILE = "file"
 LD_BLOCKDEV = "blockdev"
-LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV])
+LD_RBD = "rbd"
+LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV, LD_RBD])
+
+# rbd constants (will change to parameters later)
+RBD_POOL = "rbd"
 
 # drbd constants
 DRBD_HMAC_ALG = "md5"
@@ -476,7 +481,7 @@ RIE_CONNECT_RETRIES = 10
 CHILD_LINGER_TIMEOUT = 5.0
 
 DISK_TEMPLATES = frozenset([DT_DISKLESS, DT_PLAIN, DT_DRBD8,
-                            DT_FILE, DT_SHARED_FILE, DT_BLOCK])
+                            DT_FILE, DT_SHARED_FILE, DT_BLOCK, DT_RBD])
 
 FILE_DRIVER = frozenset([FD_LOOP, FD_BLKTAP])
 

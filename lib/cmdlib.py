@@ -6713,6 +6713,21 @@ class TLMigrateInstance(Tasklet):
       self._GoReconnect(False)
       self._WaitUntilSync()
 
+    # If the instance's disk template is `rbd' and there was a successfull
+    # migration, unmap the device from the source node.
+    if self.instance.disk_template == constants.DT_RBD:
+      disks = _ExpandCheckDisks(instance, instance.disks)
+      self.feedback_fn("* unmapping instance's disks from %s" % source_node)
+      for disk in disks:
+        result = self.rpc.call_blockdev_shutdown(source_node, disk)
+        msg = result.fail_msg
+        if msg:
+          self.LogWarning("Migration was successfull, but couldn't unmap the"
+                          "block device %s on source node %s: %s",
+                          disk.iv_name, source_node, msg)
+          self.LogWarning("Try to unmap the device %s manually on %s",
+                          disk.iv_name, source_node)
+
     self.feedback_fn("* done")
 
   def Exec(self, feedback_fn):
@@ -6941,6 +6956,20 @@ def _GenerateDiskTemplate(lu, template_name,
       disk_dev = objects.Disk(dev_type=constants.LD_BLOCKDEV, size=disk["size"],
                               logical_id=(constants.BLOCKDEV_DRIVER_MANUAL,
                                           disk["adopt"]),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk["mode"])
+      disks.append(disk_dev)
+  elif template_name == constants.DT_RBD:
+    if len(secondary_nodes) != 0:
+      raise errors.ProgrammerError("Wrong template configuration")
+
+    names = _GenerateUniqueNames(lu, [".rbd.disk%d" % (base_index + i)
+                                      for i in range(disk_count)])
+
+    for idx, disk in enumerate(disk_info):
+      disk_index = idx + base_index
+      disk_dev = objects.Disk(dev_type=constants.LD_RBD, size=disk["size"],
+                              logical_id=(constants.RBD_POOL, names[idx]),
                               iv_name="disk/%d" % disk_index,
                               mode=disk["mode"])
       disks.append(disk_dev)
@@ -7182,6 +7211,7 @@ def _ComputeDiskSize(disk_template, disks):
     constants.DT_FILE: None,
     constants.DT_SHARED_FILE: 0,
     constants.DT_BLOCK: 0,
+    constants.DT_RBD: 0,
   }
 
   if disk_template not in req_size_dict:
@@ -7978,9 +8008,13 @@ class LUInstanceCreate(LogicalUnit):
     nodenames = [pnode.name] + self.secondaries
 
     if not self.adopt_disks:
-      # Check lv size requirements, if not adopting
-      req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
-      _CheckNodesFreeDiskPerVG(self, nodenames, req_sizes)
+      if self.op.disk_template == constants.DT_RBD:
+        # Check if there is enough space on the RADOS cluster
+        _CheckRADOSFreeSpace(self.op.instance_name, self.disks)
+      else:
+        # Check lv size requirements, if not adopting
+        req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
+        _CheckNodesFreeDiskPerVG(self, nodenames, req_sizes)
 
     elif self.op.disk_template == constants.DT_PLAIN: # Check the adoption data
       all_lvs = set([i["vg"] + "/" + i["adopt"] for i in self.disks])
@@ -8196,8 +8230,9 @@ class LUInstanceCreate(LogicalUnit):
     if iobj.disk_template != constants.DT_DISKLESS and not self.adopt_disks:
       if self.op.mode == constants.INSTANCE_CREATE:
         if not self.op.no_install:
-          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
-              self.op.wait_for_sync):
+          pause_sync = (iobj.disk_template in constants.DTS_INT_MIRROR and
+                        not self.op.wait_for_sync)
+          if pause_sync:
             feedback_fn("* pausing disk sync to install instance OS")
             result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
                                                               iobj.disks, True)
@@ -8208,10 +8243,10 @@ class LUInstanceCreate(LogicalUnit):
 
           feedback_fn("* running the instance OS create scripts...")
           # FIXME: pass debug option from opcode to backend
-          result = self.rpc.call_instance_os_add(pnode_name, iobj, False,
-                                                 self.op.debug_level)
-          if (iobj.disk_template in constants.DTS_INT_MIRROR and not
-              self.op.wait_for_sync):
+          os_add_result = \
+            self.rpc.call_instance_os_add(pnode_name, iobj, False,
+                                          self.op.debug_level)
+          if pause_sync:
             feedback_fn("* resuming disk sync")
             result = self.rpc.call_blockdev_pause_resume_sync(pnode_name,
                                                               iobj.disks, False)
@@ -8220,8 +8255,8 @@ class LUInstanceCreate(LogicalUnit):
                 logging.warn("resume-sync of instance %s for disk %d failed",
                              instance, idx)
 
-          result.Raise("Could not add os for instance %s"
-                       " on node %s" % (instance, pnode_name))
+          os_add_result.Raise("Could not add os for instance %s"
+                              " on node %s" % (instance, pnode_name))
 
       elif self.op.mode == constants.INSTANCE_IMPORT:
         feedback_fn("* running the instance OS import scripts...")
@@ -8293,6 +8328,18 @@ class LUInstanceCreate(LogicalUnit):
       result.Raise("Could not start instance")
 
     return list(iobj.all_nodes)
+
+
+def _CheckRADOSFreeSpace(name, disks):
+  """Compute disk size requirements inside the RADOS cluster
+
+  """
+  # For the RADOS cluster we assume there is always enough space
+  enough_space = True
+  if not enough_space:
+    raise errors.OpPrereqError("Not enough disk space inside the RADOS"
+                               "cluster to allocate disks for instance: %s" %
+                               (name), errors.ECODE_NORES)
 
 
 class LUInstanceConsole(NoHooksLU):
@@ -9294,7 +9341,8 @@ class LUInstanceGrowDisk(LogicalUnit):
     self.disk = instance.FindDisk(self.op.disk)
 
     if instance.disk_template not in (constants.DT_FILE,
-                                      constants.DT_SHARED_FILE):
+                                      constants.DT_SHARED_FILE,
+                                      constants.DT_RBD):
       # TODO: check the free disk space for file, when that feature will be
       # supported
       _CheckNodesFreeDiskPerVG(self, nodenames,
@@ -10843,13 +10891,9 @@ class LUGroupAssignNodes(NoHooksLU):
     """Assign nodes to a new group.
 
     """
-    for node in self.op.nodes:
-      self.node_data[node].group = self.group_uuid
+    mods = [(node_name, self.group_uuid) for node_name in self.op.nodes]
 
-    # FIXME: Depends on side-effects of modifying the result of
-    # C{cfg.GetAllNodesInfo}
-
-    self.cfg.Update(self.group, feedback_fn) # Saves all modified nodes.
+    self.cfg.AssignGroupNodes(mods)
 
   @staticmethod
   def CheckAssignmentForSplitInstances(changes, node_data, instance_data):

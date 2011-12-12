@@ -1,5 +1,9 @@
-snf-ganeti (2.4.5+ippool5-1) stable; urgency=low
+snf-ganeti (2.4.5+ippool5+rbd1-1) UNRELEASED; urgency=low
 
-  * Support snf features to upstream ganeti
+  GRNET-specific package with IP pool, RBD support,
+  based on latest upstream devel-2.4.
+   * Upgrade to 2.4.5 + patches pending for 2.4.6
+   * Add support for instance disks on rbd
+   * Fix OKEANOS-60, backport Faidon's fix from upstream devel-2.5.
 
- -- Dimitris Aragiorigs <dimara@grnet.gr>  Thu, 3 Nov 2011 18:26:01 +0300
+ -- Vangelis Koukis <vkoukis@grnet.gr>  Mon, 12 Dec 2011 14:07:08 +0200

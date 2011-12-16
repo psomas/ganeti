@@ -1,0 +1,7 @@
+snf-ganeti (2.5-1) UNRELEASED; urgency=low
+
+  GRNET-specific package against google's master branch
+  The package contains google's current master branch +
+  GRNET's RBD support
+
+ -- Constantinos Venetsanopoulos <cven@grnet.gr>  Fri, 16 Dec 2011 11:07:08 +0200

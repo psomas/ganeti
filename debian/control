@@ -1,0 +1,41 @@
+Source: snf-ganeti
+Section: admin
+Priority: extra
+Maintainer: GRNET Ganeti Team <ganeti-dev@lists.grnet.gr>
+Build-Depends: debhelper (>= 7)
+Build-Depends-Indep: python-simplejson, python-pyparsing, python-openssl,
+ python-support (>= 0.6), socat, python-pyinotify, python-pycurl,
+ python-paramiko, python-ipaddr, python-bitarray
+Standards-Version: 3.9.2
+Homepage: http://code.grnet.gr/projects/snf-ganeti/
+Vcs-Browser: https://code.grnet.gr/git/snf-ganeti
+
+Package: snf-ganeti
+Architecture: all
+Conflicts: ganeti, ganeti2
+Replaces: ganeti2
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
+ openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
+ openssl, python-simplejson, python-pyparsing, python-openssl,
+ python-pyinotify, python-pycurl, python-paramiko, python-ipaddr, 
+ python-bitarray, socat, libjs-jquery
+Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
+ xen-linux-system-2.6.32-5-xen-amd64 | xen-linux-system-2.6.32-5-xen-686,
+ ganeti-instance-debootstrap, ndisc6, ceph-common
+#Breaks: ganeti-htools (<< 0.3)
+Suggests: drbd8-module-source (>= 8.0.7)
+Provides: ${python:Provides}, ganeti2
+Description: Cluster-based virtualization management software
+ Ganeti is a virtual server cluster management software tool built on top
+ of the Xen virtual machine monitor and other Open Source software. After
+ setting it up it will provide you with an automated environment to
+ manage highly available virtual machine instances.
+ .
+ It has been designed to facilitate cluster management of virtual servers
+ and to provide fast and simple recovery after physical failures using
+ commodity hardware.
+ .
+ It will take care of operations such as redundant disk creation and
+ management, operating system installation  (in cooperation with OS-specific
+ install scripts), startup, shutdown, failover of instances between physical
+ systems.

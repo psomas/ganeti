@@ -1,0 +1,4 @@
+etc/ganeti
+etc/bash_completion.d
+usr/lib/ganeti/iallocators
+usr/share/lintian/overrides

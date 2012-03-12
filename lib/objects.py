@@ -605,7 +605,8 @@ class Disk(ConfigObject):
 
     """
     if self.dev_type in [constants.LD_LV, constants.LD_FILE,
-                         constants.LD_BLOCKDEV, constants.LD_RBD]:
+                         constants.LD_BLOCKDEV, constants.LD_RBD,
+                         constants.LD_EXT]:
       result = [node]
     elif self.dev_type in constants.LDS_DRBD:
       result = [self.logical_id[0], self.logical_id[1]]
@@ -681,7 +682,7 @@ class Disk(ConfigObject):
 
     """
     if self.dev_type in (constants.LD_LV, constants.LD_FILE,
-                         constants.LD_RBD):
+                         constants.LD_RBD, constants.LD_EXT):
       self.size += amount
     elif self.dev_type == constants.LD_DRBD8:
       if self.children:
@@ -1259,6 +1260,21 @@ class OS(ConfigObject):
 
     """
     return cls.SplitNameVariant(name)[1]
+
+
+class ExtStorage(ConfigObject):
+  """Config object representing an External Storage Provider.
+
+  """
+  __slots__ = [
+    "name",
+    "path",
+    "create_script",
+    "remove_script",
+    "grow_script",
+    "attach_script",
+    "detach_script",
+    ]
 
 
 class NodeHvState(ConfigObject):

@@ -240,6 +240,7 @@ DAEMONS_LOGFILES = {
   }
 
 LOG_OS_DIR = LOG_DIR + "os"
+LOG_ES_DIR = LOG_DIR + "extstorage"
 LOG_WATCHER = LOG_DIR + "watcher.log"
 LOG_COMMANDS = LOG_DIR + "commands.log"
 LOG_BURNIN = LOG_DIR + "burnin.log"
@@ -261,6 +262,7 @@ SYSLOG_ONLY = "only"
 SYSLOG_SOCKET = "/dev/log"
 
 OS_SEARCH_PATH = _autoconf.OS_SEARCH_PATH
+ES_SEARCH_PATH = _autoconf.ES_SEARCH_PATH
 EXPORT_DIR = _autoconf.EXPORT_DIR
 
 EXPORT_CONF_FILE = "config.ini"
@@ -427,19 +429,21 @@ DT_FILE = "file"
 DT_SHARED_FILE = "sharedfile"
 DT_BLOCK = "blockdev"
 DT_RBD = "rbd"
+DT_EXT = "ext"
 
 # the set of network-mirrored disk templates
 DTS_INT_MIRROR = frozenset([DT_DRBD8])
 
 # the set of externally-mirrored disk templates (e.g. SAN, NAS)
-DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK, DT_RBD])
+DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK, DT_RBD, DT_EXT])
 
 # the set of non-lvm-based disk templates
 DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE, DT_SHARED_FILE,
-                         DT_BLOCK, DT_RBD])
+                         DT_BLOCK, DT_RBD, DT_EXT])
 
 # the set of disk templates which can be grown
-DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE, DT_RBD])
+DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE,
+                          DT_RBD, DT_EXT])
 
 # the set of disk templates that allow adoption
 DTS_MAY_ADOPT = frozenset([DT_PLAIN, DT_BLOCK])
@@ -459,15 +463,17 @@ LD_DRBD8 = "drbd8"
 LD_FILE = "file"
 LD_BLOCKDEV = "blockdev"
 LD_RBD = "rbd"
+LD_EXT = "ext"
 LOGICAL_DISK_TYPES = frozenset([
   LD_LV,
   LD_DRBD8,
   LD_FILE,
   LD_BLOCKDEV,
   LD_RBD,
+  LD_EXT,
   ])
 
-LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV, LD_RBD])
+LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV, LD_RBD, LD_EXT])
 
 # drbd constants
 DRBD_HMAC_ALG = "md5"
@@ -563,7 +569,8 @@ DISK_TEMPLATES = frozenset([
   DT_FILE,
   DT_SHARED_FILE,
   DT_BLOCK,
-  DT_RBD
+  DT_RBD,
+  DT_EXT
   ])
 
 FILE_DRIVER = frozenset([FD_LOOP, FD_BLKTAP])
@@ -673,6 +680,26 @@ OS_PARAMETERS_FILE = "parameters.list"
 
 OS_VALIDATE_PARAMETERS = "parameters"
 OS_VALIDATE_CALLS = frozenset([OS_VALIDATE_PARAMETERS])
+
+# External Storage (ES) related constants
+ES_ACTION_CREATE = "create"
+ES_ACTION_REMOVE = "remove"
+ES_ACTION_GROW = "grow"
+ES_ACTION_ATTACH = "attach"
+ES_ACTION_DETACH = "detach"
+
+ES_SCRIPT_CREATE = ES_ACTION_CREATE
+ES_SCRIPT_REMOVE = ES_ACTION_REMOVE
+ES_SCRIPT_GROW = ES_ACTION_GROW
+ES_SCRIPT_ATTACH = ES_ACTION_ATTACH
+ES_SCRIPT_DETACH = ES_ACTION_DETACH
+ES_SCRIPTS = frozenset([
+  ES_SCRIPT_CREATE,
+  ES_SCRIPT_REMOVE,
+  ES_SCRIPT_GROW,
+  ES_SCRIPT_ATTACH,
+  ES_SCRIPT_DETACH
+  ])
 
 # ssh constants
 SSH_CONFIG_DIR = _autoconf.SSH_CONFIG_DIR
@@ -1871,6 +1898,8 @@ DISK_LD_DEFAULTS = {
   LD_RBD: {
     LDP_POOL: "rbd"
     },
+  LD_EXT: {
+    },
   }
 
 # readability shortcuts
@@ -1907,6 +1936,8 @@ DISK_DT_DEFAULTS = {
     },
   DT_RBD: {
     RBD_POOL: DISK_LD_DEFAULTS[LD_RBD][LDP_POOL]
+    },
+  DT_EXT: {
     },
   }
 
@@ -2067,6 +2098,7 @@ VALID_ALLOC_POLICIES = [
 
 # Temporary external/shared storage parameters
 BLOCKDEV_DRIVER_MANUAL = "manual"
+EXTSTORAGE_SAMPLE_PROVIDER = "rbd"
 
 # qemu-img path, required for ovfconverter
 QEMUIMG_PATH = _autoconf.QEMUIMG_PATH

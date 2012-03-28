@@ -200,6 +200,12 @@ _TDiskParams = \
   ht.Comment("Disk parameters")(ht.TDictOf(ht.TElemOf(constants.IDISK_PARAMS),
                                            ht.TOr(ht.TNonEmptyString, ht.TInt)))
 
+#: Same as _TDiskParams but with NonEmptyString in the place of IDISK_PARAMS
+_TExtDiskParams = \
+  ht.Comment("ExtStorage Disk parameters")(ht.TDictOf(ht.TNonEmptyString,
+                                                      ht.TOr(ht.TNonEmptyString,
+                                                             ht.TInt)))
+
 _TQueryRow = \
   ht.TListOf(ht.TAnd(ht.TIsLength(2),
                      ht.TItems([ht.TElemOf(constants.RS_ALL),
@@ -1229,6 +1235,56 @@ class OpInstanceCreate(OpCode):
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Instance tags"),
     ]
   OP_RESULT = ht.Comment("instance nodes")(ht.TListOf(ht.TNonEmptyString))
+
+  def Validate(self, set_defaults):
+    """Validate opcode parameters, optionally setting default values.
+
+    @type set_defaults: bool
+    @param set_defaults: Whether to set default values
+    @raise errors.OpPrereqError: When a parameter value doesn't match
+                                 requirements
+
+    """
+    # Check if the template is DT_EXT
+    is_ext = False
+    for (attr_name, _, _, _) in self.GetAllParams():
+      if hasattr(self, attr_name):
+        if attr_name == "disk_template" and \
+           getattr(self, attr_name) == constants.DT_EXT:
+          is_ext = True
+
+    for (attr_name, default, test, _) in self.GetAllParams():
+      assert test == ht.NoType or callable(test)
+
+      if not hasattr(self, attr_name):
+        if default == ht.NoDefault:
+          raise errors.OpPrereqError("Required parameter '%s.%s' missing" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
+        elif set_defaults:
+          if callable(default):
+            dval = default()
+          else:
+            dval = default
+          setattr(self, attr_name, dval)
+
+      # If the template is DT_EXT and attr_name = disks
+      # set a new test method that allows passing of unknown parameters
+      if is_ext and attr_name == "disks":
+        test = ht.TListOf(_TExtDiskParams)
+
+      if test == ht.NoType:
+        # no tests here
+        continue
+
+      if set_defaults or hasattr(self, attr_name):
+        attr_val = getattr(self, attr_name)
+        if not test(attr_val):
+          logging.error("OpCode %s, parameter %s, has invalid type %s/value %s",
+                        self.OP_ID, attr_name, type(attr_val), attr_val)
+          raise errors.OpPrereqError("Parameter '%s.%s' fails validation" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
 
 
 class OpInstanceReinstall(OpCode):

@@ -938,6 +938,9 @@ class Disk(ConfigObject):
                  params)
       result.append(params)
 
+    elif disk_template == constants.DT_EXT:
+      result.append(constants.DISK_LD_DEFAULTS[constants.LD_EXT])
+
     return result
 
 
@@ -1268,6 +1271,8 @@ class ExtStorage(ConfigObject):
     "grow_script",
     "attach_script",
     "detach_script",
+    "verify_script",
+    "supported_parameters",
     ]
 
 

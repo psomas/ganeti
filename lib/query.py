@@ -2208,6 +2208,36 @@ def _BuildOsFields():
   return _PrepareFieldList(fields, [])
 
 
+class ExtStorageInfo(objects.ConfigObject):
+  __slots__ = [
+    "name",
+    "node_status",
+    "nodegroup_status",
+    "parameters",
+    ]
+
+
+def _BuildExtStorageFields():
+  """Builds list of fields for extstorage provider queries.
+
+  """
+  fields = [
+    (_MakeField("name", "Name", QFT_TEXT, "ExtStorage provider name"),
+     None, 0, _GetItemAttr("name")),
+    (_MakeField("node_status", "NodeStatus", QFT_OTHER,
+                "Status from node"),
+     None, 0, _GetItemAttr("node_status")),
+    (_MakeField("nodegroup_status", "NodegroupStatus", QFT_OTHER,
+                "Overall Nodegroup status"),
+     None, 0, _GetItemAttr("nodegroup_status")),
+    (_MakeField("parameters", "Parameters", QFT_OTHER,
+                "ExtStorage provider parameters"),
+     None, 0, _GetItemAttr("parameters")),
+    ]
+
+  return _PrepareFieldList(fields, [])
+
+
 def _JobUnavailInner(fn, ctx, (job_id, job)): # pylint: disable=W0613
   """Return L{_FS_UNAVAIL} if job is None.
 
@@ -2452,6 +2482,9 @@ GROUP_FIELDS = _BuildGroupFields()
 #: Fields available for operating system queries
 OS_FIELDS = _BuildOsFields()
 
+#: Fields available for extstorage provider queries
+EXTSTORAGE_FIELDS = _BuildExtStorageFields()
+
 #: Fields available for job queries
 JOB_FIELDS = _BuildJobFields()
 
@@ -2466,6 +2499,7 @@ ALL_FIELDS = {
   constants.QR_LOCK: LOCK_FIELDS,
   constants.QR_GROUP: GROUP_FIELDS,
   constants.QR_OS: OS_FIELDS,
+  constants.QR_EXTSTORAGE: EXTSTORAGE_FIELDS,
   constants.QR_JOB: JOB_FIELDS,
   constants.QR_EXPORT: EXPORT_FIELDS,
   }

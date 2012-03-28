@@ -1659,6 +1659,7 @@ QR_GROUP = "group"
 QR_OS = "os"
 QR_JOB = "job"
 QR_EXPORT = "export"
+QR_EXTSTORAGE = "extstorage"
 
 #: List of resources which can be queried using L{opcodes.OpQuery}
 QR_VIA_OP = frozenset([
@@ -1668,6 +1669,7 @@ QR_VIA_OP = frozenset([
   QR_GROUP,
   QR_OS,
   QR_EXPORT,
+  QR_EXTSTORAGE,
   ])
 
 #: List of resources which can be queried using Local UniX Interface

@@ -1716,6 +1716,16 @@ class OpOsDiagnose(OpCode):
   OP_RESULT = _TOldQueryResult
 
 
+# ExtStorage opcodes
+class OpExtStorageDiagnose(OpCode):
+  """Compute the list of external storage providers."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString),
+     "Which ExtStorage Provider to diagnose"),
+    ]
+
+
 # Exports opcodes
 class OpBackupQuery(OpCode):
   """Compute the list of exported images."""

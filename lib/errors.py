@@ -139,10 +139,18 @@ class ConfigVersionMismatch(ConfigurationError):
   pass
 
 
+class AddressPoolError(GenericError):
+  """Errors related to IP address pools.
+
+  """
+  pass
+
+
 class ReservationError(GenericError):
   """Errors reserving a resource.
 
   """
+  pass
 
 
 class RemoteError(GenericError):

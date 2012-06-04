@@ -1210,6 +1210,16 @@ class ConfigWriter:
     return self._config_data.nodegroups.keys()
 
   @locking.ssynchronized(_config_lock, shared=1)
+  def GetNodeGroupNames(self):
+    """Get a list of node group names
+
+    """
+    names = [group.name
+             for group in self._config_data.nodegroups.values()]
+    return names
+
+
+  @locking.ssynchronized(_config_lock, shared=1)
   def GetNodeGroupMembersByNodes(self, nodes):
     """Get nodes which are member in the same nodegroups as the given nodes.
 

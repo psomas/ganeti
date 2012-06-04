@@ -15788,12 +15788,246 @@ class LUNetworkQuery(NoHooksLU):
   def Exec(self, feedback_fn):
     return self.nq.OldStyleQuery(self)
 
+class LUNetworkConnectAll(LogicalUnit):
+  """Connect a network to all nodegroups
+
+  """
+  def ExpandNames(self):
+    self.needed_locks = {
+      locking.LEVEL_NODE: locking.ALL_SET,
+      }
+    self.share_locks[locking.LEVEL_NODE] = 1
+
+  def Exec(self, feedback_fn):
+    groups_info = self.cfg.GetAllNodeGroupsInfo()
+    jobs = [
+      [opcodes.OpNetworkConnect(network_name=self.op.network_name,
+                                group_name=group,
+                                network_mode=self.op.network_mode,
+                                network_link=self.op.network_link)]
+      for group in self.cfg.GetNodeGroupNames()
+      ]
+
+    return ResultWithJobs(jobs)
+
 
 class LUNetworkConnect(LogicalUnit):
-  pass
+  """Connect a network to a nodegroup
+
+  """
+  HPATH = "network-connect"
+  HTYPE = constants.HTYPE_NETWORK
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self.network_name = self.op.network_name
+    self.group_name = self.op.group_name
+    self.network_mode = self.op.network_mode
+    self.network_link = self.op.network_link
+
+    self.network_uuid = self.cfg.LookupNetwork(self.network_name)
+    self.network = self.cfg.GetNetwork(self.network_uuid)
+    self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
+    self.group = self.cfg.GetNodeGroup(self.group_uuid)
+
+    self.needed_locks = {
+      locking.LEVEL_INSTANCE: [],
+      locking.LEVEL_NODEGROUP: [self.group_uuid],
+      }
+    self.share_locks[locking.LEVEL_INSTANCE] = 1
+
+    self._connector = TLConnectNetwork(self)
+    self.tasklets = [self._connector]
+
+  def DeclareLocks(self, level):
+    if level == locking.LEVEL_INSTANCE:
+      assert not self.needed_locks[locking.LEVEL_INSTANCE]
+
+      # Lock instances optimistically, needs verification once group lock has
+      # been acquired
+      self.needed_locks[locking.LEVEL_INSTANCE] = \
+          self.cfg.GetNodeGroupInstances(self.group_uuid)
+
+  def BuildHooksEnv(self):
+    ret = dict()
+    ret["GROUP_NAME"] = self.group_name
+    ret["GROUP_NETWORK_NAME"] = self.network_name
+    ret["GROUP_NETWORK_MODE"] = self.network_mode
+    ret["GROUP_NETWORK_LINK"] = self.network_link
+    return ret
+
+  def BuildHooksNodes(self):
+    nodes = self.cfg.GetNodeGroup(self.group_uuid).members
+    return (nodes, nodes)
+
+
+class TLConnectNetwork(Tasklet):
+  """Tasklet for connecting a network to a nodegroup
+
+  """
+  def __init__(self, lu):
+    Tasklet.__init__(self, lu)
+
+  def CheckPrereq(self):
+    l = lambda value: ", ".join("%s: %s/%s" % (i[0], i[1], i[2])
+                                   for i in value)
+
+    if self.lu.network is None:
+      raise errors.OpPrereqError("Network %s does not exist" %
+                                 self.lu.network_name, errors.ECODE_INVAL)
+
+    self.netparams = dict()
+    self.netparams[constants.NIC_MODE] = self.lu.network_mode
+    self.netparams[constants.NIC_LINK] = self.lu.network_link
+    objects.NIC.CheckParameterSyntax(self.netparams)
+
+    #if self.network_mode == constants.NIC_MODE_BRIDGED:
+    #  _CheckNodeGroupBridgesExist(self, self.network_link, self.group_uuid)
+    self.connected = False
+    if self.lu.network_uuid in self.lu.group.networks:
+      self.lu.LogWarning("Network '%s' is already mapped to group '%s'" %
+                         (self.lu.network_name, self.lu.group.name))
+      self.connected = True
+      return
+
+    pool = network.AddressPool(self.lu.network)
+    if self.lu.op.conflicts_check:
+      groupinstances = []
+      for n in self.cfg.GetNodeGroupInstances(self.lu.group_uuid):
+        groupinstances.append(self.cfg.GetInstanceInfo(n))
+      instances = [(instance.name, idx, nic.ip)
+                   for instance in groupinstances
+                   for idx, nic in enumerate(instance.nics)
+                   if (not nic.network and pool._Contains(nic.ip))]
+      if instances:
+        self.lu.LogWarning("Following occurences use IPs from network %s"
+                           " that is about to connect to nodegroup %s: %s" %
+                           (self.lu.network_name, self.lu.group.name,
+                            l(instances)))
+        raise errors.OpPrereqError("Conflicting IPs found."
+                                   " Please remove/modify"
+                                   " corresponding NICs",
+                                   errors.ECODE_INVAL)
+
+  def Exec(self, feedback_fn):
+    if self.connected:
+      return
+
+    self.lu.group.networks[self.lu.network_uuid] = self.netparams
+    self.cfg.Update(self.lu.group, feedback_fn)
+
+
+class LUNetworkDisconnectAll(LogicalUnit):
+  """Connect a network to all nodegroups
+
+  """
+  def ExpandNames(self):
+    self.needed_locks = {
+      locking.LEVEL_NODE: locking.ALL_SET,
+      }
+    self.share_locks[locking.LEVEL_NODE] = 1
+
+  def Exec(self, feedback_fn):
+    groups_info = self.cfg.GetAllNodeGroupsInfo()
+    jobs = [
+      [opcodes.OpNetworkDisconnect(network_name=self.op.network_name,
+                                   group_name=group)]
+      for group in self.cfg.GetNodeGroupNames()
+      ]
+
+    return ResultWithJobs(jobs)
+
 
 class LUNetworkDisconnect(LogicalUnit):
-  pass
+  """Disconnect a network to a nodegroup
+
+  """
+  HPATH = "network-disconnect"
+  HTYPE = constants.HTYPE_NETWORK
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self.network_name = self.op.network_name
+    self.group_name = self.op.group_name
+
+    self.network_uuid = self.cfg.LookupNetwork(self.network_name)
+    self.network = self.cfg.GetNetwork(self.network_uuid)
+    self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
+    self.group = self.cfg.GetNodeGroup(self.group_uuid)
+
+    self.needed_locks = {
+      locking.LEVEL_INSTANCE: [],
+      locking.LEVEL_NODEGROUP: [self.group_uuid],
+      }
+    self.share_locks[locking.LEVEL_INSTANCE] = 1
+
+    self._connector = TLDisconnectNetwork(self)
+    self.tasklets = [self._connector]
+
+  def DeclareLocks(self, level):
+    if level == locking.LEVEL_INSTANCE:
+      assert not self.needed_locks[locking.LEVEL_INSTANCE]
+
+      # Lock instances optimistically, needs verification once group lock has
+      # been acquired
+      self.needed_locks[locking.LEVEL_INSTANCE] = \
+          self.cfg.GetNodeGroupInstances(self.group_uuid)
+
+  def BuildHooksEnv(self):
+    ret = dict()
+    ret["GROUP_NAME"] = self.group_name
+    ret["GROUP_NETWORK_NAME"] = self.network_name
+    return ret
+
+  def BuildHooksNodes(self):
+    nodes = self.cfg.GetNodeGroup(self.group_uuid).members
+    return (nodes, nodes)
+
+
+class TLDisconnectNetwork(Tasklet):
+  """Tasklet for disconnecting a network from a nodegroup
+
+  """
+  def __init__(self, lu):
+    Tasklet.__init__(self, lu)
+
+  def CheckPrereq(self):
+    l = lambda value: ", ".join("%s: %s/%s" % (i[0], i[1], i[2])
+                                   for i in value)
+
+    self.connected = True
+    if self.lu.network_uuid not in self.lu.group.networks:
+      self.lu.LogWarning("Network '%s' is"
+                         " not mapped to group '%s'" %
+                         (self.lu.network_name, self.lu.group.name))
+      self.connected = False
+      return
+
+    if self.lu.op.conflicts_check:
+      groupinstances = []
+      for n in self.cfg.GetNodeGroupInstances(self.lu.group_uuid):
+        groupinstances.append(self.cfg.GetInstanceInfo(n))
+      instances = [(instance.name, idx, nic.ip)
+                   for instance in groupinstances
+                   for idx, nic in enumerate(instance.nics)
+                   if nic.network == self.lu.network_name]
+      if instances:
+        self.lu.LogWarning("Following occurences use IPs from network %s"
+                           " that is about to disconnected from the nodegroup"
+                           " %s: %s" %
+                           (self.lu.network_name, self.lu.group.name,
+                            l(instances)))
+        raise errors.OpPrereqError("Conflicting IPs."
+                                   " Please remove/modify"
+                                   " corresponding NICS",
+                                   errors.ECODE_INVAL)
+
+  def Exec(self, feedback_fn):
+    if not self.connected:
+      return
+
+    del self.lu.group.networks[self.lu.network_uuid]
+    self.cfg.Update(self.lu.group, feedback_fn)
 
 
 #: Query type implementations

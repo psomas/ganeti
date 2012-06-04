@@ -50,6 +50,7 @@ from ganeti import serializer
 from ganeti import uidpool
 from ganeti import netutils
 from ganeti import runtime
+from ganeti import network
 
 
 _config_lock = locking.SharedLock("ConfigWriter")
@@ -2093,6 +2094,9 @@ class ConfigWriter:
     nodegroups = ["%s %s" % (nodegroup.uuid, nodegroup.name) for nodegroup in
                   self._config_data.nodegroups.values()]
     nodegroups_data = fn(utils.NiceSort(nodegroups))
+    networks = ["%s %s" % (net.uuid, net.name) for net in
+                self._config_data.networks.values()]
+    networks_data = fn(utils.NiceSort(networks))
 
     ssconf_values = {
       constants.SS_CLUSTER_NAME: cluster.cluster_name,
@@ -2117,6 +2121,7 @@ class ConfigWriter:
       constants.SS_MAINTAIN_NODE_HEALTH: str(cluster.maintain_node_health),
       constants.SS_UID_POOL: uid_pool,
       constants.SS_NODEGROUPS: nodegroups_data,
+      constants.SS_NETWORKS: networks_data,
       }
     bad_values = [(k, v) for k, v in ssconf_values.items()
                   if not isinstance(v, (str, basestring))]
@@ -2244,3 +2249,82 @@ class ConfigWriter:
     """
     for rm in self._all_rms:
       rm.DropECReservations(ec_id)
+
+  @locking.ssynchronized(_config_lock)
+  def AddNetwork(self, net, ec_id):
+    """Add a network to the configuration.
+
+    @type net: L{objects.Network}
+    @param net: the Network object to add
+    @type ec_id: string
+    @param ec_id: unique id for the job to use when creating a missing UUID
+
+    """
+    self._UnlockedAddNetwork(net, ec_id)
+    self._WriteConfig()
+
+  def _UnlockedAddNetwork(self, net, ec_id):
+    """Add a network to the configuration.
+
+    """
+    logging.info("Adding network %s to configuration", net.name)
+
+    self._EnsureUUID(net, ec_id)
+
+    existing_uuid = self._UnlockedLookupNetwork(net.name)
+    if existing_uuid:
+      raise errors.OpPrereqError("Desired network name '%s' already"
+                                 " exists as a network (UUID: %s)" %
+                                 (net.name, existing_uuid),
+                                 errors.ECODE_EXISTS)
+    net.serial_no = 1
+    self._config_data.networks[net.uuid] = net
+    self._config_data.cluster.serial_no += 1
+
+  def _UnlockedLookupNetwork(self, target):
+    """Lookup a network's UUID.
+
+    @type target: string
+    @param target: network name or UUID
+    @rtype: string
+    @return: network UUID
+    @raises errors.OpPrereqError: when the target network cannot be found
+
+    """
+    if target in self._config_data.networks:
+      return target
+    for net in self._config_data.networks.values():
+      if net.name == target:
+        return net.uuid
+    return None
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def LookupNetwork(self, target):
+    """Lookup a network's UUID.
+
+    This function is just a wrapper over L{_UnlockedLookupNetwork}.
+
+    @type target: string
+    @param target: network name or UUID
+    @rtype: string
+    @return: network UUID
+
+    """
+    return self._UnlockedLookupNetwork(target)
+
+  @locking.ssynchronized(_config_lock)
+  def RemoveNetwork(self, network_uuid):
+    """Remove a network from the configuration.
+
+    @type network_uuid: string
+    @param network_uuid: the UUID of the network to remove
+
+    """
+    logging.info("Removing network %s from configuration", network_uuid)
+
+    if network_uuid not in self._config_data.networks:
+      raise errors.ConfigurationError("Unknown network '%s'" % network_uuid)
+
+    del self._config_data.networks[network_uuid]
+    self._config_data.cluster.serial_no += 1
+    self._WriteConfig()

@@ -2250,6 +2250,55 @@ class ConfigWriter:
     for rm in self._all_rms:
       rm.DropECReservations(ec_id)
 
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetAllNetworksInfo(self):
+    """Get the configuration of all networks
+
+    """
+    return dict(self._config_data.networks)
+
+  def _UnlockedGetNetworkList(self):
+    """Get the list of networks.
+
+    This function is for internal use, when the config lock is already held.
+
+    """
+    return self._config_data.networks.keys()
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetworkList(self):
+    """Get the list of networks.
+
+    @return: array of networks, ex. ["main", "vlan100", "200]
+
+    """
+    return self._UnlockedGetNetworkList()
+
+  def _UnlockedGetNetwork(self, uuid):
+    """Returns information about a network.
+
+    This function is for internal use, when the config lock is already held.
+
+    """
+    if uuid not in self._config_data.networks:
+      return None
+
+    return self._config_data.networks[uuid]
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetwork(self, uuid):
+    """Returns information about a network.
+
+    It takes the information from the configuration file.
+
+    @param uuid: UUID of the network
+
+    @rtype: L{objects.Network}
+    @return: the network object
+
+    """
+    return self._UnlockedGetNetwork(uuid)
+
   @locking.ssynchronized(_config_lock)
   def AddNetwork(self, net, ec_id):
     """Add a network to the configuration.

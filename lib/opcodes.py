@@ -166,6 +166,8 @@ _PIgnoreIpolicy = ("ignore_ipolicy", False, ht.TBool,
 _PAllowRuntimeChgs = ("allow_runtime_changes", True, ht.TBool,
                       "Allow runtime changes (eg. memory ballooning)")
 
+#: a required network name
+_PNetworkName = ("network_name", ht.NoDefault, ht.TNonEmptyString, "Set network name")
 
 #: OP_ID conversion regular expression
 _OPID_RE = re.compile("([a-z])([A-Z])")
@@ -1200,6 +1202,7 @@ class OpInstanceCreate(OpCode):
     ("identify_defaults", False, ht.TBool,
      "Reset instance parameters to default if equal"),
     ("ip_check", True, ht.TBool, _PIpCheckDoc),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ("mode", ht.NoDefault, ht.TElemOf(constants.INSTANCE_CREATE_MODES),
      "Instance creation mode"),
     ("nics", ht.NoDefault, ht.TListOf(_TestNicDef),
@@ -1531,6 +1534,7 @@ class OpInstanceSetParams(OpCode):
     ("wait_for_sync", True, ht.TBool,
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ]
   OP_RESULT = _TSetParamsResult
 
@@ -1885,6 +1889,86 @@ class OpTestDummy(OpCode):
     ("submit_jobs", None, ht.NoType, None),
     ]
   WITH_LU = False
+
+
+# Network opcodes
+class OpNetworkAdd(OpCode):
+  """Add an IP network to the cluster."""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("network", None, ht.TString, None),
+    ("gateway", None, ht.TMaybeString, None),
+    ("network6", None, ht.TMaybeString, None),
+    ("gateway6", None, ht.TMaybeString, None),
+    ("mac_prefix", None, ht.TMaybeString, None),
+    ("network_type", None, ht.TMaybeString, None),
+    ("reserved_ips", None, ht.TOr(ht.TListOf(ht.TNonEmptyString), ht.TNone), None),
+    ]
+
+class OpNetworkRemove(OpCode):
+  """Remove an IP network from the cluster."""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    _PForce,
+    ]
+
+class OpNetworkSetParams(OpCode):
+  """Set parameters of an IP network"""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("gateway", None, ht.TMaybeString, None),
+    ("reserved_ips", None, ht.TOr(ht.TListOf(ht.TNonEmptyString), ht.TNone), None),
+    ("network6", None, ht.TMaybeString, None),
+    ("gateway6", None, ht.TMaybeString, None),
+    ("mac_prefix", None, ht.TMaybeString, None),
+    ("network_type", None, ht.TMaybeString, None),
+    ]
+
+class OpNetworkConnect(OpCode):
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PGroupName,
+    _PNetworkName,
+    ("network_mode", None, ht.TString, None),
+    ("network_link", None, ht.TString, None),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ]
+
+class OpNetworkDisconnect(OpCode):
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PGroupName,
+    _PNetworkName,
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ]
+
+class OpNetworkConnectAll(OpCode):
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("network_mode", None, ht.TString, None),
+    ("network_link", None, ht.TString, None),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ]
+
+class OpNetworkDisconnectAll(OpCode):
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ]
+
+
+class OpNetworkQuery(OpCode):
+  """Compute the list of networks."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString),
+     "Empty list to query all groups, group names otherwise"),
+    ]
 
 
 def _GetOpList():

@@ -368,6 +368,7 @@ HTYPE_CLUSTER = "CLUSTER"
 HTYPE_NODE = "NODE"
 HTYPE_GROUP = "GROUP"
 HTYPE_INSTANCE = "INSTANCE"
+HTYPE_NETWORK = "NETWORK"
 
 HKR_SKIP = 0
 HKR_FAIL = 1
@@ -1090,8 +1091,14 @@ NIC_LINK = "link"
 
 NIC_MODE_BRIDGED = "bridged"
 NIC_MODE_ROUTED = "routed"
+NIC_IP_POOL = "pool"
 
 NIC_VALID_MODES = frozenset([NIC_MODE_BRIDGED, NIC_MODE_ROUTED])
+
+NETWORK_TYPE_PRIVATE = "private"
+NETWORK_TYPE_PUBLIC = "public"
+
+NETWORK_VALID_TYPES = frozenset([NETWORK_TYPE_PRIVATE, NETWORK_TYPE_PUBLIC])
 
 NICS_PARAMETER_TYPES = {
   NIC_MODE: VTYPE_STRING,
@@ -1120,11 +1127,13 @@ INIC_MAC = "mac"
 INIC_IP = "ip"
 INIC_MODE = "mode"
 INIC_LINK = "link"
+INIC_NETWORK = "network"
 INIC_PARAMS_TYPES = {
   INIC_IP: VTYPE_MAYBE_STRING,
   INIC_LINK: VTYPE_STRING,
   INIC_MAC: VTYPE_STRING,
   INIC_MODE: VTYPE_STRING,
+  INIC_NETWORK: VTYPE_MAYBE_STRING,
   }
 INIC_PARAMS = frozenset(INIC_PARAMS_TYPES.keys())
 
@@ -1625,6 +1634,7 @@ QR_GROUP = "group"
 QR_OS = "os"
 QR_JOB = "job"
 QR_EXPORT = "export"
+QR_NETWORK = "network"
 
 #: List of resources which can be queried using L{opcodes.OpQuery}
 QR_VIA_OP = frozenset([
@@ -1634,6 +1644,7 @@ QR_VIA_OP = frozenset([
   QR_GROUP,
   QR_OS,
   QR_EXPORT,
+  QR_NETWORK,
   ])
 
 #: List of resources which can be queried using Local UniX Interface
@@ -1725,6 +1736,7 @@ SS_HYPERVISOR_LIST = "hypervisor_list"
 SS_MAINTAIN_NODE_HEALTH = "maintain_node_health"
 SS_UID_POOL = "uid_pool"
 SS_NODEGROUPS = "nodegroups"
+SS_NETWORKS = "networks"
 
 SS_FILE_PERMS = 0444
 

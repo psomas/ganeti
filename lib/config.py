@@ -1368,6 +1368,7 @@ class ConfigWriter:
     self._config_data.instances[instance.name] = instance
     self._config_data.cluster.serial_no += 1
     self._UnlockedReleaseDRBDMinors(instance.name)
+    self._UnlockedCommitTemporaryIps(ec_id)
     self._WriteConfig()
 
   def _EnsureUUID(self, item, ec_id):

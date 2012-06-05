@@ -9893,7 +9893,7 @@ class LUInstanceCreate(LogicalUnit):
     # creation job will fail.
     for nic in self.nics:
       if nic.mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
-        nic.mac = self.cfg.GenerateMAC(self.proc.GetECId())
+        nic.mac = self.cfg.GenerateMAC(nic.network, self.proc.GetECId())
 
     #### allocator run
 
@@ -12427,7 +12427,7 @@ class LUInstanceSetParams(LogicalUnit):
       elif mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
         # otherwise generate the MAC address
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
       else:
         # or validate/reserve the current one
         try:
@@ -12438,7 +12438,7 @@ class LUInstanceSetParams(LogicalUnit):
                                      errors.ECODE_NOTUNIQUE)
     elif new_net != old_net:
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
 
     #if there is a change in nic-network configuration
     new_ip = params.get(constants.INIC_IP, old_ip)
@@ -15522,6 +15522,7 @@ class LUNetworkAdd(LogicalUnit):
       if self.op.mac_prefix == constants.VALUE_NONE:
         self.mac_prefix = None
       else:
+        utils.NormalizeAndValidateMac(self.op.mac_prefix+"00:00:00")
         self.mac_prefix = self.op.mac_prefix
 
     if self.op.network6:
@@ -15717,6 +15718,7 @@ class LUNetworkSetParams(LogicalUnit):
       if self.op.mac_prefix == constants.VALUE_NONE:
         self.mac_prefix = None
       else:
+        utils.NormalizeAndValidateMac(self.op.mac_prefix+"00:00:00")
         self.mac_prefix = self.op.mac_prefix
 
     if self.op.gateway6:

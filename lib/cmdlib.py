@@ -9877,7 +9877,7 @@ class LUInstanceCreate(LogicalUnit):
     # creation job will fail.
     for nic in self.nics:
       if nic.mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
-        nic.mac = self.cfg.GenerateMAC(self.proc.GetECId())
+        nic.mac = self.cfg.GenerateMAC(nic.network, self.proc.GetECId())
 
     #### allocator run
 
@@ -12412,7 +12412,7 @@ class LUInstanceSetParams(LogicalUnit):
       elif mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
         # otherwise generate the MAC address
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
       else:
         # or validate/reserve the current one
         try:
@@ -12433,7 +12433,7 @@ class LUInstanceSetParams(LogicalUnit):
       old_prefix = get_net_prefix(old_net)
       if old_prefix != new_prefix:
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
 
     #if there is a change in nic-network configuration
     new_ip = params.get(constants.INIC_IP, old_ip)
@@ -15507,6 +15507,8 @@ class LUNetworkAdd(LogicalUnit):
       raise errors.OpPrereqError("Network '%s' already defined" %
                                  self.op.network, errors.ECODE_EXISTS)
 
+    if self.op.mac_prefix:
+      utils.NormalizeAndValidateMac(self.op.mac_prefix+":00:00:00")
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -15695,6 +15697,7 @@ class LUNetworkSetParams(LogicalUnit):
       if self.op.mac_prefix == constants.VALUE_NONE:
         self.mac_prefix = None
       else:
+        utils.NormalizeAndValidateMac(self.op.mac_prefix+":00:00:00")
         self.mac_prefix = self.op.mac_prefix
 
     if self.op.gateway6:

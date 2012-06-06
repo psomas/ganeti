@@ -35,6 +35,7 @@ import zlib
 import base64
 import pycurl
 import threading
+import copy
 
 from ganeti import utils
 from ganeti import objects
@@ -661,6 +662,7 @@ class RpcRunner(_RpcClientBase,
     encoders.update({
       # Encoders requiring configuration object
       rpc_defs.ED_INST_DICT: self._InstDict,
+      rpc_defs.ED_NIC_DICT: self._NicDict,
       rpc_defs.ED_INST_DICT_HVP_BEP: self._InstDictHvpBep,
       rpc_defs.ED_INST_DICT_OSP_DP: self._InstDictOspDp,
 
@@ -687,6 +689,18 @@ class RpcRunner(_RpcClientBase,
     _generated_rpc.RpcClientBootstrap.__init__(self)
     _generated_rpc.RpcClientDnsOnly.__init__(self)
     _generated_rpc.RpcClientDefault.__init__(self)
+
+  def _NicDict(self, nic):
+    """Convert the given nic to a dict and encapsulate netinfo
+
+    """
+    n = copy.deepcopy(nic)
+    if n.network:
+      net_uuid = self._cfg.LookupNetwork(n.network)
+      if net_uuid:
+        nobj = self._cfg.GetNetwork(net_uuid)
+        n.netinfo = objects.Network.ToDict(nobj)
+    return n.ToDict()
 
   def _InstDict(self, instance, hvp=None, bep=None, osp=None):
     """Convert the given instance to a dict.
@@ -722,6 +736,12 @@ class RpcRunner(_RpcClientBase,
       nic["nicparams"] = objects.FillDict(
         cluster.nicparams[constants.PP_DEFAULT],
         nic["nicparams"])
+      network = nic.get("network", None)
+      if network:
+        net_uuid = self._cfg.LookupNetwork(network)
+        if net_uuid:
+          nobj = self._cfg.GetNetwork(net_uuid)
+          nic["netinfo"] = objects.Network.ToDict(nobj)
     return idict
 
   def _InstDictHvpBep(self, (instance, hvp, bep)):

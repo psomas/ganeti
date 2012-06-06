@@ -773,8 +773,20 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if nic.nicparams[constants.NIC_LINK]:
       env["LINK"] = nic.nicparams[constants.NIC_LINK]
 
+    def setenv(nic, field, name, env):
+      value = nic.netinfo.get(field, None)
+      if value:
+        env[name] = value
+
     if nic.network:
       env["NETWORK"] = nic.network
+      if nic.netinfo:
+        setenv(nic, "network", "SUBNET", env)
+        setenv(nic, "gateway", "GATEWAY", env)
+        setenv(nic, "network6", "SUBNET6", env)
+        setenv(nic, "gateway6", "GATEWAY6", env)
+        setenv(nic, "network_type", "TYPE", env)
+        setenv(nic, "mac_prefix", "MAC_PREFIX", env)
 
     if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
       env["BRIDGE"] = nic.nicparams[constants.NIC_LINK]

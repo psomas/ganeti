@@ -275,6 +275,15 @@ _INSTANCE_CALLS = [
     ("reinstall", None, None),
     ("debug", None, None),
     ], None, None, "Starts an instance"),
+  ("hot_add_nic", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "Nic dict to hotplug"),
+    ("idx", None, "nic idx to hotplug"),
+    ], None, None, "Adds a nic to a running instance"),
+  ("hot_del_nic", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "nic dict to remove"),
+    ], None, None, "Removes a nic to a running instance"),
   ]
 
 _IMPEXP_CALLS = [

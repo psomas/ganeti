@@ -37,6 +37,7 @@ import shutil
 import socket
 import stat
 import StringIO
+import fdsend
 try:
   import affinity   # pylint: disable=F0401
 except ImportError:
@@ -510,6 +511,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _CPU_INFO_RE = re.compile(r"cpu\s+\#(\d+).*thread_id\s*=\s*(\d+)", re.I)
   _CPU_INFO_CMD = "info cpus"
   _CONT_CMD = "cont"
+
+  _PCI_ADD_RE = re.compile("OK domain (\d+), bus (\d+),"
+                           " slot (\d+), function (\d+)", re.I)
+  _PCI_ADD_FIELDS = ('domain', 'bus', 'slot', 'function')
+
+  _HOTADD_NIC_SCRIPT = "/etc/ganeti/kvm-hotadd-nic"
 
   ANCILLARY_FILES = [
     _KVM_NETWORK_SCRIPT,
@@ -1404,8 +1411,9 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         tapfds.append(tapfd)
         taps.append(tapname)
         if (v_major, v_min) >= (0, 12):
-          nic_val = "%s,mac=%s,netdev=netdev%s" % (nic_model, nic.mac, nic_seq)
-          tap_val = "type=tap,id=netdev%s,fd=%d%s" % (nic_seq, tapfd, tap_extra)
+          nic_val = ("%s,mac=%s,netdev=netdev%d,id=virtio-net-pci.%d" %
+                     (nic_model, nic.mac, nic.idx, nic.idx))
+          tap_val = "type=tap,id=netdev%d,fd=%d%s" % (nic.idx, tapfd, tap_extra)
           kvm_cmd.extend(["-netdev", tap_val, "-device", nic_val])
         else:
           nic_val = "nic,vlan=%s,macaddr=%s,model=%s" % (nic_seq,
@@ -1555,6 +1563,75 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       raise errors.HypervisorError(msg)
 
     return result
+
+  def HotAddNic(self, instance, nic, seq):
+    """Hotadd new nic to the VM
+
+    """
+    if not self._InstancePidAlive(instance.name)[2]:
+      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      return nic.ToDict()
+
+    mac = nic.mac
+    idx = nic.idx
+
+    (tap, fd) = _OpenTap()
+    logging.info("%s %d", tap, fd)
+
+    self._PassTapFd(instance, fd, nic)
+
+    command = ("netdev_add tap,id=netdev%d,fd=netdev%d"
+               % (idx, idx))
+    logging.info("%s" % command)
+    output = self._CallMonitorCommand(instance.name, command)
+    for line in output.stdout.splitlines():
+      logging.info("%s" % line)
+
+    command = ("device_add virtio-net-pci,mac=%s,"
+               "netdev=netdev%d,id=virtio-net-pci.%d"
+               % (mac, idx, idx))
+    logging.info("%s" % command)
+    output = self._CallMonitorCommand(instance.name, command)
+    for line in output.stdout.splitlines():
+      logging.info("%s" % line)
+
+    self._ConfigureNIC(instance, seq, nic, tap)
+    return nic.ToDict()
+
+  def HotDelNic(self, instance, nic):
+    """Hotadd new nic to the VM
+
+    """
+    if not self._InstancePidAlive(instance.name)[2]:
+      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      return nic.ToDict()
+
+    mac = nic.mac
+    idx = nic.idx
+
+    command = "device_del virtio-net-pci.%d" % idx
+    logging.info("%s" % command)
+    output = self._CallMonitorCommand(instance.name, command)
+    for line in output.stdout.splitlines():
+      logging.info("%s" % line)
+
+    command = "netdev_del netdev%d" % idx
+    logging.info("%s" % command)
+    output = self._CallMonitorCommand(instance.name, command)
+    for line in output.stdout.splitlines():
+      logging.info("%s" % line)
+    return nic.ToDict()
+
+  def _PassTapFd(self, instance, fd, nic):
+    monsock = utils.ShellQuote(self._InstanceMonitor(instance.name))
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(monsock)
+    idx = nic.idx
+    command = "getfd netdev%d\n" % idx
+    fds = [fd]
+    logging.info("%s", fds)
+    fdsend.sendfds(s, command, fds = fds)
+    s.close()
 
   @classmethod
   def _ParseKVMVersion(cls, text):

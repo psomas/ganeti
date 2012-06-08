@@ -101,11 +101,16 @@ def UpgradeNetworks(config_data):
 
 
 def UpgradeGroups(config_data):
-  nicparams = config_data["cluster"]["nicparams"]["default"]
   for group in config_data["nodegroups"].values():
     networks = group.get("networks", None)
     if not networks:
       group["networks"] = {}
+
+def UpgradeInstances(config_data):
+  for instance in config_data["instances"].values():
+    instance["hotplugs"] = 0
+    for nic in instance["nics"]:
+      nic["idx"] = -1
 
 
 def main():
@@ -252,6 +257,7 @@ def main():
 
   UpgradeNetworks(config_data)
   UpgradeGroups(config_data)
+  UpgradeInstances(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

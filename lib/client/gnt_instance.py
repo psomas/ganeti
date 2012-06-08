@@ -1406,6 +1406,11 @@ def SetInstanceParams(opts, args):
   else:
     offline = None
 
+  if opts.hotplug:
+    hotplug = True
+  else:
+    hotplug = False
+
   op = opcodes.OpInstanceSetParams(instance_name=args[0],
                                    nics=nics,
                                    disks=disks,
@@ -1421,6 +1426,7 @@ def SetInstanceParams(opts, args):
                                    wait_for_sync=opts.wait_for_sync,
                                    offline=offline,
                                    conflicts_check=opts.conflicts_check,
+                                   hotplug=hotplug,
                                    ignore_ipolicy=opts.ignore_ipolicy)
 
   # even if here we process the result, we allow submit only
@@ -1608,7 +1614,7 @@ commands = {
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
      ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
-     NOCONFLICTSCHECK_OPT],
+     NOCONFLICTSCHECK_OPT, HOTPLUG_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

@@ -91,6 +91,7 @@ __all__ = [
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
+  "HOTPLUG_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -1485,6 +1486,10 @@ NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
                                   default=True,
                                   action="store_false",
                                   help="Don't check for conflicting IPs")
+
+HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
+                         action="store_true", default=False,
+                         help="Enable disk/nic hotplug")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]

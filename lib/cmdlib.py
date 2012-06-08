@@ -9886,7 +9886,7 @@ class LUInstanceCreate(LogicalUnit):
 
       check_params = cluster.SimpleFillNIC(nicparams)
       objects.NIC.CheckParameterSyntax(check_params)
-      self.nics.append(objects.NIC(mac=mac, ip=nic_ip,
+      self.nics.append(objects.NIC(idx=idx, mac=mac, ip=nic_ip,
                                    network=net, nicparams=check_params))
 
     # disk checks/pre-build
@@ -10210,6 +10210,7 @@ class LUInstanceCreate(LogicalUnit):
                             hvparams=self.op.hvparams,
                             hypervisor=self.op.hypervisor,
                             osparams=self.op.osparams,
+                            hotplugs=len(self.nics),
                             )
 
     if self.op.tags:
@@ -12103,7 +12104,8 @@ _TApplyContModsCbChanges = \
 
 
 def ApplyContainerMods(kind, container, chgdesc, mods,
-                       create_fn, modify_fn, remove_fn):
+                       create_fn, modify_fn, remove_fn,
+                       hotadd_fn, hotmod_fn, hotdel_fn):
   """Applies descriptions in C{mods} to C{container}.
 
   @type kind: string
@@ -12154,6 +12156,8 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
         item = params
       else:
         (item, changes) = create_fn(addidx, params, private)
+        if hotadd_fn is not None:
+          (item, chg) = hotadd_fn(item, addidx)
 
       if idx == -1:
         container.append(item)
@@ -12174,6 +12178,8 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
 
         if remove_fn is not None:
           remove_fn(absidx, item, private)
+        if hotdel_fn is not None:
+          hotdel_fn(item)
 
         changes = [("%s/%s" % (kind, absidx), "remove")]
 
@@ -12182,6 +12188,9 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
       elif op == constants.DDM_MODIFY:
         if modify_fn is not None:
           changes = modify_fn(absidx, item, params, private)
+          if hotmod_fn is not None:
+            hotmod_fn(item, absidx)
+
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
 
@@ -12805,7 +12814,8 @@ class LUInstanceSetParams(LogicalUnit):
     # Verify NIC changes (operating on copy)
     nics = instance.nics[:]
     ApplyContainerMods("NIC", nics, None, self.nicmod,
-                       _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove)
+                       _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove,
+                       None, self._PrepareNicHotMod, None)
     if len(nics) > constants.MAX_NICS:
       raise errors.OpPrereqError("Instance has too many network interfaces"
                                  " (%d), cannot add more" % constants.MAX_NICS,
@@ -12813,7 +12823,9 @@ class LUInstanceSetParams(LogicalUnit):
 
     # Verify disk changes (operating on a copy)
     disks = instance.disks[:]
-    ApplyContainerMods("disk", disks, None, self.diskmod, None, None, None)
+    ApplyContainerMods("disk", disks, None, self.diskmod,
+                       None, None, None,
+                       None, None, None)
     if len(disks) > constants.MAX_DISKS:
       raise errors.OpPrereqError("Instance has too many disks (%d), cannot add"
                                  " more" % constants.MAX_DISKS,
@@ -12832,10 +12844,16 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in instance.nics]
       ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                         self._CreateNewNic, self._ApplyNicMods, None)
+                         self._CreateNewNic, self._ApplyNicMods, None,
+                         self._HotAddNic, self._HotModNic, self._HotDelNic)
       self._new_nics = nics
     else:
       self._new_nics = None
+
+  def _PrepareNicHotMod(self, nic, idx):
+    if self.op.hotplug:
+      self._HotDelNic(nic)
+
 
   def _ConvertPlainToDrbd(self, feedback_fn):
     """Converts an instance from plain to drbd.
@@ -13025,13 +13043,16 @@ class LUInstanceSetParams(LogicalUnit):
     network = params.get(constants.INIC_NETWORK, None)
     nicparams = private.filled
 
-    return (objects.NIC(mac=mac, ip=ip, network=network,nicparams=nicparams), [
+    nic = objects.NIC(idx=-1, mac=mac, ip=ip,
+                      network=network, nicparams=nicparams)
+    desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, nicparams[constants.NIC_MODE],
        nicparams[constants.NIC_LINK],
        network)),
-      ])
+      ]
+    return (nic, desc)
 
   @staticmethod
   def _ApplyNicMods(idx, nic, params, private):
@@ -13052,6 +13073,47 @@ class LUInstanceSetParams(LogicalUnit):
         changes.append(("nic.%s/%d" % (key, idx), val))
 
     return changes
+
+  def _HotAddNic(self, nic, idx):
+    """Hotadd a nic to a running vm
+
+    """
+    if self.op.hotplug:
+      nic.idx = self.instance.hotplugs
+      self.instance.hotplugs += 1
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance,
+                                         nic,
+                                         idx)
+      desc = [
+        ("nic.%d" % idx, "hotpluged"),
+        ]
+    else:
+      desc = None
+    return (nic, desc)
+
+  def _HotModNic(self, nic, idx):
+    """Hotadd a nic to a running vm
+
+    """
+    if self.op.hotplug:
+      self._HotAddNic(nic, idx)
+
+  def _HotDelNic(self, nic):
+    """Hotdel a nic to a running vm
+
+    """
+    if self.op.hotplug:
+      self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                self.instance,
+                                nic)
+
+  @staticmethod
+  def _CheckItemHotPlug(item):
+    idict = item.ToDict()
+    return idict.get('pci', None)
+
+
 
   def Exec(self, feedback_fn):
     """Modifies an instance.
@@ -13082,7 +13144,8 @@ class LUInstanceSetParams(LogicalUnit):
 
     # Apply disk changes
     ApplyContainerMods("disk", instance.disks, result, self.diskmod,
-                       self._CreateNewDisk, self._ModifyDisk, self._RemoveDisk)
+                       self._CreateNewDisk, self._ModifyDisk, self._RemoveDisk,
+                       None, None, None)
     _UpdateIvNames(0, instance.disks)
 
     if self.op.disk_template:

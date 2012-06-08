@@ -1137,6 +1137,20 @@ INIC_PARAMS_TYPES = {
   }
 INIC_PARAMS = frozenset(INIC_PARAMS_TYPES.keys())
 
+PCI = "pci"
+PCI_DOMAIN = "domain"
+PCI_BUS = "bus"
+PCI_SLOT = "slot"
+PCI_FUNCTION = "function"
+PCI_PARAMS_TYPES = {
+  PCI_DOMAIN: VTYPE_STRING,
+  PCI_BUS: VTYPE_STRING,
+  PCI_SLOT: VTYPE_STRING,
+  PCI_FUNCTION: VTYPE_STRING,
+  }
+PCI_PARAMS = frozenset(PCI_PARAMS_TYPES.keys())
+
+
 # Hypervisor constants
 HT_XEN_PVM = "xen-pvm"
 HT_FAKE = "fake"

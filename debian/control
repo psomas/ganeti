@@ -5,7 +5,7 @@ Maintainer: GRNET Ganeti Team <ganeti-dev@lists.grnet.gr>
 Build-Depends: debhelper (>= 7)
 Build-Depends-Indep: python-simplejson, python-pyparsing, python-openssl,
  python-support (>= 0.6), socat, python-pyinotify, python-pycurl,
- python-paramiko, python-ipaddr, python-bitarray
+ python-paramiko, python-ipaddr, python-bitarray, python-fdsend
 Standards-Version: 3.9.2
 Homepage: http://code.grnet.gr/projects/snf-ganeti/
 Vcs-Browser: https://code.grnet.gr/git/snf-ganeti
@@ -18,7 +18,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
  python-pyinotify, python-pycurl, python-paramiko, python-ipaddr, 
- python-bitarray, socat, libjs-jquery, fping
+ python-bitarray, socat, libjs-jquery, fping, python-fdsend
 Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
  xen-linux-system-2.6.32-5-xen-amd64 | xen-linux-system-2.6.32-5-xen-686,
  ganeti-instance-debootstrap, ndisc6, ceph-common

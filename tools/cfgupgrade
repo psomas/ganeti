@@ -118,8 +118,9 @@ def UpgradeGroups(config_data):
 def UpgradeInstances(config_data):
   for instance in config_data["instances"].values():
     instance["hotplugs"] = 0
-    for nic in instance["nics"]:
-      nic["idx"] = -1
+    for i, nic in enumerate(instance["nics"]):
+      nic["idx"] = i 
+      instance["hotplugs"] = instance["hotplugs"] + 1  
 
 
 def main():

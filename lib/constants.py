@@ -1095,10 +1095,17 @@ NIC_IP_POOL = "pool"
 
 NIC_VALID_MODES = frozenset([NIC_MODE_BRIDGED, NIC_MODE_ROUTED])
 
-NETWORK_TYPE_PRIVATE = "private"
 NETWORK_TYPE_PUBLIC = "public"
+NETWORK_TYPE_PUBLIC_ROUTED = "public-routed"
+NETWORK_TYPE_PRIVATE = "private"
+NETWORK_TYPE_PRIVATE_FILTERED = "private-filtered"
+NETWORK_TYPE_PRIVATE_VLAN = "private-vlan"
 
-NETWORK_VALID_TYPES = frozenset([NETWORK_TYPE_PRIVATE, NETWORK_TYPE_PUBLIC])
+NETWORK_VALID_TYPES = frozenset([NETWORK_TYPE_PUBLIC,
+                                 NETWORK_TYPE_PUBLIC_ROUTED,
+                                 NETWORK_TYPE_PRIVATE,
+                                 NETWORK_TYPE_PRIVATE_VLAN,
+                                 NETWORK_TYPE_PRIVATE_FILTERED])
 
 NICS_PARAMETER_TYPES = {
   NIC_MODE: VTYPE_STRING,

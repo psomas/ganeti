@@ -105,6 +105,15 @@ def UpgradeGroups(config_data):
     networks = group.get("networks", None)
     if not networks:
       group["networks"] = {}
+      continue
+
+    for network_uuid in group["networks"].keys():
+      netparams = group["networks"][network_uuid]
+      if (not isinstance(netparams, dict) or
+          not netparams.get("link", None) or not netparams.get("mode", None)):
+        nicparams = constants.NICC_DEFAULTS
+        group["networks"][network_uuid] = dict(nicparams)
+
 
 def UpgradeInstances(config_data):
   for instance in config_data["instances"].values():

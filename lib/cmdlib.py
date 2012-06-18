@@ -13033,8 +13033,7 @@ class LUInstanceSetParams(LogicalUnit):
     if root.dev_type in constants.LDS_DRBD:
       self.cfg.AddTcpUdpPort(root.logical_id[2])
 
-  @staticmethod
-  def _CreateNewNic(idx, params, private):
+  def _CreateNewNic(self, idx, params, private):
     """Creates data structure for a new network interface.
 
     """
@@ -13043,8 +13042,10 @@ class LUInstanceSetParams(LogicalUnit):
     network = params.get(constants.INIC_NETWORK, None)
     nicparams = private.filled
 
-    nic = objects.NIC(idx=-1, mac=mac, ip=ip,
+    nic = objects.NIC(idx=self.instance.hotplugs, mac=mac, ip=ip,
                       network=network, nicparams=nicparams)
+    self.instance.hotplugs += 1
+
     desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
@@ -13079,8 +13080,6 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     if self.op.hotplug:
-      nic.idx = self.instance.hotplugs
-      self.instance.hotplugs += 1
       result = self.rpc.call_hot_add_nic(self.instance.primary_node,
                                          self.instance,
                                          nic,
@@ -13107,13 +13106,6 @@ class LUInstanceSetParams(LogicalUnit):
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance,
                                 nic)
-
-  @staticmethod
-  def _CheckItemHotPlug(item):
-    idict = item.ToDict()
-    return idict.get('pci', None)
-
-
 
   def Exec(self, feedback_fn):
     """Modifies an instance.

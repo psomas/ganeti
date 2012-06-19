@@ -2413,6 +2413,15 @@ class ConfigWriter:
     """
     return self._UnlockedGetNetworkList()
 
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetworkNames(self):
+    """Get a list of network names
+
+    """
+    names = [network.name
+             for network in self._config_data.networks.values()]
+    return names
+
   def _UnlockedGetNetwork(self, uuid):
     """Returns information about a network.
 
@@ -2439,7 +2448,7 @@ class ConfigWriter:
     return self._UnlockedGetNetwork(uuid)
 
   @locking.ssynchronized(_config_lock)
-  def AddNetwork(self, net, ec_id):
+  def AddNetwork(self, net, ec_id, check_uuid=True):
     """Add a network to the configuration.
 
     @type net: L{objects.Network}
@@ -2448,16 +2457,17 @@ class ConfigWriter:
     @param ec_id: unique id for the job to use when creating a missing UUID
 
     """
-    self._UnlockedAddNetwork(net, ec_id)
+    self._UnlockedAddNetwork(net, ec_id, check_uuid)
     self._WriteConfig()
 
-  def _UnlockedAddNetwork(self, net, ec_id):
+  def _UnlockedAddNetwork(self, net, ec_id, check_uuid):
     """Add a network to the configuration.
 
     """
     logging.info("Adding network %s to configuration", net.name)
 
-    self._EnsureUUID(net, ec_id)
+    if check_uuid:
+      self._EnsureUUID(net, ec_id)
 
     existing_uuid = self._UnlockedLookupNetwork(net.name)
     if existing_uuid:

@@ -15610,6 +15610,8 @@ class LUNetworkAdd(LogicalUnit):
     return ([mn], [mn])
 
   def ExpandNames(self):
+    self.network_uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
+    self.add_locks[locking.LEVEL_NETWORK] = self.network_uuid
     self.needed_locks = {
       locking.LEVEL_NODE: locking.ALL_SET,
     }
@@ -15676,6 +15678,7 @@ class LUNetworkAdd(LogicalUnit):
                            gateway6=self.op.gateway6,
                            mac_prefix=self.mac_prefix,
                            network_type=self.op.network_type,
+                           uuid=self.network_uuid,
                            family=4)
     # Initialize the associated address pool
     try:
@@ -15711,7 +15714,8 @@ class LUNetworkAdd(LogicalUnit):
           raise errors.OpExecError("Cannot reserve IP %s " % ip,
                                    errors.ECODE_INVAL)
 
-    self.cfg.AddNetwork(nobj, self.proc.GetECId())
+    self.cfg.AddNetwork(nobj, self.proc.GetECId(), check_uuid=False)
+    del self.remove_locks[locking.LEVEL_NETWORK]
 
 class LUNetworkRemove(LogicalUnit):
   HPATH = "network-remove"

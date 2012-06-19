@@ -780,20 +780,33 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if nic.nicparams[constants.NIC_LINK]:
       env["LINK"] = nic.nicparams[constants.NIC_LINK]
 
-    def setenv(nic, field, name, env):
-      value = nic.netinfo.get(field, None)
-      if value:
-        env[name] = value
+    def _BuildNetworkEnv(name, network, gateway, network6, gateway6,
+                         network_type, mac_prefix, tags, env):
+      if name:
+        env["NETWORK_NAME"] = name
+      if network:
+        env["NETWORK_SUBNET"] = network
+      if gateway:
+        env["NETWORK_GATEWAY"] = gateway
+      if network6:
+        env["NETWORK_SUBNET6"] = network6
+      if gateway6:
+        env["NETWORK_GATEWAY6"] = gateway6
+      if mac_prefix:
+        env["NETWORK_MAC_PREFIX"] = mac_prefix
+      if network_type:
+        env["NETWORK_TYPE"] = network_type
+      if tags:
+        env["NETWORK_TAGS"] = " ".join(tags)
+
+      return env
+
 
     if nic.network:
-      env["NETWORK"] = nic.network
-      if nic.netinfo:
-        setenv(nic, "network", "SUBNET", env)
-        setenv(nic, "gateway", "GATEWAY", env)
-        setenv(nic, "network6", "SUBNET6", env)
-        setenv(nic, "gateway6", "GATEWAY6", env)
-        setenv(nic, "network_type", "TYPE", env)
-        setenv(nic, "mac_prefix", "MAC_PREFIX", env)
+      n = objects.Network.FromDict(nic.netinfo)
+      _BuildNetworkEnv(nic.network, n.network, n.gateway,
+                       n.network6, n.gateway6, n.network_type,
+                       n.mac_prefix, n.tags, env)
 
     if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
       env["BRIDGE"] = nic.nicparams[constants.NIC_LINK]

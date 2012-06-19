@@ -1905,6 +1905,7 @@ class OpNetworkAdd(OpCode):
     ("mac_prefix", None, ht.TMaybeString, None),
     ("network_type", None, ht.TMaybeString, None),
     ("reserved_ips", None, ht.TOr(ht.TListOf(ht.TNonEmptyString), ht.TNone), None),
+    ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Network tags"),
     ]
 
 class OpNetworkRemove(OpCode):

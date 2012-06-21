@@ -15654,7 +15654,7 @@ class LUNetworkAdd(LogicalUnit):
       if self.op.mac_prefix == constants.VALUE_NONE:
         self.mac_prefix = None
       else:
-        utils.NormalizeAndValidateMac(self.op.mac_prefix+"00:00:00")
+        utils.NormalizeAndValidateMac(self.op.mac_prefix+":00:00:00")
         self.mac_prefix = self.op.mac_prefix
 
     if self.op.network6:
@@ -15863,7 +15863,7 @@ class LUNetworkSetParams(LogicalUnit):
       if self.op.mac_prefix == constants.VALUE_NONE:
         self.mac_prefix = None
       else:
-        utils.NormalizeAndValidateMac(self.op.mac_prefix+"00:00:00")
+        utils.NormalizeAndValidateMac(self.op.mac_prefix+":00:00:00")
         self.mac_prefix = self.op.mac_prefix
 
     if self.op.gateway6:

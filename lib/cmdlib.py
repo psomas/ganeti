@@ -12521,8 +12521,8 @@ class LUInstanceSetParams(LogicalUnit):
     #if there is a change in nic-network configuration
     new_ip = params.get(constants.INIC_IP, old_ip)
     if (new_ip, new_net) != (old_ip, old_net):
-      if new_ip is not None:
-        if new_net is not None:
+      if new_ip:
+        if new_net:
           if new_ip.lower() == constants.NIC_IP_POOL:
             try:
               new_ip = self.cfg.GenerateIp(new_net, self.proc.GetECId())
@@ -12548,8 +12548,8 @@ class LUInstanceSetParams(LogicalUnit):
           if self.op.conflicts_check:
             _CheckForConflictingIp(self, new_ip, pnode)
 
-      if old_ip is not None and old_ip != new_ip:
-        if old_net is not None:
+      if old_ip:
+        if old_net:
           try:
             self.cfg.ReleaseIp(old_net, old_ip, self.proc.GetECId())
           except errors.AddressPoolError:

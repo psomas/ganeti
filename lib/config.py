@@ -371,7 +371,7 @@ class ConfigWriter:
       try:
         ip = gen_free()
       except StopIteration:
-        return None
+        raise errors.ReservationError("Cannot generate IP. Network is full")
       return ("reserve", ip, net_uuid)
 
     _ ,address, _ = self._temporary_ips.Generate([], gen_one, ec_id)

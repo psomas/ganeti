@@ -10015,7 +10015,7 @@ class LUInstanceCreate(LogicalUnit):
           if nic.ip.lower() == constants.NIC_IP_POOL:
             try:
               nic.ip = self.cfg.GenerateIp(net, self.proc.GetECId())
-            except errors.ConfigurationError:
+            except errors.ReservationError:
               raise errors.OpPrereqError("Unable to get a free IP for NIC %d"
                                          " from the address pool" % idx,
                                          errors.ECODE_STATE)
@@ -12526,7 +12526,7 @@ class LUInstanceSetParams(LogicalUnit):
           if new_ip.lower() == constants.NIC_IP_POOL:
             try:
               new_ip = self.cfg.GenerateIp(new_net, self.proc.GetECId())
-            except errors.ConfigurationError:
+            except errors.ReservationError:
               raise errors.OpPrereqError("Unable to get a free IP"
                                         " from the address pool",
                                          errors.ECODE_STATE)

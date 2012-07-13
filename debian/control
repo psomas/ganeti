@@ -2,29 +2,31 @@ Source: snf-ganeti
 Section: admin
 Priority: extra
 Maintainer: GRNET Ganeti Team <ganeti-dev@lists.grnet.gr>
-Build-Depends: debhelper (>= 7)
-Build-Depends-Indep: python-simplejson, python-pyparsing, python-openssl,
- python-support (>= 0.6), socat, python-pyinotify, python-pycurl,
- python-paramiko, python-ipaddr, python-bitarray, python-fdsend
+Build-Depends: debhelper (>= 7),
+ ghc6 (>= 6.12), libghc6-curl-dev, libghc6-json-dev,
+ libghc6-network-dev, libcurl4-gnutls-dev, libghc6-parallel-dev,
+ python-simplejson, python-pyparsing, python-openssl,
+ python-support (>= 0.6), python-pyinotify, python-pycurl,
+ python-paramiko, python--ipaddr, python-bitarray, python-fdsend
+ socat, iproute
 Standards-Version: 3.9.2
 Homepage: http://code.grnet.gr/projects/snf-ganeti/
 Vcs-Browser: https://code.grnet.gr/git/snf-ganeti
 
 Package: snf-ganeti
 Architecture: all
-Conflicts: ganeti, ganeti2, ganeti-htools
-Replaces: ganeti2, ganeti-htools
+Conflicts: ganeti
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
- python-pyinotify, python-pycurl, python-paramiko, python-ipaddr, 
- python-bitarray, socat, libjs-jquery, fping, python-fdsend
+ python-pyinotify, python-pycurl, python-paramiko, python-fdsend
+ socat, libjs-jquery, fping
 Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
  xen-linux-system-2.6.32-5-xen-amd64 | xen-linux-system-2.6.32-5-xen-686,
  ganeti-instance-debootstrap, ndisc6, ceph-common
-#Breaks: ganeti-htools (<< 0.3)
+Breaks: ganeti-htools (<< 0.3)
 Suggests: drbd8-module-source (>= 8.0.7)
-Provides: ${python:Provides}, ganeti2, ganeti-htools
+Provides: ${python:Provides}
 Description: Cluster-based virtualization management software
  Ganeti is a virtual server cluster management software tool built on top
  of the Xen virtual machine monitor and other Open Source software. After
@@ -39,3 +41,17 @@ Description: Cluster-based virtualization management software
  management, operating system installation  (in cooperation with OS-specific
  install scripts), startup, shutdown, failover of instances between physical
  systems.
+
+Package: ganeti-htools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Breaks: ganeti2 (<< 2.4)
+Description: Cluster allocation tools for Ganeti
+ These are additional tools used for enhanced allocation and capacity
+ calculation on Ganeti clusters.
+ .
+ The tools provided are:
+   - hail, an iallocator script for ganeti
+   - hbal, used to redistribute instances on the cluster
+   - hspace, used for capacity calculation
+   - hscan, used to gather cluster files for offline use in hbal/hspace

@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 7),
  libghc6-network-dev, libcurl4-gnutls-dev, libghc6-parallel-dev,
  python-simplejson, python-pyparsing, python-openssl,
  python-support (>= 0.6), python-pyinotify, python-pycurl,
- python-paramiko, python--ipaddr, python-bitarray, python-fdsend
+ python-paramiko, python-ipaddr, python-bitarray, python-fdsend,
  socat, iproute
 Standards-Version: 3.9.2
 Homepage: http://code.grnet.gr/projects/snf-ganeti/
@@ -19,7 +19,8 @@ Conflicts: ganeti
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
- python-pyinotify, python-pycurl, python-paramiko, python-fdsend
+ python-pyinotify, python-pycurl, python-paramiko, 
+ python-fdsend, python-ipaddr, python-bitarray,
  socat, libjs-jquery, fping
 Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
  xen-linux-system-2.6.32-5-xen-amd64 | xen-linux-system-2.6.32-5-xen-686,

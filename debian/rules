@@ -6,16 +6,18 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+GANETI_DIR=$(CURDIR)/debian/snf-ganeti
+HTOOLS_DIR=$(CURDIR)/debian/ganeti-htools
+
 build: build-arch build-indep
 build-arch: build-stamp
 build-indep: build-stamp
 
 build-stamp:
 	dh_testdir
-	
+
 	# Add here commands to compile the package.
 	./autogen.sh
-
 	./configure \
 	  --prefix=/usr \
 	  --localstatedir=/var \
@@ -24,7 +26,7 @@ build-stamp:
 	  --with-iallocator-search-path=/usr/local/lib/ganeti/iallocators,/usr/lib/ganeti/iallocators \
 	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
 	  --docdir=/usr/share/doc/snf-ganeti \
-	  --enable-htools
+	  --enable-htools --enable-htools-rapi
 
 	$(MAKE)
 
@@ -54,62 +56,106 @@ install: build
 	dh_installdirs
 
 	# Add here commands to install the package into debian/<packagename>.
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/`dh_listpackages`
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/snf-ganeti
 	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/snf-ganeti.ganeti.init
 	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/snf-ganeti.ganeti.cron.d
 	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/snf-ganeti.ganeti.default
 	# No longer needed with ganeti 2.1
 	#mv $(CURDIR)/debian/snf-ganeti/usr/share/doc/ganeti $(CURDIR)/debian/snf-ganeti/usr/share/doc/snf-ganeti
 	install -m 0644 $(CURDIR)/doc/examples/bash_completion \
-	  $(CURDIR)/debian/snf-ganeti/etc/bash_completion.d/ganeti
-	#install -m 0644 $(CURDIR)/debian/snf-ganeti.overrides \
-	#  $(CURDIR)/debian/snf-ganeti/usr/share/lintian/overrides/snf-ganeti
+	  $(GANETI_DIR)/etc/bash_completion.d/ganeti
+	install -m 0644 $(CURDIR)/debian/snf-ganeti.overrides \
+	  $(GANETI_DIR)/usr/share/lintian/overrides/snf-ganeti
 
 	# remove embedded copy of jquery
-	rm -f $(CURDIR)/debian/snf-ganeti/usr/share/doc/snf-ganeti/html/_static/jsquery.js
+	rm -f $(GANETI_DIR)/usr/share/doc/snf-ganeti/html/_static/jsquery.js
 
-	rmdir debian/snf-ganeti/var/run/ganeti
-	rmdir debian/snf-ganeti/var/run
+	rmdir $(GANETI_DIR)/var/run/ganeti
+	rmdir $(GANETI_DIR)/var/run
+
+	# htools
+	mv $(GANETI_DIR)/usr/bin $(HTOOLS_DIR)/usr/
+	mv $(GANETI_DIR)/usr/lib/ganeti/iallocators/hail \
+	   $(HTOOLS_DIR)/usr/lib/ganeti/iallocators/
+
+	mkdir -p $(HTOOLS_DIR)/usr/share/man/man1
+	for i in htools hail hbal hscan hspace; do \
+	  mv $(GANETI_DIR)/usr/share/man/man1/$${i}.1 \
+	     $(HTOOLS_DIR)/usr/share/man/man1/ ; \
+	done
+	rmdir $(GANETI_DIR)/usr/share/man/man1
 
 # Build architecture-independent files here.
 binary-indep: build install
-	dh_testdir
-	dh_testroot
-	dh_installchangelogs
-	dh_installdocs
-#	dh_installexamples
-#	dh_installmenu
-#	dh_installdebconf
-#	dh_installlogrotate
-#	dh_installemacsen
-#	dh_installcatalogs
-#	dh_installpam
-#	dh_installmime
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i
+	dh_installdocs -i
+#	dh_installexamples -i
+#	dh_installmenu -i
+#	dh_installdebconf -i
+#	dh_installlogrotate -i
+#	dh_installemacsen -i
+#	dh_installcatalogs -i
+#	dh_installpam -i
+#	dh_installmime -i
 # Note: dh_pysupport *must* be before dh_installinit, since the daemons
 # need the python modules as installed by pysupport
 	dh_pysupport
-	dh_installinit --name=ganeti --error-handler=true -- defaults 20 80
-	dh_installcron --name=ganeti
-#	dh_installinfo
-#	dh_installwm
-#	dh_installudev
-#	dh_lintian
-#	dh_bugfiles
-#	dh_undocumented
-	dh_installman
-	dh_link
+	dh_installinit --name=ganeti --error-handler=true -- defaults 20 80 -i
+	dh_installcron --name=ganeti -i
+#	dh_installinfo -i
+#	dh_installwm -i
+#	dh_installudev -i
+#	dh_lintian -i
+#	dh_bugfiles -i
+#	dh_undocumented -i
+	dh_installman -i
+	dh_link -i
 	# Note: no compression on the html docs, since it will break navigation
-	dh_compress -Xsnf-ganeti/html/
-	dh_fixperms
-#	dh_perl
-	dh_installdeb
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb
+	dh_compress -Xsnf-ganeti/html/ -i
+	dh_fixperms -i
+#	dh_perl -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
 
 # Build architecture-dependent files here.
 binary-arch: build install
-# We have nothing to do by default.
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs -a
+	dh_installdocs -a
+#	dh_installexamples -a
+#	dh_install -a
+#	dh_installmenu -a
+#	dh_installdebconf -a
+#	dh_installlogrotate -a
+#	dh_installemacsen -a
+#	dh_installcatalogs -a
+#	dh_installpam -a
+#	dh_installmime -a
+#	dh_installinit -a
+#	dh_installcron -a
+#	dh_installinfo -a
+#	dh_installwm -a
+#	dh_installudev -a
+#	dh_lintian -a
+#	dh_bugfiles -a
+#	dh_undocumented -a
+	dh_installman -a
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+#	dh_perl -a
+#	dh_makeshlibs -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
 
 binary: binary-indep binary-arch
 .PHONY: build clean binary-indep binary-arch binary install

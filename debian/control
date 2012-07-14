@@ -15,7 +15,7 @@ Vcs-Browser: https://code.grnet.gr/git/snf-ganeti
 
 Package: snf-ganeti
 Architecture: all
-Conflicts: ganeti
+Conflicts: ganeti, ganeti2
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
@@ -27,7 +27,8 @@ Recommends: drbd8-utils (>= 8.0.7), qemu-kvm |
  ganeti-instance-debootstrap, ndisc6, ceph-common
 Breaks: ganeti-htools (<< 0.3)
 Suggests: drbd8-module-source (>= 8.0.7)
-Provides: ${python:Provides}
+Provides: ${python:Provides}, ganeti2
+Replaces: ganeti2
 Description: Cluster-based virtualization management software
  Ganeti is a virtual server cluster management software tool built on top
  of the Xen virtual machine monitor and other Open Source software. After

@@ -26,6 +26,7 @@ build-stamp:
 	  --with-iallocator-search-path=/usr/local/lib/ganeti/iallocators,/usr/lib/ganeti/iallocators \
 	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
 	  --docdir=/usr/share/doc/snf-ganeti \
+	  --with-extstorage-search-path=/srv/ganeti/extstorage,/usr/local/lib/ganeti/extstorage,/usr/lib/ganeti/extstorage,/usr/share/ganeti/extstorage \
 	  --enable-htools --enable-htools-rapi
 
 	$(MAKE)

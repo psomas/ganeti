@@ -447,6 +447,11 @@ _OS_CALLS = [
     ], None, _OsGetPostProc, "Returns an OS definition"),
   ]
 
+_EXTSTORAGE_CALLS = [
+  ("extstorage_diagnose", MULTI, None, TMO_FAST, [], None, None,
+   "Request a diagnose of ExtStorage Providers"),
+  ]
+
 _NODE_CALLS = [
   ("node_has_ip_address", SINGLE, None, TMO_FAST, [
     ("address", None, "IP address"),
@@ -515,7 +520,7 @@ CALLS = {
   "RpcClientDefault": \
     _Prepare(_IMPEXP_CALLS + _X509_CALLS + _OS_CALLS + _NODE_CALLS +
              _FILE_STORAGE_CALLS + _MISC_CALLS + _INSTANCE_CALLS +
-             _BLOCKDEV_CALLS + _STORAGE_CALLS),
+             _BLOCKDEV_CALLS + _STORAGE_CALLS + _EXTSTORAGE_CALLS),
   "RpcClientJobQueue": _Prepare([
     ("jobqueue_update", MULTI, None, TMO_URGENT, [
       ("file_name", None, None),

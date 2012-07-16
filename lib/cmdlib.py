@@ -5001,6 +5001,159 @@ class LUOsDiagnose(NoHooksLU):
     return self.oq.OldStyleQuery(self)
 
 
+class _ExtStorageQuery(_QueryBase):
+  FIELDS = query.EXTSTORAGE_FIELDS
+
+  def ExpandNames(self, lu):
+    # Lock all nodes in shared mode
+    # Temporary removal of locks, should be reverted later
+    # TODO: reintroduce locks when they are lighter-weight
+    lu.needed_locks = {}
+    #self.share_locks[locking.LEVEL_NODE] = 1
+    #self.needed_locks[locking.LEVEL_NODE] = locking.ALL_SET
+
+    # The following variables interact with _QueryBase._GetNames
+    if self.names:
+      self.wanted = self.names
+    else:
+      self.wanted = locking.ALL_SET
+
+    self.do_locking = self.use_locking
+
+  def DeclareLocks(self, lu, level):
+    pass
+
+  @staticmethod
+  def _DiagnoseByProvider(rlist):
+    """Remaps a per-node return list into an a per-provider per-node dictionary
+
+    @param rlist: a map with node names as keys and ExtStorage objects as values
+
+    @rtype: dict
+    @return: a dictionary with extstorage providers as keys and as
+        value another map, with nodes as keys and tuples of
+        (path, status, diagnose, parameters) as values, eg::
+
+          {"provider1": {"node1": [(/usr/lib/..., True, "", [])]
+                         "node2": [(/srv/..., False, "missing file")]
+                         "node3": [(/srv/..., True, "", [])]
+          }
+
+    """
+    all_es = {}
+    # we build here the list of nodes that didn't fail the RPC (at RPC
+    # level), so that nodes with a non-responding node daemon don't
+    # make all OSes invalid
+    good_nodes = [node_name for node_name in rlist
+                  if not rlist[node_name].fail_msg]
+    for node_name, nr in rlist.items():
+      if nr.fail_msg or not nr.payload:
+        continue
+      for (name, path, status, diagnose, params) in nr.payload:
+        if name not in all_es:
+          # build a list of nodes for this os containing empty lists
+          # for each node in node_list
+          all_es[name] = {}
+          for nname in good_nodes:
+            all_es[name][nname] = []
+        # convert params from [name, help] to (name, help)
+        params = [tuple(v) for v in params]
+        all_es[name][node_name].append((path, status, diagnose, params))
+    return all_es
+
+  def _GetQueryData(self, lu):
+    """Computes the list of nodes and their attributes.
+
+    """
+    # Locking is not used
+    assert not (compat.any(lu.glm.is_owned(level)
+                           for level in locking.LEVELS
+                           if level != locking.LEVEL_CLUSTER) or
+                self.do_locking or self.use_locking)
+
+    valid_nodes = [node.name
+                   for node in lu.cfg.GetAllNodesInfo().values()
+                   if not node.offline and node.vm_capable]
+    pol = self._DiagnoseByProvider(lu.rpc.call_extstorage_diagnose(valid_nodes))
+
+    data = {}
+
+    nodegroup_list = lu.cfg.GetNodeGroupList()
+
+    for (es_name, es_data) in pol.items():
+      # For every provider compute the nodegroup validity.
+      # To do this we need to check the validity of each node in es_data
+      # and then construct the corresponding nodegroup dict:
+      #      { nodegroup1: status
+      #        nodegroup2: status
+      #      }
+      ndgrp_data = {}
+      for nodegroup in nodegroup_list:
+        ndgrp = lu.cfg.GetNodeGroup(nodegroup)
+
+        nodegroup_nodes = ndgrp.members
+        nodegroup_name = ndgrp.name
+        node_statuses = []
+
+        for node in nodegroup_nodes:
+          if node in valid_nodes:
+            if es_data[node] != []:
+              node_status = es_data[node][0][1]
+              node_statuses.append(node_status)
+            else:
+              node_statuses.append(False)
+
+        if False in node_statuses:
+          ndgrp_data[nodegroup_name] = False
+        else:
+          ndgrp_data[nodegroup_name] = True
+
+      # Compute the provider's parameters
+      parameters = set()
+      for idx, esl in enumerate(es_data.values()):
+        valid = bool(esl and esl[0][1])
+        if not valid:
+          break
+
+        node_params = esl[0][3]
+        if idx == 0:
+          # First entry
+          parameters.update(node_params)
+        else:
+          # Filter out inconsistent values
+          parameters.intersection_update(node_params)
+
+      params = list(parameters)
+
+      # Now fill all the info for this provider
+      info = query.ExtStorageInfo(name=es_name, node_status=es_data,
+                                  nodegroup_status=ndgrp_data,
+                                  parameters=params)
+
+      data[es_name] = info
+
+    # Prepare data in requested order
+    return [data[name] for name in self._GetNames(lu, pol.keys(), None)
+            if name in data]
+
+
+class LUExtStorageDiagnose(NoHooksLU):
+  """Logical unit for ExtStorage diagnose/query.
+
+  """
+  REQ_BGL = False
+
+  def CheckArguments(self):
+    self.eq = _ExtStorageQuery(qlang.MakeSimpleFilter("name", self.op.names),
+                               self.op.output_fields, False)
+
+  def ExpandNames(self):
+    self.eq.ExpandNames(self)
+
+  def Exec(self, feedback_fn):
+    return self.eq.OldStyleQuery(self)
+
+
 class LUNodeRemove(LogicalUnit):
   """Logical unit for removing a node.
 
@@ -7153,6 +7306,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     # TODO: Implement support changing VG while recreating
     constants.IDISK_VG,
     constants.IDISK_METAVG,
+    constants.IDISK_PROVIDER,
     ]))
 
   def CheckArguments(self):
@@ -8584,9 +8738,9 @@ class TLMigrateInstance(Tasklet):
       self._GoReconnect(False)
       self._WaitUntilSync()
 
-    # If the instance's disk template is `rbd' and there was a successful
-    # migration, unmap the device from the source node.
-    if self.instance.disk_template == constants.DT_RBD:
+    # If the instance's disk template is `rbd' or `ext' and there was a
+    # successful migration, unmap the device from the source node.
+    if self.instance.disk_template in (constants.DT_RBD, constants.DT_EXT):
       disks = _ExpandCheckDisks(instance, instance.disks)
       self.feedback_fn("* unmapping instance's disks from %s" % source_node)
       for disk in disks:
@@ -8835,6 +8989,7 @@ def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
 _DISK_TEMPLATE_NAME_PREFIX = {
   constants.DT_PLAIN: "",
   constants.DT_RBD: ".rbd",
+  constants.DT_EXT: ".ext",
   }
 
 
@@ -8844,6 +8999,7 @@ _DISK_TEMPLATE_DEVICE_TYPE = {
   constants.DT_SHARED_FILE: constants.LD_FILE,
   constants.DT_BLOCK: constants.LD_BLOCKDEV,
   constants.DT_RBD: constants.LD_RBD,
+  constants.DT_EXT: constants.LD_EXT,
   }
 
 
@@ -8922,12 +9078,27 @@ def _GenerateDiskTemplate(lu, template_name, instance_name, primary_node,
                                        disk[constants.IDISK_ADOPT])
     elif template_name == constants.DT_RBD:
       logical_id_fn = lambda idx, _, disk: ("rbd", names[idx])
+    elif template_name == constants.DT_EXT:
+      def logical_id_fn(idx, _, disk):
+        provider = disk.get(constants.IDISK_PROVIDER, None)
+        if provider is None:
+          raise errors.ProgrammerError("Disk template is %s, but '%s' is"
+                                       " not found", constants.DT_EXT,
+                                       constants.IDISK_PROVIDER)
+        return (provider, names[idx])
     else:
       raise errors.ProgrammerError("Unknown disk template '%s'" % template_name)
 
     dev_type = _DISK_TEMPLATE_DEVICE_TYPE[template_name]
 
     for idx, disk in enumerate(disk_info):
+      params={}
+      # Only for the Ext template add disk_info to params
+      if template_name == constants.DT_EXT:
+        params[constants.IDISK_PROVIDER] = disk[constants.IDISK_PROVIDER]
+        for key in disk:
+          if key not in constants.IDISK_PARAMS:
+            params[key] = disk[key]
       disk_index = idx + base_index
       size = disk[constants.IDISK_SIZE]
       feedback_fn("* disk %s, size %s" %
@@ -8936,7 +9107,7 @@ def _GenerateDiskTemplate(lu, template_name, instance_name, primary_node,
                                 logical_id=logical_id_fn(idx, disk_index, disk),
                                 iv_name="disk/%d" % disk_index,
                                 mode=disk[constants.IDISK_MODE],
-                                params={}))
+                                params=params))
 
   return disks
 
@@ -9186,6 +9357,7 @@ def _ComputeDiskSize(disk_template, disks):
     constants.DT_SHARED_FILE: 0,
     constants.DT_BLOCK: 0,
     constants.DT_RBD: 0,
+    constants.DT_EXT: 0,
   }
 
   if disk_template not in req_size_dict:
@@ -9303,7 +9475,8 @@ class LUInstanceCreate(LogicalUnit):
     # check disks. parameter names and consistent adopt/no-adopt strategy
     has_adopt = has_no_adopt = False
     for disk in self.op.disks:
-      utils.ForceDictType(disk, constants.IDISK_PARAMS_TYPES)
+      if self.op.disk_template != constants.DT_EXT:
+        utils.ForceDictType(disk, constants.IDISK_PARAMS_TYPES)
       if constants.IDISK_ADOPT in disk:
         has_adopt = True
       else:
@@ -9911,16 +10084,37 @@ class LUInstanceCreate(LogicalUnit):
         raise errors.OpPrereqError("Invalid disk size '%s'" % size,
                                    errors.ECODE_INVAL)
 
+      ext_provider = disk.get(constants.IDISK_PROVIDER, None)
+      if ext_provider and self.op.disk_template != constants.DT_EXT:
+        raise errors.OpPrereqError("The '%s' option is only valid for the %s"
+                                   " disk template, not %s" %
+                                   (constants.IDISK_PROVIDER, constants.DT_EXT,
+                                   self.op.disk_template), errors.ECODE_INVAL)
+
       data_vg = disk.get(constants.IDISK_VG, default_vg)
       new_disk = {
         constants.IDISK_SIZE: size,
         constants.IDISK_MODE: mode,
         constants.IDISK_VG: data_vg,
         }
+
       if constants.IDISK_METAVG in disk:
         new_disk[constants.IDISK_METAVG] = disk[constants.IDISK_METAVG]
       if constants.IDISK_ADOPT in disk:
         new_disk[constants.IDISK_ADOPT] = disk[constants.IDISK_ADOPT]
+
+      # For extstorage, demand the `provider' option and add any
+      # additional parameters (ext-params) to the dict
+      if self.op.disk_template == constants.DT_EXT:
+        if ext_provider:
+          new_disk[constants.IDISK_PROVIDER] = ext_provider
+          for key in disk:
+            if key not in constants.IDISK_PARAMS:
+              new_disk[key] = disk[key]
+        else:
+          raise errors.OpPrereqError("Missing provider for template '%s'" %
+                                     constants.DT_EXT, errors.ECODE_INVAL)
+
       self.disks.append(new_disk)
 
     if self.op.mode == constants.INSTANCE_IMPORT:
@@ -10079,6 +10273,9 @@ class LUInstanceCreate(LogicalUnit):
         # Any function that checks prerequisites can be placed here.
         # Check if there is enough space on the RADOS cluster.
         _CheckRADOSFreeSpace()
+      elif self.op.disk_template == constants.DT_EXT:
+        # FIXME: Function that checks prereqs if needed
+        pass
       else:
         # Check lv size requirements, if not adopting
         req_sizes = _ComputeDiskSizePerVG(self.op.disk_template, self.disks)
@@ -10161,6 +10358,9 @@ class LUInstanceCreate(LogicalUnit):
     _CheckOSParams(self, True, nodenames, self.op.os_type, self.os_full)
 
     _CheckNicsBridgesExist(self, self.nics, self.pnode.name)
+
+    #TODO: _CheckExtParams (remotely)
+    # Check parameters for extstorage
 
     # memory check on primary node
     #TODO(dynmem): use MINMEM for checking
@@ -11792,7 +11992,8 @@ class LUInstanceGrowDisk(LogicalUnit):
 
     if instance.disk_template not in (constants.DT_FILE,
                                       constants.DT_SHARED_FILE,
-                                      constants.DT_RBD):
+                                      constants.DT_RBD,
+                                      constants.DT_EXT):
       # TODO: check the free disk space for file, when that feature will be
       # supported
       _CheckNodesFreeDiskPerVG(self, nodenames,
@@ -16318,6 +16519,7 @@ _QUERY_IMPL = {
   constants.QR_GROUP: _GroupQuery,
   constants.QR_NETWORK: _NetworkQuery,
   constants.QR_OS: _OsQuery,
+  constants.QR_EXTSTORAGE: _ExtStorageQuery,
   constants.QR_EXPORT: _ExportQuery,
   }
 

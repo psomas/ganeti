@@ -259,6 +259,7 @@ __all__ = [
   "ArgNetwork",
   "ArgNode",
   "ArgOs",
+  "ArgExtStorage",
   "ArgSuggest",
   "ArgUnknown",
   "OPT_COMPL_INST_ADD_NODES",
@@ -269,6 +270,7 @@ __all__ = [
   "OPT_COMPL_ONE_NODEGROUP",
   "OPT_COMPL_ONE_NETWORK",
   "OPT_COMPL_ONE_OS",
+  "OPT_COMPL_ONE_EXTSTORAGE",
   "cli_option",
   "SplitNodeOption",
   "CalculateOSNames",
@@ -403,6 +405,12 @@ class ArgHost(_Argument):
 
 class ArgOs(_Argument):
   """OS argument.
+
+  """
+
+
+class ArgExtStorage(_Argument):
+  """ExtStorage argument.
 
   """
 
@@ -656,6 +664,7 @@ def check_maybefloat(option, opt, value): # pylint: disable=W0613
  OPT_COMPL_ONE_NODE,
  OPT_COMPL_ONE_INSTANCE,
  OPT_COMPL_ONE_OS,
+ OPT_COMPL_ONE_EXTSTORAGE,
  OPT_COMPL_ONE_IALLOCATOR,
  OPT_COMPL_ONE_NETWORK,
  OPT_COMPL_INST_ADD_NODES,
@@ -666,6 +675,7 @@ OPT_COMPL_ALL = frozenset([
   OPT_COMPL_ONE_NODE,
   OPT_COMPL_ONE_INSTANCE,
   OPT_COMPL_ONE_OS,
+  OPT_COMPL_ONE_EXTSTORAGE,
   OPT_COMPL_ONE_IALLOCATOR,
   OPT_COMPL_ONE_NETWORK,
   OPT_COMPL_INST_ADD_NODES,

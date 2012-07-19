@@ -174,6 +174,7 @@ TOOLSDIR = _autoconf.TOOLSDIR
 CONF_DIR = SYSCONFDIR + "/ganeti"
 USER_SCRIPTS_DIR = CONF_DIR + "/scripts"
 ENABLE_CONFD = _autoconf.ENABLE_CONFD
+HS_CONFD = _autoconf.HS_CONFD
 
 #: Lock file for watcher, locked in shared mode by watcher; lock in exclusive
 # mode to block watcher (see L{cli._RunWhileClusterStoppedHelper.Call}
@@ -2038,6 +2039,7 @@ CONFD_REQ_CLUSTER_MASTER = 3
 CONFD_REQ_NODE_PIP_LIST = 4
 CONFD_REQ_MC_PIP_LIST = 5
 CONFD_REQ_INSTANCES_IPS_LIST = 6
+CONFD_REQ_NODE_DRBD = 7
 
 # Confd request query fields. These are used to narrow down queries.
 # These must be strings rather than integers, because json-encoding
@@ -2059,6 +2061,7 @@ CONFD_REQS = frozenset([
   CONFD_REQ_NODE_PIP_LIST,
   CONFD_REQ_MC_PIP_LIST,
   CONFD_REQ_INSTANCES_IPS_LIST,
+  CONFD_REQ_NODE_DRBD,
   ])
 
 CONFD_REPL_STATUS_OK = 0

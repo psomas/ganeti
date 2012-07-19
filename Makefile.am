@@ -246,7 +246,7 @@ client_PYTHON = \
 	lib/client/gnt_job.py \
 	lib/client/gnt_node.py \
 	lib/client/gnt_network.py \
-	lib/client/gnt_os.py
+	lib/client/gnt_os.py \
 	lib/client/gnt_storage.py
 
 hypervisor_PYTHON = \

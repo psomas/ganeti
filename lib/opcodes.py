@@ -1548,6 +1548,7 @@ class OpInstanceSetParams(OpCode):
   """
   TestNicModifications = _TestInstSetParamsModList(_TestNicDef)
   TestDiskModifications = _TestInstSetParamsModList(_TDiskParams)
+  TestExtDiskModifications = _TestInstSetParamsModList(_TExtDiskParams)
 
   OP_DSC_FIELD = "instance_name"
   OP_PARAMS = [
@@ -1581,8 +1582,59 @@ class OpInstanceSetParams(OpCode):
     ("wait_for_sync", True, ht.TBool,
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
+    ("allow_arbit_params", None, ht.TMaybeBool,
+     "Whether to allow the passing of arbitrary parameters to --disk(s)"),
     ]
   OP_RESULT = _TSetParamsResult
+
+  def Validate(self, set_defaults):
+    """Validate opcode parameters, optionally setting default values.
+
+    @type set_defaults: bool
+    @param set_defaults: Whether to set default values
+    @raise errors.OpPrereqError: When a parameter value doesn't match
+                                 requirements
+
+    """
+    # Check if the template is DT_EXT
+    allow_arbitrary_params = False
+    for (attr_name, _, _, _) in self.GetAllParams():
+      if hasattr(self, attr_name):
+        if attr_name == "allow_arbit_params" and \
+          getattr(self, attr_name) == True:
+          allow_arbitrary_params = True
+
+    for (attr_name, default, test, _) in self.GetAllParams():
+      assert test == ht.NoType or callable(test)
+
+      if not hasattr(self, attr_name):
+        if default == ht.NoDefault:
+          raise errors.OpPrereqError("Required parameter '%s.%s' missing" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
+        elif set_defaults:
+          if callable(default):
+            dval = default()
+          else:
+            dval = default
+          setattr(self, attr_name, dval)
+
+      # If `allow_arbit_params' is set, use the ExtStorage's test method for disks
+      if allow_arbitrary_params and attr_name == "disks":
+        test = OpInstanceSetParams.TestExtDiskModifications
+
+      if test == ht.NoType:
+        # no tests here
+        continue
+
+      if set_defaults or hasattr(self, attr_name):
+        attr_val = getattr(self, attr_name)
+        if not test(attr_val):
+          logging.error("OpCode %s, parameter %s, has invalid type %s/value %s",
+                        self.OP_ID, attr_name, type(attr_val), attr_val)
+          raise errors.OpPrereqError("Parameter '%s.%s' fails validation" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
 
 
 class OpInstanceGrowDisk(OpCode):

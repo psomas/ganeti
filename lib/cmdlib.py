@@ -12716,6 +12716,16 @@ class LUInstanceSetParams(LogicalUnit):
                                      " in cluster" % mac,
                                      errors.ECODE_NOTUNIQUE)
     elif new_net != old_net:
+      def get_net_prefix(net):
+        if net:
+          uuid = self.cfg.LookupNetwork(net)
+          if uuid:
+            nobj = self.cfg.GetNetwork(uuid)
+            return nobj.mac_prefix
+        return None
+      new_prefix = get_net_prefix(new_net)
+      old_prefix = get_net_prefix(old_net)
+      if old_prefix != new_prefix:
         params[constants.INIC_MAC] = \
           self.cfg.GenerateMAC(new_net, self.proc.GetECId())
 

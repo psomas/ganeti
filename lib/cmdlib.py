@@ -3287,10 +3287,12 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
       if master_node not in self.my_node_info:
         additional_nodes.append(master_node)
         vf_node_info.append(self.all_node_info[master_node])
-      # Add the first vm_capable node we find which is not included
+      # Add the first vm_capable node we find which is not included,
+      # excluding the master node (which we already have)
       for node in absent_nodes:
         nodeinfo = self.all_node_info[node]
-        if nodeinfo.vm_capable and not nodeinfo.offline:
+        if (nodeinfo.vm_capable and not nodeinfo.offline and
+            node != master_node):
           additional_nodes.append(node)
           vf_node_info.append(self.all_node_info[node])
           break
@@ -14458,7 +14460,7 @@ class LUGroupSetParams(LogicalUnit):
 
     if self.op.ndparams:
       new_ndparams = _GetUpdatedParams(self.group.ndparams, self.op.ndparams)
-      utils.ForceDictType(self.op.ndparams, constants.NDS_PARAMETER_TYPES)
+      utils.ForceDictType(new_ndparams, constants.NDS_PARAMETER_TYPES)
       self.new_ndparams = new_ndparams
 
     if self.op.diskparams:

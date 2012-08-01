@@ -209,6 +209,7 @@ __all__ = [
   "HV_STATE_OPT",
   "IGNORE_IPOLICY_OPT",
   "INSTANCE_POLICY_OPTS",
+  "ALLOW_ARBITPARAMS_OPT",
   # Generic functions for CLI programs
   "ConfirmOperation",
   "CreateIPolicyFromOpts",
@@ -1501,6 +1502,13 @@ NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
 HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
                          action="store_true", default=False,
                          help="Enable disk/nic hotplug")
+
+ALLOW_ARBITPARAMS_OPT = cli_option("--allow-arbit-params",
+                                   dest="allow_arbit_params",
+                                   action="store_true", default=None,
+                                   help="Allow arbitrary parameters to be passed"
+                                   " to --disk(s) option (used by ExtStorage)")
+
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]

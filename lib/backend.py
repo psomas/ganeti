@@ -1520,6 +1520,13 @@ def GetMigrationStatus(instance):
     _Fail("Failed to get migration status: %s", err, exc=True)
 
 
+def UpdateKVMRuntimeNICs(instance):
+  """updates KVM runtime NICs
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.UpdateKVMRuntimeNICs(instance)
+
 def HotAddNic(instance, nic, idx):
   """Hot add a nic
 
@@ -1527,12 +1534,12 @@ def HotAddNic(instance, nic, idx):
   hyper = hypervisor.GetHypervisor(instance.hypervisor)
   return hyper.HotAddNic(instance, nic, idx)
 
-def HotDelNic(instance, nic):
+def HotDelNic(instance, nic, idx):
   """Hot add a nic
 
   """
   hyper = hypervisor.GetHypervisor(instance.hypervisor)
-  return hyper.HotDelNic(instance, nic)
+  return hyper.HotDelNic(instance, nic, idx)
 
 
 def BlockdevCreate(disk, size, owner, on_primary, info):

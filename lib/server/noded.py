@@ -563,6 +563,15 @@ class NodeRequestHandler(http.server.HttpServerHandler):
     return backend.StartInstance(instance, startup_paused)
 
   @staticmethod
+  def perspective_update_kvm_runtime_nics(params):
+    """Hotplugs a nic to a running instance.
+
+    """
+    (idict, ) = params
+    instance = objects.Instance.FromDict(idict)
+    return backend.UpdateKVMRuntimeNICs(instance)
+
+  @staticmethod
   def perspective_hot_add_nic(params):
     """Hotplugs a nic to a running instance.
 
@@ -578,11 +587,11 @@ class NodeRequestHandler(http.server.HttpServerHandler):
     """Hotplugs a nic to a running instance.
 
     """
-    (idict, ndict) = params
+    (idict, ndict, seq) = params
     logging.info("%s %s", idict, ndict)
     instance = objects.Instance.FromDict(idict)
     nic = objects.NIC.FromDict(ndict)
-    return backend.HotDelNic(instance, nic)
+    return backend.HotDelNic(instance, nic, seq)
 
   @staticmethod
   def perspective_migration_info(params):

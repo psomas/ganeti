@@ -283,7 +283,11 @@ _INSTANCE_CALLS = [
   ("hot_del_nic", SINGLE, None, TMO_NORMAL, [
     ("instance", ED_INST_DICT, "Instance object"),
     ("nic", ED_NIC_DICT, "nic dict to remove"),
+    ("idx", None, "nic idx to hotplug"),
     ], None, None, "Removes a nic to a running instance"),
+  ("update_kvm_runtime_nics", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ], None, None, "Updates KVM runtime nics"),
   ]
 
 _IMPEXP_CALLS = [

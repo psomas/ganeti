@@ -1586,6 +1586,11 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     return result
 
+  def UpdateKVMRuntimeNICs(self, instance):
+    (kvm_cmd, kvm_nics, hvparams) = self._LoadKVMRuntime(instance)
+    new_kvm_runtime = (kvm_cmd, instance.nics, hvparams)
+    self._SaveKVMRuntime(instance, new_kvm_runtime)
+
   def HotAddNic(self, instance, nic, seq):
     """Hotadd new nic to the VM
 
@@ -1594,33 +1599,38 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
       return nic.ToDict()
 
-    mac = nic.mac
-    idx = nic.idx
+    _, v_major, v_min, _ = self._GetKVMVersion()
+    if (v_major, v_min) >= (1, 0):
 
-    (tap, fd) = _OpenTap()
-    logging.info("%s %d", tap, fd)
+      mac = nic.mac
+      idx = nic.idx
 
-    self._PassTapFd(instance, fd, nic)
+      (tap, fd) = _OpenTap()
+      logging.info("%s %d", tap, fd)
 
-    command = ("netdev_add tap,id=netdev%d,fd=netdev%d"
-               % (idx, idx))
-    logging.info("%s" % command)
-    output = self._CallMonitorCommand(instance.name, command)
-    for line in output.stdout.splitlines():
-      logging.info("%s" % line)
+      self._PassTapFd(instance, fd, nic)
 
-    command = ("device_add virtio-net-pci,mac=%s,"
-               "netdev=netdev%d,id=virtio-net-pci.%d"
-               % (mac, idx, idx))
-    logging.info("%s" % command)
-    output = self._CallMonitorCommand(instance.name, command)
-    for line in output.stdout.splitlines():
-      logging.info("%s" % line)
+      command = ("netdev_add tap,id=netdev%d,fd=netdev%d"
+                 % (idx, idx))
+      logging.info("%s" % command)
+      output = self._CallMonitorCommand(instance.name, command)
+      for line in output.stdout.splitlines():
+        logging.info("%s" % line)
 
-    self._ConfigureNIC(instance, seq, nic, tap)
+      command = ("device_add virtio-net-pci,mac=%s,"
+                 "netdev=netdev%d,id=virtio-net-pci.%d"
+                 % (mac, idx, idx))
+      logging.info("%s" % command)
+      output = self._CallMonitorCommand(instance.name, command)
+      for line in output.stdout.splitlines():
+        logging.info("%s" % line)
+
+      self._ConfigureNIC(instance, seq, nic, tap)
+
+
     return nic.ToDict()
 
-  def HotDelNic(self, instance, nic):
+  def HotDelNic(self, instance, nic, seq):
     """Hotadd new nic to the VM
 
     """
@@ -1628,20 +1638,24 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
       return nic.ToDict()
 
-    mac = nic.mac
-    idx = nic.idx
+    _, v_major, v_min, _ = self._GetKVMVersion()
+    if (v_major, v_min) >= (1, 0):
 
-    command = "device_del virtio-net-pci.%d" % idx
-    logging.info("%s" % command)
-    output = self._CallMonitorCommand(instance.name, command)
-    for line in output.stdout.splitlines():
-      logging.info("%s" % line)
+      mac = nic.mac
+      idx = nic.idx
 
-    command = "netdev_del netdev%d" % idx
-    logging.info("%s" % command)
-    output = self._CallMonitorCommand(instance.name, command)
-    for line in output.stdout.splitlines():
-      logging.info("%s" % line)
+      command = "device_del virtio-net-pci.%d" % idx
+      logging.info("%s" % command)
+      output = self._CallMonitorCommand(instance.name, command)
+      for line in output.stdout.splitlines():
+        logging.info("%s" % line)
+
+      command = "netdev_del netdev%d" % idx
+      logging.info("%s" % command)
+      output = self._CallMonitorCommand(instance.name, command)
+      for line in output.stdout.splitlines():
+        logging.info("%s" % line)
+
     return nic.ToDict()
 
   def _PassTapFd(self, instance, fd, nic):

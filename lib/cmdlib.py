@@ -12387,7 +12387,7 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
         if remove_fn is not None:
           remove_fn(absidx, item, private)
         if hotdel_fn is not None:
-          hotdel_fn(item)
+          hotdel_fn(item, absidx)
 
         changes = [("%s/%s" % (kind, absidx), "remove")]
 
@@ -13116,7 +13116,7 @@ class LUInstanceSetParams(LogicalUnit):
 
   def _PrepareNicHotMod(self, nic, idx):
     if self.op.hotplug:
-      self._HotDelNic(nic)
+      self._HotDelNic(nic, idx)
 
 
   def _ConvertPlainToDrbd(self, feedback_fn):
@@ -13362,14 +13362,15 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.hotplug:
       self._HotAddNic(nic, idx)
 
-  def _HotDelNic(self, nic):
+  def _HotDelNic(self, nic, idx):
     """Hotdel a nic to a running vm
 
     """
     if self.op.hotplug:
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance,
-                                nic)
+                                nic,
+                                idx)
 
   def Exec(self, feedback_fn):
     """Modifies an instance.
@@ -13439,6 +13440,8 @@ class LUInstanceSetParams(LogicalUnit):
     # Apply NIC changes
     if self._new_nics is not None:
       instance.nics = self._new_nics
+      if self.op.hotplug:
+        self.rpc.call_update_kvm_runtime_nics(instance.primary_node, instance)
       result.extend(self._nic_chgdesc)
 
     # hvparams changes

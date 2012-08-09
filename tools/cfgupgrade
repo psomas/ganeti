@@ -124,6 +124,13 @@ def UpgradeInstances(config_data):
                 " Substituting with uuid %s." % (name, uuid))
           nic["network"] = uuid
 
+    hotplug_info = inst.get("hotplug_info", None)
+    if hotplug_info:
+      try:
+        del hotplug_info["pci_pool"]
+      except KeyError:
+        pass
+
 
 def main():
   """Main program.

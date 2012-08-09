@@ -693,6 +693,24 @@ DDMS_VALUES_WITH_MODIFY = (DDMS_VALUES | frozenset([
   ]))
 # TODO: DDM_SWAP, DDM_MOVE?
 
+# device types to hotplug
+HOTPLUG_TARGET_DISK = "hotdisk"
+HOTPLUG_TARGET_NIC = "hotnic"
+HOTPLUG_ALL_TARGETS = frozenset([
+  HOTPLUG_TARGET_DISK,
+  HOTPLUG_TARGET_NIC
+  ])
+
+# hotplug actions
+HOTPLUG_ACTION_ADD = "hotadd"
+HOTPLUG_ACTION_REMOVE = "hotremove"
+HOTPLUG_ACTION_MODIFY = "hotmod"
+HOTPLUG_ALL_ACTIONS = frozenset([
+  HOTPLUG_ACTION_ADD,
+  HOTPLUG_ACTION_REMOVE,
+  HOTPLUG_ACTION_MODIFY
+  ])
+
 # common exit codes
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1

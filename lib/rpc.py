@@ -35,6 +35,7 @@ import zlib
 import base64
 import pycurl
 import threading
+import copy
 
 from ganeti import utils
 from ganeti import objects
@@ -663,6 +664,7 @@ class RpcRunner(_RpcClientBase,
       rpc_defs.ED_INST_DICT: self._InstDict,
       rpc_defs.ED_INST_DICT_HVP_BEP: self._InstDictHvpBep,
       rpc_defs.ED_INST_DICT_OSP_DP: self._InstDictOspDp,
+      rpc_defs.ED_NIC_DICT: self._NicDict,
 
       # Encoders annotating disk parameters
       rpc_defs.ED_DISKS_DICT_DP: self._DisksDictDP,
@@ -687,6 +689,13 @@ class RpcRunner(_RpcClientBase,
     _generated_rpc.RpcClientBootstrap.__init__(self)
     _generated_rpc.RpcClientDnsOnly.__init__(self)
     _generated_rpc.RpcClientDefault.__init__(self)
+
+  def _NicDict(self, nic):
+    """Convert the given nic to a dict and encapsulate netinfo
+
+    """
+    n = copy.deepcopy(nic)
+    return n.ToDict()
 
   def _InstDict(self, instance, hvp=None, bep=None, osp=None):
     """Convert the given instance to a dict.

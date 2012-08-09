@@ -1314,6 +1314,7 @@ class OpInstanceCreate(OpCode):
     ("src_path", None, ht.TMaybeString, "Source directory for import"),
     ("start", True, ht.TBool, "Whether to start instance after creation"),
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Instance tags"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
     ]
   OP_RESULT = ht.Comment("instance nodes")(ht.TListOf(ht.TNonEmptyString))
 
@@ -1680,6 +1681,7 @@ class OpInstanceSetParams(OpCode):
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
     ]
   OP_RESULT = _TSetParamsResult
 

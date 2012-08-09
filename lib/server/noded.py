@@ -574,6 +574,46 @@ class NodeRequestHandler(http.server.HttpServerHandler):
     return backend.StartInstance(instance, startup_paused)
 
   @staticmethod
+  def perspective_hot_add_disk(params):
+    """Hotplugs a nic to a running instance.
+
+    """
+    (idict, ddict, dev_path, seq) = params
+    instance = objects.Instance.FromDict(idict)
+    disk = objects.Disk.FromDict(ddict)
+    return backend.HotAddDisk(instance, disk, dev_path, seq)
+
+  @staticmethod
+  def perspective_hot_del_disk(params):
+    """Hotplugs a nic to a running instance.
+
+    """
+    (idict, ddict, seq) = params
+    instance = objects.Instance.FromDict(idict)
+    disk = objects.Disk.FromDict(ddict)
+    return backend.HotDelDisk(instance, disk, seq)
+
+  @staticmethod
+  def perspective_hot_add_nic(params):
+    """Hotplugs a nic to a running instance.
+
+    """
+    (idict, ndict, seq) = params
+    instance = objects.Instance.FromDict(idict)
+    nic = objects.NIC.FromDict(ndict)
+    return backend.HotAddNic(instance, nic, seq)
+
+  @staticmethod
+  def perspective_hot_del_nic(params):
+    """Hotplugs a nic to a running instance.
+
+    """
+    (idict, ndict, seq) = params
+    instance = objects.Instance.FromDict(idict)
+    nic = objects.NIC.FromDict(ndict)
+    return backend.HotDelNic(instance, nic, seq)
+
+  @staticmethod
   def perspective_migration_info(params):
     """Gather information about an instance to be migrated.
 

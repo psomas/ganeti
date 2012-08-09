@@ -1550,6 +1550,34 @@ def GetMigrationStatus(instance):
   except Exception, err:  # pylint: disable=W0703
     _Fail("Failed to get migration status: %s", err, exc=True)
 
+def HotAddDisk(instance, disk, dev_path, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddDisk(instance, disk, dev_path, seq)
+
+def HotDelDisk(instance, disk, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelDisk(instance, disk, seq)
+
+def HotAddNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddNic(instance, nic, seq)
+
+def HotDelNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelNic(instance, nic, seq)
+
 
 def BlockdevCreate(disk, size, owner, on_primary, info, excl_stor):
   """Creates a block device for an instance.

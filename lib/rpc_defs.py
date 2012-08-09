@@ -283,6 +283,27 @@ _INSTANCE_CALLS = [
     ("reinstall", None, None),
     ("debug", None, None),
     ], None, None, "Starts an instance"),
+  ("hot_add_nic", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "Nic dict to hotplug"),
+    ("seq", None, "Nic seq to hotplug"),
+    ], None, None, "Adds a nic to a running instance"),
+  ("hot_del_nic", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "nic dict to remove"),
+    ("seq", None, "Nic seq to hotplug"),
+    ], None, None, "Removes a nic to a running instance"),
+  ("hot_add_disk", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("disk", ED_OBJECT_DICT, "Disk dict to hotplug"),
+    ("dev_path", None, "Device path"),
+    ("seq", None, "Disk seq to hotplug"),
+    ], None, None, "Adds a nic to a running instance"),
+  ("hot_del_disk", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("disk", ED_OBJECT_DICT, "Disk dict to remove"),
+    ("seq", None, "Disk seq to hotplug"),
+    ], None, None, "Removes a nic to a running instance"),
   ]
 
 _IMPEXP_CALLS = [

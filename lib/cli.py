@@ -89,6 +89,7 @@ __all__ = [
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
+  "HOTPLUG_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -1431,6 +1432,10 @@ ABSOLUTE_OPT = cli_option("--absolute", dest="absolute",
                           help="Marks the grow as absolute instead of the"
                           " (default) relative mode")
 
+HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
+                         action="store_true", default=False,
+                         help="Enable disk/nic hotplug")
+
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]
 
@@ -2390,6 +2395,11 @@ def GenericInstanceCreate(mode, opts, args):
   else:
     raise errors.ProgrammerError("Invalid creation mode %s" % mode)
 
+  if opts.hotplug:
+    hotplug = True
+  else:
+    hotplug = False
+
   op = opcodes.OpInstanceCreate(instance_name=instance,
                                 disks=disks,
                                 disk_template=opts.disk_template,
@@ -2412,6 +2422,7 @@ def GenericInstanceCreate(mode, opts, args):
                                 src_node=src_node,
                                 src_path=src_path,
                                 tags=tags,
+                                hotplug=hotplug,
                                 no_install=no_install,
                                 identify_defaults=identify_defaults,
                                 ignore_ipolicy=opts.ignore_ipolicy)

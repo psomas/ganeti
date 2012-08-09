@@ -1403,9 +1403,15 @@ def SetInstanceParams(opts, args):
   else:
     offline = None
 
+  if opts.hotplug:
+    hotplug = True
+  else:
+    hotplug = False
+
   op = opcodes.OpInstanceSetParams(instance_name=args[0],
                                    nics=nics,
                                    disks=disks,
+                                   hotplug=hotplug,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
                                    hvparams=opts.hvparams,
@@ -1517,6 +1523,7 @@ add_opts = [
   FORCE_VARIANT_OPT,
   NO_INSTALL_OPT,
   IGNORE_IPOLICY_OPT,
+  HOTPLUG_OPT,
   ]
 
 commands = {
@@ -1603,7 +1610,7 @@ commands = {
     [BACKEND_OPT, DISK_OPT, FORCE_OPT, HVOPTS_OPT, NET_OPT, SUBMIT_OPT,
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
-     ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT],
+     ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT, HOTPLUG_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

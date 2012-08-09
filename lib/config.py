@@ -290,6 +290,27 @@ class ConfigWriter:
       self._temporary_macs.Reserve(ec_id, mac)
 
   @locking.ssynchronized(_config_lock, shared=1)
+  def GetPCIInfo(self, instance_name, dev_type):
+
+    instance = self._UnlockedGetInstanceInfo(instance_name)
+    if not instance.hotplug_info:
+      return None, None 
+    idx = getattr(instance.hotplug_info, dev_type)
+    setattr(instance.hotplug_info, dev_type, idx+1)
+    pci = instance.hotplug_info.pci_pool.pop()
+    self._WriteConfig()
+
+    return idx, pci
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def UpdatePCIInfo(self, instance_name, pci_slot):
+
+    instance = self._UnlockedGetInstanceInfo(instance_name)
+    if instance.hotplug_info:
+      instance.hotplug_info.pci_pool.append(pci_slot)
+      self._WriteConfig()
+
+  @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
     """Reserve an VG/LV pair for an instance.
 

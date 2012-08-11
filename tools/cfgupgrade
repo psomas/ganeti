@@ -106,6 +106,20 @@ def UpgradeGroups(config_data):
     if not networks:
       group["networks"] = {}
 
+def UpgradeInstances(config_data):
+  for i in config_data["instances"].values():
+    print("Updating Instance %s" % i["name"])
+    try:
+      del i["hotplugs"]
+    except:
+      pass
+    for n in i["nics"]:
+      print("Updating Instance nic with idx %d" % n["idx"])
+      try:
+        del n["idx"]
+      except:
+        pass
+
 
 def main():
   """Main program.
@@ -251,6 +265,7 @@ def main():
 
   UpgradeNetworks(config_data)
   UpgradeGroups(config_data)
+  UpgradeInstances(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

@@ -1,0 +1,7 @@
+snf-ganeti (2.6.0rc3+grnet-1) stable; urgency=low
+
+  GRNET-specific package against google's master branch
+  The package contains google's current master branch +
+  GRNET's IP pool management
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Thu, 26 Apr 2012 11:07:08 +0200

@@ -507,10 +507,13 @@ class ConfigData(ConfigObject):
     if self.networks is None:
       self.networks = {}
 
+class HotplugInfo(ConfigObject):
+  __slots__ = ["nics", "disks", "pci_pool"]
+
 
 class NIC(ConfigObject):
   """Config object representing a network card."""
-  __slots__ = ["mac", "ip", "network", "nicparams", "netinfo"]
+  __slots__ = ["idx", "pci", "mac", "ip", "network", "nicparams", "netinfo"]
 
   @classmethod
   def CheckParameterSyntax(cls, nicparams):
@@ -534,7 +537,7 @@ class NIC(ConfigObject):
 
 class Disk(ConfigObject):
   """Config object representing a block device."""
-  __slots__ = ["dev_type", "logical_id", "physical_id",
+  __slots__ = ["idx", "pci", "dev_type", "logical_id", "physical_id",
                "children", "iv_name", "size", "mode", "params"]
 
   def CreateOnSecondary(self):
@@ -1037,6 +1040,7 @@ class Instance(TaggableObject):
     "admin_state",
     "nics",
     "disks",
+    "hotplug_info",
     "disk_template",
     "network_port",
     "serial_no",
@@ -1167,6 +1171,8 @@ class Instance(TaggableObject):
       else:
         nlist = []
       bo[attr] = nlist
+    if self.hotplug_info:
+      bo['hotplug_info'] = self.hotplug_info.ToDict()
     return bo
 
   @classmethod
@@ -1184,6 +1190,8 @@ class Instance(TaggableObject):
     obj = super(Instance, cls).FromDict(val)
     obj.nics = cls._ContainerFromDicts(obj.nics, list, NIC)
     obj.disks = cls._ContainerFromDicts(obj.disks, list, Disk)
+    if "hotplug_info" in val:
+      obj.hotplug_info = HotplugInfo.FromDict(val["hotplug_info"])
     return obj
 
   def UpgradeConfig(self):

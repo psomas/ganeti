@@ -246,7 +246,8 @@ client_PYTHON = \
 	lib/client/gnt_job.py \
 	lib/client/gnt_node.py \
 	lib/client/gnt_network.py \
-	lib/client/gnt_os.py
+	lib/client/gnt_os.py \
+	lib/client/gnt_storage.py
 
 hypervisor_PYTHON = \
 	lib/hypervisor/__init__.py \
@@ -486,7 +487,8 @@ gnt_scripts = \
 	scripts/gnt-job \
 	scripts/gnt-network \
 	scripts/gnt-node \
-	scripts/gnt-os
+	scripts/gnt-os \
+	scripts/gnt-storage
 
 PYTHON_BOOTSTRAP_SBIN = \
 	daemons/ganeti-masterd \
@@ -688,6 +690,7 @@ man_MANS = \
 	man/ganeti-masterd.8 \
 	man/ganeti-noded.8 \
 	man/ganeti-os-interface.7 \
+	man/ganeti-extstorage-interface.7 \
 	man/ganeti-rapi.8 \
 	man/ganeti-watcher.8 \
 	man/gnt-backup.8 \
@@ -699,6 +702,7 @@ man_MANS = \
 	man/gnt-job.8 \
 	man/gnt-node.8 \
 	man/gnt-os.8 \
+	man/gnt-storage.8 \
 	man/hail.1 \
 	man/hbal.1 \
 	man/hcheck.1 \
@@ -1116,6 +1120,7 @@ lib/_autoconf.py: Makefile | lib/.dir
 	  echo "SSH_CONFIG_DIR = '$(SSH_CONFIG_DIR)'"; \
 	  echo "EXPORT_DIR = '$(EXPORT_DIR)'"; \
 	  echo "OS_SEARCH_PATH = [$(OS_SEARCH_PATH)]"; \
+	  echo "ES_SEARCH_PATH = [$(ES_SEARCH_PATH)]"; \
 	  echo "XEN_BOOTLOADER = '$(XEN_BOOTLOADER)'"; \
 	  echo "XEN_KERNEL = '$(XEN_KERNEL)'"; \
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \

@@ -209,6 +209,7 @@ __all__ = [
   "HV_STATE_OPT",
   "IGNORE_IPOLICY_OPT",
   "INSTANCE_POLICY_OPTS",
+  "ALLOW_ARBITPARAMS_OPT",
   # Generic functions for CLI programs
   "ConfirmOperation",
   "CreateIPolicyFromOpts",
@@ -259,6 +260,7 @@ __all__ = [
   "ArgNetwork",
   "ArgNode",
   "ArgOs",
+  "ArgExtStorage",
   "ArgSuggest",
   "ArgUnknown",
   "OPT_COMPL_INST_ADD_NODES",
@@ -269,6 +271,7 @@ __all__ = [
   "OPT_COMPL_ONE_NODEGROUP",
   "OPT_COMPL_ONE_NETWORK",
   "OPT_COMPL_ONE_OS",
+  "OPT_COMPL_ONE_EXTSTORAGE",
   "cli_option",
   "SplitNodeOption",
   "CalculateOSNames",
@@ -403,6 +406,12 @@ class ArgHost(_Argument):
 
 class ArgOs(_Argument):
   """OS argument.
+
+  """
+
+
+class ArgExtStorage(_Argument):
+  """ExtStorage argument.
 
   """
 
@@ -656,16 +665,18 @@ def check_maybefloat(option, opt, value): # pylint: disable=W0613
  OPT_COMPL_ONE_NODE,
  OPT_COMPL_ONE_INSTANCE,
  OPT_COMPL_ONE_OS,
+ OPT_COMPL_ONE_EXTSTORAGE,
  OPT_COMPL_ONE_IALLOCATOR,
  OPT_COMPL_ONE_NETWORK,
  OPT_COMPL_INST_ADD_NODES,
- OPT_COMPL_ONE_NODEGROUP) = range(100, 108)
+ OPT_COMPL_ONE_NODEGROUP) = range(100, 109)
 
 OPT_COMPL_ALL = frozenset([
   OPT_COMPL_MANY_NODES,
   OPT_COMPL_ONE_NODE,
   OPT_COMPL_ONE_INSTANCE,
   OPT_COMPL_ONE_OS,
+  OPT_COMPL_ONE_EXTSTORAGE,
   OPT_COMPL_ONE_IALLOCATOR,
   OPT_COMPL_ONE_NETWORK,
   OPT_COMPL_INST_ADD_NODES,
@@ -1495,6 +1506,13 @@ NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
 HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
                          action="store_true", default=False,
                          help="Enable disk/nic hotplug")
+
+ALLOW_ARBITPARAMS_OPT = cli_option("--allow-arbit-params",
+                                   dest="allow_arbit_params",
+                                   action="store_true", default=None,
+                                   help="Allow arbitrary parameters"
+                                   " to be passed to --disk(s)"
+                                   " option (used by ExtStorage)")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]

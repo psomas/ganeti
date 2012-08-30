@@ -8719,14 +8719,18 @@ def _GetPCIInfo(lu, dev_type):
     if hasattr(lu, 'hotplug_info'):
       info = lu.hotplug_info
     elif hasattr(lu, 'instance') and hasattr(lu.instance, 'hotplug_info'):
-      return lu.cfg.GetPCIInfo(lu.instance.name, dev_type)
+      idx, pci = lu.cfg.GetPCIInfo(lu.instance.name, dev_type)
+      lu.LogInfo("Choosing pci slot %d" % pci)
+      return idx, pci
 
     if info:
       idx = getattr(info, dev_type)
       setattr(info, dev_type, idx+1)
       pci = info.pci_pool.pop()
+      lu.LogInfo("Choosing pci slot %d" % pci)
       return idx, pci
 
+  lu.LogWarning("Hotplug not supported for this instance.")
   return None, None
 
 
@@ -9755,6 +9759,7 @@ class LUInstanceCreate(LogicalUnit):
 
     self.hotplug_info = None
     if self.op.hotplug:
+      self.LogInfo("Enabling hotplug.")
       self.hotplug_info = objects.HotplugInfo(disks=0, nics=0,
                                               pci_pool=list(range(16,32)))
     # NIC buildup
@@ -12815,6 +12820,7 @@ class LUInstanceSetParams(LogicalUnit):
                         disk.iv_name, disk, node, err)
 
     if self.op.hotplug and disk.pci:
+      self.LogInfo("Trying to hotplug device.")
       disk_ok, device_info = _AssembleInstanceDisks(self, self.instance,
                                                     [disk], check=False)
       _, _, dev_path = device_info[0]
@@ -12847,6 +12853,7 @@ class LUInstanceSetParams(LogicalUnit):
                                  " without removing it with hotplug",
                                  errors.ECODE_INVAL)
     if self.op.hotplug and root.pci:
+      self.LogInfo("Trying to hotplug device.")
       self.rpc.call_hot_del_disk(self.instance.primary_node,
                                  self.instance, root, idx)
       _ShutdownInstanceDisks(self, self.instance, [root])
@@ -12880,10 +12887,11 @@ class LUInstanceSetParams(LogicalUnit):
     #      return changes
     if self.op.hotplug:
       nic_idx, pci = _GetPCIInfo(self, 'nics')
-      nic.idx = nic_idx
-      nic.pci = pci
-      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
-                                         self.instance, nic, idx)
+      if pci is not None:
+        nic.idx = nic_idx
+        nic.pci = pci
+        result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                           self.instance, nic, idx)
     desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s" %
@@ -12912,6 +12920,7 @@ class LUInstanceSetParams(LogicalUnit):
     #TODO: log warning in case hotplug is not possible
     #      handle errors
     if self.op.hotplug and nic.pci:
+      self.LogInfo("Trying to hotplug device.")
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance, nic, idx)
       result = self.rpc.call_hot_add_nic(self.instance.primary_node,
@@ -12926,6 +12935,7 @@ class LUInstanceSetParams(LogicalUnit):
     #TODO: log warning in case hotplug is not possible
     #      handle errors
     if self.op.hotplug and nic.pci:
+      self.LogInfo("Trying to hotplug device.")
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance, nic, idx)
       self.cfg.UpdatePCIInfo(self.instance.name, nic.pci)

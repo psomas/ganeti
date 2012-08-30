@@ -943,6 +943,69 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         data.append(info)
     return data
 
+  def _GenerateKVMBlockDevicesOptions(self, instance, kvm_cmd, block_devices):
+
+    hvp = instance.hvparams
+    boot_disk = hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_DISK
+
+    _, v_major, v_min, _ = self._GetKVMVersion()
+
+    # whether this is an older KVM version that uses the boot=on flag
+    # on devices
+    needs_boot_flag = (v_major, v_min) < (0, 14)
+
+    disk_type = hvp[constants.HV_DISK_TYPE]
+    if disk_type == constants.HT_DISK_PARAVIRTUAL:
+      if_val = ",if=virtio"
+      if (v_major, v_min) >= (0, 12):
+        disk_model = "virtio-blk-pci"
+      else:
+        disk_model = "virtio"
+    else:
+      if_val = ",if=%s" % disk_type
+      disk_model = disk_type
+    # Cache mode
+    disk_cache = hvp[constants.HV_DISK_CACHE]
+    if instance.disk_template in constants.DTS_EXT_MIRROR:
+      if disk_cache != "none":
+        # TODO: make this a hard error, instead of a silent overwrite
+        logging.warning("KVM: overriding disk_cache setting '%s' with 'none'"
+                        " to prevent shared storage corruption on migration",
+                        disk_cache)
+      cache_val = ",cache=none"
+    elif disk_cache != constants.HT_CACHE_DEFAULT:
+      cache_val = ",cache=%s" % disk_cache
+    else:
+      cache_val = ""
+    for cfdev, dev_path in block_devices:
+      if cfdev.mode != constants.DISK_RDWR:
+        raise errors.HypervisorError("Instance has read-only disks which"
+                                     " are not supported by KVM")
+      # TODO: handle FD_LOOP and FD_BLKTAP (?)
+      boot_val = ""
+      if boot_disk:
+        kvm_cmd.extend(["-boot", "c"])
+        boot_disk = False
+        if needs_boot_flag and disk_type != constants.HT_DISK_IDE:
+          boot_val = ",boot=on"
+      drive_val = "file=%s,format=raw%s%s" % \
+                  (dev_path, boot_val, cache_val)
+      if cfdev.pci:
+        #TODO: name id after model
+        drive_val += (",bus=0,unit=%d,if=none,id=drive%d" %
+                      (cfdev.pci, cfdev.idx))
+      else:
+        drive_val += if_val
+
+      kvm_cmd.extend(["-drive", drive_val])
+
+      if cfdev.pci:
+        dev_val = ("%s,bus=pci.0,addr=%s,drive=drive%d,id=virtio-blk-pci.%d" %
+                   (disk_model, hex(cfdev.pci), cfdev.idx, cfdev.idx))
+        kvm_cmd.extend(["-device", dev_val])
+
+    return kvm_cmd
+
   def _GenerateKVMRuntime(self, instance, block_devices, startup_paused):
     """Generate KVM information to start an instance.
 
@@ -1001,6 +1064,9 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     needs_boot_flag = (v_major, v_min) < (0, 14)
 
     disk_type = hvp[constants.HV_DISK_TYPE]
+    if not instance.hotplug_info:
+      kvm_cmd = self._GenerateKVMBlockDevicesOptions(instance, kvm_cmd,
+                                                     block_devices)
 
     #Now we can specify a different device type for CDROM devices.
     cdrom_disk_type = hvp[constants.HV_KVM_CDROM_DISK_TYPE]
@@ -1226,7 +1292,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     kvm_nics = instance.nics
     hvparams = hvp
 
-    return (kvm_cmd, kvm_nics, hvparams, block_devices)
+    if instance.hotplug_info:
+      return (kvm_cmd, kvm_nics, hvparams, block_devices)
+    else:
+      return (kvm_cmd, kvm_nics, hvparams)
 
   def _WriteKVMRuntime(self, instance_name, data):
     """Write an instance's KVM runtime
@@ -1252,11 +1321,21 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """Save an instance's KVM runtime
 
     """
-    kvm_cmd, kvm_nics, hvparams, block_devices = kvm_runtime
+    if instance.hotplug_info:
+      kvm_cmd, kvm_nics, hvparams, block_devices = kvm_runtime
+      serialized_blockdevs = [(blk.ToDict(), link)
+                              for blk,link in block_devices]
+    else:
+      kvm_cmd, kvm_nics, hvparams = kvm_runtime
+
     serialized_nics = [nic.ToDict() for nic in kvm_nics]
-    serialized_blockdevs = [(blk.ToDict(), link) for blk,link in block_devices]
-    serialized_form = serializer.Dump((kvm_cmd, serialized_nics,
-                                       hvparams, serialized_blockdevs))
+
+    if instance.hotplug_info:
+      serialized_form = serializer.Dump((kvm_cmd, serialized_nics,
+                                        hvparams, serialized_blockdevs))
+    else:
+      serialized_form = serializer.Dump((kvm_cmd, serialized_nics, hvparams))
+
     self._WriteKVMRuntime(instance.name, serialized_form)
 
   def _LoadKVMRuntime(self, instance, serialized_runtime=None):
@@ -1266,11 +1345,19 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if not serialized_runtime:
       serialized_runtime = self._ReadKVMRuntime(instance.name)
     loaded_runtime = serializer.Load(serialized_runtime)
-    kvm_cmd, serialized_nics, hvparams, serialized_blockdevs = loaded_runtime
+    if instance.hotplug_info:
+      kvm_cmd, serialized_nics, hvparams, serialized_blockdevs = loaded_runtime
+      block_devices = [(objects.Disk.FromDict(sdisk), link)
+                       for sdisk, link in serialized_blockdevs]
+    else:
+      kvm_cmd, serialized_nics, hvparams = loaded_runtime
+
     kvm_nics = [objects.NIC.FromDict(snic) for snic in serialized_nics]
-    block_devices = [(objects.Disk.FromDict(sdisk), link)
-                     for sdisk, link in serialized_blockdevs]
-    return (kvm_cmd, kvm_nics, hvparams, block_devices)
+
+    if instance.hotplug_info:
+      return (kvm_cmd, kvm_nics, hvparams, block_devices)
+    else:
+      return (kvm_cmd, kvm_nics, hvparams)
 
   def _RunKVMCmd(self, name, kvm_cmd, tap_fds=None):
     """Run the KVM cmd and check for errors
@@ -1317,7 +1404,11 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     temp_files = []
 
-    kvm_cmd, kvm_nics, up_hvp, block_devices = kvm_runtime
+    if instance.hotplug_info:
+      kvm_cmd, kvm_nics, up_hvp, block_devices = kvm_runtime
+    else:
+      kvm_cmd, kvm_nics, up_hvp = kvm_runtime
+
     up_hvp = objects.FillDict(conf_hvp, up_hvp)
 
     _, v_major, v_min, _ = self._GetKVMVersion()
@@ -1338,59 +1429,9 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       utils.WriteFile(keymap_path, data="include en-us\ninclude %s\n" % keymap)
       kvm_cmd.extend(["-k", keymap_path])
 
-    # whether this is an older KVM version that uses the boot=on flag
-    # on devices
-    needs_boot_flag = (v_major, v_min) < (0, 14)
-
-    disk_type = up_hvp[constants.HV_DISK_TYPE]
-    if disk_type == constants.HT_DISK_PARAVIRTUAL:
-      if_val = ",if=virtio"
-      if (v_major, v_min) >= (0, 12):
-        disk_model = "virtio-blk-pci"
-      else:
-        disk_model = "virtio"
-    else:
-      if_val = ",if=%s" % disk_type
-      disk_model = disk_type
-    # Cache mode
-    disk_cache = up_hvp[constants.HV_DISK_CACHE]
-    if instance.disk_template in constants.DTS_EXT_MIRROR:
-      if disk_cache != "none":
-        # TODO: make this a hard error, instead of a silent overwrite
-        logging.warning("KVM: overriding disk_cache setting '%s' with 'none'"
-                        " to prevent shared storage corruption on migration",
-                        disk_cache)
-      cache_val = ",cache=none"
-    elif disk_cache != constants.HT_CACHE_DEFAULT:
-      cache_val = ",cache=%s" % disk_cache
-    else:
-      cache_val = ""
-    for cfdev, dev_path in block_devices:
-      if cfdev.mode != constants.DISK_RDWR:
-        raise errors.HypervisorError("Instance has read-only disks which"
-                                     " are not supported by KVM")
-      # TODO: handle FD_LOOP and FD_BLKTAP (?)
-      boot_val = ""
-      if boot_disk:
-        kvm_cmd.extend(["-boot", "c"])
-        boot_disk = False
-        if needs_boot_flag and disk_type != constants.HT_DISK_IDE:
-          boot_val = ",boot=on"
-      drive_val = "file=%s,format=raw%s%s" % \
-                  (dev_path, boot_val, cache_val)
-      if cfdev.pci:
-        #TODO: name id after model
-        drive_val += (",bus=0,unit=%d,if=none,id=drive%d" %
-                      (cfdev.pci, cfdev.idx))
-      else:
-        drive_val += if_val
-
-      kvm_cmd.extend(["-drive", drive_val])
-
-      if cfdev.pci:
-        dev_val = ("%s,bus=pci.0,addr=%s,drive=drive%d,id=virtio-blk-pci.%d" %
-                   (disk_model, hex(cfdev.pci), cfdev.idx, cfdev.idx))
-        kvm_cmd.extend(["-device", dev_val])
+    if instance.hotplug_info:
+      kvm_cmd = self._GenerateKVMBlockDevicesOptions(instance, kvm_cmd,
+                                                     block_devices)
 
     # We have reasons to believe changing something like the nic driver/type
     # upon migration won't exactly fly with the instance kernel, so for nic

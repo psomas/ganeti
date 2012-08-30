@@ -8716,17 +8716,17 @@ def _GenerateUniqueNames(lu, exts):
 def _GetPCIInfo(lu, dev_type):
 
   if lu.op.hotplug:
+    # case of InstanceCreate()
     if hasattr(lu, 'hotplug_info'):
-      info = lu.hotplug_info
-    elif hasattr(lu, 'instance') and hasattr(lu.instance, 'hotplug_info'):
+      if lu.hotplug_info is not None:
+        idx = getattr(lu.hotplug_info, dev_type)
+        setattr(lu.hotplug_info, dev_type, idx+1)
+        pci = lu.hotplug_info.pci_pool.pop()
+        lu.LogInfo("Choosing pci slot %d" % pci)
+        return idx, pci
+    # case of InstanceSetParams()
+    elif lu.instance.hotplug_info is not None:
       idx, pci = lu.cfg.GetPCIInfo(lu.instance.name, dev_type)
-      lu.LogInfo("Choosing pci slot %d" % pci)
-      return idx, pci
-
-    if info:
-      idx = getattr(info, dev_type)
-      setattr(info, dev_type, idx+1)
-      pci = info.pci_pool.pop()
       lu.LogInfo("Choosing pci slot %d" % pci)
       return idx, pci
 

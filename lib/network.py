@@ -75,6 +75,7 @@ class AddressPool(object):
       self.ext_reservations = bitarray(self.network.numhosts)
       self.ext_reservations.setall(False)
 
+    assert self.network.numhosts >= 8
     assert len(self.reservations) == self.network.numhosts
     assert len(self.ext_reservations) == self.network.numhosts
 

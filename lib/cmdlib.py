@@ -705,6 +705,18 @@ def _SupportsOob(cfg, node):
   return cfg.GetNdParams(node)[constants.ND_OOB_PROGRAM]
 
 
+def _CopyLockList(names):
+  """Makes a copy of a list of lock names.
+
+  Handles L{locking.ALL_SET} correctly.
+
+  """
+  if names == locking.ALL_SET:
+    return locking.ALL_SET
+  else:
+    return names[:]
+
+
 def _GetWantedNodes(lu, nodes):
   """Returns list of checked and expanded node names.
 
@@ -959,9 +971,8 @@ def _RunPostHook(lu, node_name):
   hm = lu.proc.BuildHooksManager(lu)
   try:
     hm.RunPhase(constants.HOOKS_PHASE_POST, nodes=[node_name])
-  except:
-    # pylint: disable=W0702
-    lu.LogWarning("Errors occurred running hooks on %s" % node_name)
+  except Exception, err: # pylint: disable=W0703
+    lu.LogWarning("Errors occurred running hooks on %s: %s" % (node_name, err))
 
 
 def _CheckOutputFields(static, dynamic, selected):
@@ -7327,7 +7338,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -7599,7 +7610,7 @@ class LUInstanceRemove(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -7752,7 +7763,7 @@ class LUInstanceFailover(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -7836,7 +7847,7 @@ class LUInstanceMigrate(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -7895,7 +7906,7 @@ class LUInstanceMove(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -11947,7 +11958,7 @@ class LUInstanceGrowDisk(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -12647,7 +12658,7 @@ class LUInstanceSetParams(LogicalUnit):
     elif level == locking.LEVEL_NODE_RES and self.op.disk_template:
       # Copy node locks
       self.needed_locks[locking.LEVEL_NODE_RES] = \
-        self.needed_locks[locking.LEVEL_NODE][:]
+        _CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -15862,6 +15873,7 @@ class LUTestAllocator(NoHooksLU):
                        nics=self.op.nics,
                        vcpus=self.op.vcpus,
                        hypervisor=self.op.hypervisor,
+                       spindle_use=self.op.spindle_use,
                        )
     elif self.op.mode == constants.IALLOCATOR_MODE_RELOC:
       ial = IAllocator(self.cfg, self.rpc,

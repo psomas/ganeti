@@ -2968,6 +2968,10 @@ def _VolumeLogName(kind, es_name, volume):
   @param volume: the name of the Volume inside the External Storage
 
   """
+  # Check if the extstorage log dir is a valid dir
+  if not os.path.isdir(constants.LOG_ES_DIR):
+    _ThrowError("Cannot find log directory: %s", constants.LOG_ES_DIR)
+
   # TODO: Use tempfile.mkstemp to create unique filename
   base = ("%s-%s-%s-%s.log" %
           (kind, es_name, volume, utils.TimestampForFilename()))

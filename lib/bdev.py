@@ -2821,7 +2821,7 @@ def _ExtStorageAction(action, unique_id, ext_params, size=None, grow=None):
   create_env = _ExtStorageEnvironment(unique_id, ext_params, size, grow)
 
   # Do not use log file for action `attach' as we need
-  # to get the outpout from RunResult
+  # to get the output from RunResult
   # TODO: find a way to have a log file for attach too
   logfile = None
   if action is not constants.ES_ACTION_ATTACH:
@@ -2839,11 +2839,18 @@ def _ExtStorageAction(action, unique_id, ext_params, size=None, grow=None):
                   " error: %s, logfile: %s, output: %s",
                   action, result.cmd, result.fail_reason,
                   logfile, result.output)
-    lines = [utils.SafeEncode(val)
-             for val in utils.TailFile(logfile, lines=20)]
-    _ThrowError("External storage's %s script failed (%s), last"
-                " lines in the log file:\n%s",
-                action, result.fail_reason, "\n".join(lines))
+
+    # If logfile is 'None' (during attach), it breaks TailFile
+    # TODO: have a log file for attach too
+    if action is not constants.ES_ACTION_ATTACH:
+      lines = [utils.SafeEncode(val)
+               for val in utils.TailFile(logfile, lines=20)]
+      _ThrowError("External storage's %s script failed (%s), last"
+                  " lines in the log file:\n%s",
+                  action, result.fail_reason, "\n".join(lines))
+    else:
+      _ThrowError("External storage's %s script failed (%s)",
+                  action, result.fail_reason)
 
   if action == constants.ES_ACTION_ATTACH:
     return result.stdout
@@ -2961,6 +2968,10 @@ def _VolumeLogName(kind, es_name, volume):
   @param volume: the name of the Volume inside the External Storage
 
   """
+  # Check if the extstorage log dir is a valid dir
+  if not os.path.isdir(constants.LOG_ES_DIR):
+    _ThrowError("Cannot find log directory: %s", constants.LOG_ES_DIR)
+
   # TODO: Use tempfile.mkstemp to create unique filename
   base = ("%s-%s-%s-%s.log" %
           (kind, es_name, volume, utils.TimestampForFilename()))

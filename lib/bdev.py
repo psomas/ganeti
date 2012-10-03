@@ -2018,6 +2018,20 @@ class DRBD8(BaseDRBD):
     This will, of course, fail if the device is in use.
 
     """
+    # This is a hack to find out what is happening before drbd shutdown
+    # and should be removed after discovering what happens
+    hack_script = "/etc/ganeti/debug-drbd-remove.sh"
+    if os.path.exists(hack_script):
+      result = utils.RunCmd([hack_script, minor])
+      if result.failed:
+        logging.error("Script '%s' failed: %s", hack_script, result.output)
+      else:
+        logging.info("Run script '%s' successfully. Output:", hack_script)
+        logging.info("%s", result.output)
+    else:
+      logging.error("Cannot find script '%s' to run before drbd shutdown",
+                    hack_script)
+
     result = utils.RunCmd(["drbdsetup", cls._DevPath(minor), "down"])
     if result.failed:
       _ThrowError("drbd%d: can't shutdown drbd device: %s",

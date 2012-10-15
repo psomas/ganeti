@@ -351,40 +351,44 @@ def _CheckCIDRNetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv4Network(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv4Network(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDRAddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv4Address(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv4Address(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDR6AddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv6Address(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv6Address(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDR6NetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv6Network(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv6Network(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 class _AutoOpParamSlots(type):

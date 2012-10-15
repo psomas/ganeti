@@ -1314,7 +1314,7 @@ def _ExpandInstanceName(cfg, name):
   return _ExpandItemName(cfg.ExpandInstanceName, name, "Instance")
 
 def _BuildNetworkHookEnv(name, network, gateway, network6, gateway6,
-                         network_type, mac_prefix, tags):
+                         network_type, mac_prefix, tags, serial_no):
   env = dict()
   if name:
     env["NETWORK_NAME"] = name
@@ -1332,6 +1332,8 @@ def _BuildNetworkHookEnv(name, network, gateway, network6, gateway6,
     env["NETWORK_TYPE"] = network_type
   if tags:
     env["NETWORK_TAGS"] = " ".join(tags)
+  if serial_no:
+    env["NETWORK_SERIAL_NO"] = serial_no
 
   return env
 
@@ -1345,14 +1347,15 @@ def _BuildNetworkHookEnvByObject(lu, network):
     "gateway6": network.gateway6,
     "network_type": network.network_type,
     "mac_prefix": network.mac_prefix,
-    "tags" : network.tags,
+    "tags": network.tags,
+    "serial_no": network.serial_no,
   }
   return _BuildNetworkHookEnv(**args)
 
 
 def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
                           minmem, maxmem, vcpus, nics, disk_template, disks,
-                          bep, hvp, hypervisor_name, tags):
+                          bep, hvp, hypervisor_name, tags, serial_no):
   """Builds instance related env variables for hooks
 
   This builds the hook environment from individual variables.
@@ -1406,6 +1409,7 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
     "INSTANCE_VCPUS": vcpus,
     "INSTANCE_DISK_TEMPLATE": disk_template,
     "INSTANCE_HYPERVISOR": hypervisor_name,
+    "INSTANCE_SERIAL_NO": serial_no,
   }
   if nics:
     nic_count = len(nics)
@@ -1538,6 +1542,7 @@ def _BuildInstanceHookEnvByObject(lu, instance, override=None):
     "hvp": hvp,
     "hypervisor_name": instance.hypervisor,
     "tags": instance.tags,
+    "serial_no": instance.serial_no,
   }
   if override:
     args.update(override)
@@ -9545,6 +9550,7 @@ class LUInstanceCreate(LogicalUnit):
       hvp=self.hv_full,
       hypervisor_name=self.op.hypervisor,
       tags=self.op.tags,
+      serial_no=1,
     ))
 
     return env
@@ -15607,6 +15613,7 @@ class LUNetworkAdd(LogicalUnit):
       "mac_prefix": self.op.mac_prefix,
       "network_type": self.op.network_type,
       "tags": self.op.tags,
+      "serial_no": 1,
       }
     return _BuildNetworkHookEnv(**args)
 
@@ -15817,6 +15824,7 @@ class LUNetworkSetParams(LogicalUnit):
       "mac_prefix": self.mac_prefix,
       "network_type": self.network_type,
       "tags": self.tags,
+      "serial_no": self.network.serial_no,
       }
     return _BuildNetworkHookEnv(**args)
 

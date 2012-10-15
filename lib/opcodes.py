@@ -1948,6 +1948,7 @@ class OpNetworkAdd(OpCode):
     ("add_reserved_ips", None,
      ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)), None),
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Network tags"),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ]
 
 class OpNetworkRemove(OpCode):

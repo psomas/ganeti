@@ -290,8 +290,9 @@ def RemoveNetwork(opts, args):
 commands = {
   "add": (
     AddNetwork, ARGS_ONE_NETWORK,
-    [DRY_RUN_OPT, NETWORK_OPT, GATEWAY_OPT, ADD_RESERVED_IPS_OPT, TAG_ADD_OPT,
-     MAC_PREFIX_OPT, NETWORK_TYPE_OPT, NETWORK6_OPT, GATEWAY6_OPT],
+    [DRY_RUN_OPT, NETWORK_OPT, GATEWAY_OPT, ADD_RESERVED_IPS_OPT,
+     MAC_PREFIX_OPT, NETWORK_TYPE_OPT, NETWORK6_OPT, GATEWAY6_OPT,
+     TAG_ADD_OPT, NOCONFLICTSCHECK_OPT],
     "<network_name>", "Add a new IP network to the cluster"),
   "list": (
     ListNetworks, ARGS_MANY_NETWORKS,

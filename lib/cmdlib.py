@@ -15562,7 +15562,11 @@ class LUNetworkAdd(LogicalUnit):
 
   def ExpandNames(self):
     self.network_uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
-    self.needed_locks = {}
+    if self.op.conflicts_check:
+      self.needed_locks = {
+        locking.LEVEL_NODE: locking.ALL_SET,
+        }
+      self.share_locks[locking.LEVEL_NODE] = 1
     self.add_locks[locking.LEVEL_NETWORK] = self.network_uuid
 
   def CheckPrereq(self):
@@ -15628,21 +15632,22 @@ class LUNetworkAdd(LogicalUnit):
     # Check if we need to reserve the nodes and the cluster master IP
     # These may not be allocated to any instances in routed mode, as
     # they wouldn't function anyway.
-    for node in self.cfg.GetAllNodesInfo().values():
-      for ip in [node.primary_ip, node.secondary_ip]:
-        try:
-          pool.Reserve(ip)
-          self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
+    if self.op.conflicts_check:
+      for node in self.cfg.GetAllNodesInfo().values():
+        for ip in [node.primary_ip, node.secondary_ip]:
+          try:
+            pool.Reserve(ip)
+            self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
 
-        except errors.AddressPoolError:
-          pass
+          except errors.AddressPoolError:
+            pass
 
-    master_ip = self.cfg.GetClusterInfo().master_ip
-    try:
-      pool.Reserve(master_ip)
-      self.LogInfo("Reserved cluster master IP (%s)", master_ip)
-    except errors.AddressPoolError:
-      pass
+      master_ip = self.cfg.GetClusterInfo().master_ip
+      try:
+        pool.Reserve(master_ip)
+        self.LogInfo("Reserved cluster master IP (%s)", master_ip)
+      except errors.AddressPoolError:
+        pass
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
@@ -15672,8 +15677,9 @@ class LUNetworkRemove(LogicalUnit):
                                  errors.ECODE_INVAL)
     self.needed_locks = {
       locking.LEVEL_NETWORK: [self.network_uuid],
+      locking.LEVEL_NODEGROUP: locking.ALL_SET,
       }
-
+    self.share_locks[locking.LEVEL_NODEGROUP] = 1
 
   def CheckPrereq(self):
     """Check prerequisites.
@@ -16021,7 +16027,6 @@ class LUNetworkConnect(LogicalUnit):
                                  self.group_name, errors.ECODE_INVAL)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
     self.share_locks[locking.LEVEL_INSTANCE] = 1
@@ -16032,8 +16037,9 @@ class LUNetworkConnect(LogicalUnit):
 
       # Lock instances optimistically, needs verification once group lock has
       # been acquired
-      self.needed_locks[locking.LEVEL_INSTANCE] = \
-          self.cfg.GetNodeGroupInstances(self.group_uuid)
+      if self.op.conflicts_check:
+        self.needed_locks[locking.LEVEL_INSTANCE] = \
+            self.cfg.GetNodeGroupInstances(self.group_uuid)
 
   def BuildHooksEnv(self):
     ret = dict()
@@ -16118,7 +16124,6 @@ class LUNetworkDisconnect(LogicalUnit):
                                  self.group_name, errors.ECODE_INVAL)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
     self.share_locks[locking.LEVEL_INSTANCE] = 1
@@ -16129,8 +16134,9 @@ class LUNetworkDisconnect(LogicalUnit):
 
       # Lock instances optimistically, needs verification once group lock has
       # been acquired
-      self.needed_locks[locking.LEVEL_INSTANCE] = \
-          self.cfg.GetNodeGroupInstances(self.group_uuid)
+      if self.op.conflicts_check:
+        self.needed_locks[locking.LEVEL_INSTANCE] = \
+            self.cfg.GetNodeGroupInstances(self.group_uuid)
 
   def BuildHooksEnv(self):
     ret = dict()

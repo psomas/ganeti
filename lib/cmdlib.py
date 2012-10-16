@@ -8715,7 +8715,7 @@ def _GenerateUniqueNames(lu, exts):
 
 def _GetPCIInfo(lu, dev_type):
 
-  if lu.op.hotplug:
+  if (hasattr(lu, 'op') and lu.op.hotplug):
     # case of InstanceCreate()
     if hasattr(lu, 'hotplug_info'):
       if lu.hotplug_info is not None:

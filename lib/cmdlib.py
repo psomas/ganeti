@@ -1325,7 +1325,7 @@ def _ExpandInstanceName(cfg, name):
   return _ExpandItemName(cfg.ExpandInstanceName, name, "Instance")
 
 def _BuildNetworkHookEnv(name, network, gateway, network6, gateway6,
-                         network_type, mac_prefix, tags):
+                         network_type, mac_prefix, tags, serial_no):
   env = dict()
   if name:
     env["NETWORK_NAME"] = name
@@ -1343,6 +1343,8 @@ def _BuildNetworkHookEnv(name, network, gateway, network6, gateway6,
     env["NETWORK_TYPE"] = network_type
   if tags:
     env["NETWORK_TAGS"] = " ".join(tags)
+  if serial_no:
+    env["NETWORK_SERIAL_NO"] = serial_no
 
   return env
 
@@ -1356,14 +1358,15 @@ def _BuildNetworkHookEnvByObject(lu, network):
     "gateway6": network.gateway6,
     "network_type": network.network_type,
     "mac_prefix": network.mac_prefix,
-    "tags" : network.tags,
+    "tags": network.tags,
+    "serial_no": network.serial_no,
   }
   return _BuildNetworkHookEnv(**args)
 
 
 def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
                           minmem, maxmem, vcpus, nics, disk_template, disks,
-                          bep, hvp, hypervisor_name, tags):
+                          bep, hvp, hypervisor_name, tags, serial_no):
   """Builds instance related env variables for hooks
 
   This builds the hook environment from individual variables.
@@ -1417,6 +1420,7 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
     "INSTANCE_VCPUS": vcpus,
     "INSTANCE_DISK_TEMPLATE": disk_template,
     "INSTANCE_HYPERVISOR": hypervisor_name,
+    "INSTANCE_SERIAL_NO": serial_no,
   }
   if nics:
     nic_count = len(nics)
@@ -1549,6 +1553,7 @@ def _BuildInstanceHookEnvByObject(lu, instance, override=None):
     "hvp": hvp,
     "hypervisor_name": instance.hypervisor,
     "tags": instance.tags,
+    "serial_no": instance.serial_no,
   }
   if override:
     args.update(override)
@@ -9756,6 +9761,7 @@ class LUInstanceCreate(LogicalUnit):
       hvp=self.hv_full,
       hypervisor_name=self.op.hypervisor,
       tags=self.op.tags,
+      serial_no=1,
     ))
 
     return env
@@ -15920,7 +15926,11 @@ class LUNetworkAdd(LogicalUnit):
 
   def ExpandNames(self):
     self.network_uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
-    self.needed_locks = {}
+    if self.op.conflicts_check:
+      self.needed_locks = {
+        locking.LEVEL_NODE: locking.ALL_SET,
+        }
+      self.share_locks[locking.LEVEL_NODE] = 1
     self.add_locks[locking.LEVEL_NETWORK] = self.network_uuid
 
   def CheckPrereq(self):
@@ -15961,6 +15971,7 @@ class LUNetworkAdd(LogicalUnit):
       "mac_prefix": self.op.mac_prefix,
       "network_type": self.op.network_type,
       "tags": self.op.tags,
+      "serial_no": 1,
       }
     return _BuildNetworkHookEnv(**args)
 
@@ -15986,21 +15997,22 @@ class LUNetworkAdd(LogicalUnit):
     # Check if we need to reserve the nodes and the cluster master IP
     # These may not be allocated to any instances in routed mode, as
     # they wouldn't function anyway.
-    for node in self.cfg.GetAllNodesInfo().values():
-      for ip in [node.primary_ip, node.secondary_ip]:
-        try:
-          pool.Reserve(ip)
-          self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
+    if self.op.conflicts_check:
+      for node in self.cfg.GetAllNodesInfo().values():
+        for ip in [node.primary_ip, node.secondary_ip]:
+          try:
+            pool.Reserve(ip)
+            self.LogInfo("Reserved node %s's IP (%s)", node.name, ip)
 
-        except errors.AddressPoolError:
-          pass
+          except errors.AddressPoolError:
+            pass
 
-    master_ip = self.cfg.GetClusterInfo().master_ip
-    try:
-      pool.Reserve(master_ip)
-      self.LogInfo("Reserved cluster master IP (%s)", master_ip)
-    except errors.AddressPoolError:
-      pass
+      master_ip = self.cfg.GetClusterInfo().master_ip
+      try:
+        pool.Reserve(master_ip)
+        self.LogInfo("Reserved cluster master IP (%s)", master_ip)
+      except errors.AddressPoolError:
+        pass
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
@@ -16025,10 +16037,14 @@ class LUNetworkRemove(LogicalUnit):
   def ExpandNames(self):
     self.network_uuid = self.cfg.LookupNetwork(self.op.network_name)
 
+    if not self.network_uuid:
+      raise errors.OpPrereqError("Network %s not found" % self.op.network_name,
+                                 errors.ECODE_INVAL)
     self.needed_locks = {
       locking.LEVEL_NETWORK: [self.network_uuid],
+      locking.LEVEL_NODEGROUP: locking.ALL_SET,
       }
-
+    self.share_locks[locking.LEVEL_NODEGROUP] = 1
 
   def CheckPrereq(self):
     """Check prerequisites.
@@ -16038,9 +16054,6 @@ class LUNetworkRemove(LogicalUnit):
     cluster.
 
     """
-    if not self.network_uuid:
-      raise errors.OpPrereqError("Network %s not found" % self.op.network_name,
-                                 errors.ECODE_INVAL)
 
     # Verify that the network is not conncted.
     node_groups = [group.name
@@ -16099,15 +16112,13 @@ class LUNetworkSetParams(LogicalUnit):
   def ExpandNames(self):
     self.network_uuid = self.cfg.LookupNetwork(self.op.network_name)
     self.network = self.cfg.GetNetwork(self.network_uuid)
-    self.needed_locks = {
-      locking.LEVEL_NETWORK: [self.network_uuid],
-      }
-
-
     if self.network is None:
       raise errors.OpPrereqError("Could not retrieve network '%s' (UUID: %s)" %
                                  (self.op.network_name, self.network_uuid),
                                  errors.ECODE_INVAL)
+    self.needed_locks = {
+      locking.LEVEL_NETWORK: [self.network_uuid],
+      }
 
   def CheckPrereq(self):
     """Check prerequisites.
@@ -16171,6 +16182,7 @@ class LUNetworkSetParams(LogicalUnit):
       "mac_prefix": self.mac_prefix,
       "network_type": self.network_type,
       "tags": self.tags,
+      "serial_no": self.network.serial_no,
       }
     return _BuildNetworkHookEnv(**args)
 
@@ -16370,11 +16382,17 @@ class LUNetworkConnect(LogicalUnit):
 
     self.network_uuid = self.cfg.LookupNetwork(self.network_name)
     self.network = self.cfg.GetNetwork(self.network_uuid)
+    if self.network is None:
+      raise errors.OpPrereqError("Network %s does not exist" %
+                                 self.network_name, errors.ECODE_INVAL)
+
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
     self.group = self.cfg.GetNodeGroup(self.group_uuid)
+    if self.group is None:
+      raise errors.OpPrereqError("Group %s does not exist" %
+                                 self.group_name, errors.ECODE_INVAL)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
     self.share_locks[locking.LEVEL_INSTANCE] = 1
@@ -16385,8 +16403,9 @@ class LUNetworkConnect(LogicalUnit):
 
       # Lock instances optimistically, needs verification once group lock has
       # been acquired
-      self.needed_locks[locking.LEVEL_INSTANCE] = \
-          self.cfg.GetNodeGroupInstances(self.group_uuid)
+      if self.op.conflicts_check:
+        self.needed_locks[locking.LEVEL_INSTANCE] = \
+            self.cfg.GetNodeGroupInstances(self.group_uuid)
 
   def BuildHooksEnv(self):
     ret = dict()
@@ -16404,10 +16423,6 @@ class LUNetworkConnect(LogicalUnit):
   def CheckPrereq(self):
     l = lambda value: ", ".join("%s: %s/%s" % (i[0], i[1], i[2])
                                    for i in value)
-
-    if self.network is None:
-      raise errors.OpPrereqError("Network %s does not exist" %
-                                 self.network_name, errors.ECODE_INVAL)
 
     self.netparams = dict()
     self.netparams[constants.NIC_MODE] = self.network_mode
@@ -16464,11 +16479,17 @@ class LUNetworkDisconnect(LogicalUnit):
 
     self.network_uuid = self.cfg.LookupNetwork(self.network_name)
     self.network = self.cfg.GetNetwork(self.network_uuid)
+    if self.network is None:
+      raise errors.OpPrereqError("Network %s does not exist" %
+                                 self.network_name, errors.ECODE_INVAL)
+
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
     self.group = self.cfg.GetNodeGroup(self.group_uuid)
+    if self.group is None:
+      raise errors.OpPrereqError("Group %s does not exist" %
+                                 self.group_name, errors.ECODE_INVAL)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
     self.share_locks[locking.LEVEL_INSTANCE] = 1
@@ -16479,8 +16500,9 @@ class LUNetworkDisconnect(LogicalUnit):
 
       # Lock instances optimistically, needs verification once group lock has
       # been acquired
-      self.needed_locks[locking.LEVEL_INSTANCE] = \
-          self.cfg.GetNodeGroupInstances(self.group_uuid)
+      if self.op.conflicts_check:
+        self.needed_locks[locking.LEVEL_INSTANCE] = \
+            self.cfg.GetNodeGroupInstances(self.group_uuid)
 
   def BuildHooksEnv(self):
     ret = dict()

@@ -185,24 +185,27 @@ def ShowNetworkConfig(opts, args):
                                     "mac_prefix", "network_type",
                                     "free_count", "reserved_count",
                                     "map", "group_list", "inst_list",
-                                    "external_reservations"],
+                                    "external_reservations",
+                                    "serial_no", "uuid"],
                             names=args, use_locking=False)
 
   for (name, network, gateway, network6, gateway6,
        mac_prefix, network_type, free_count, reserved_count,
-       map, group_list, instances, ext_res) in result:
+       map, group_list, instances, ext_res, serial, uuid) in result:
     size = free_count + reserved_count
     ToStdout("Network name: %s", name)
-    ToStdout("  subnet: %s", network)
-    ToStdout("  gateway: %s", gateway)
-    ToStdout("  subnet6: %s", network6)
-    ToStdout("  gateway6: %s", gateway6)
-    ToStdout("  mac prefix: %s", mac_prefix)
-    ToStdout("  type: %s", network_type)
-    ToStdout("  size: %d", size)
-    ToStdout("  free: %d (%.2f%%)", free_count,
+    ToStdout("UUID: %s", uuid)
+    ToStdout("Serial number: %d", serial)
+    ToStdout("  Subnet: %s", network)
+    ToStdout("  Gateway: %s", gateway)
+    ToStdout("  IPv6 Subnet: %s", network6)
+    ToStdout("  IPv6 Gateway: %s", gateway6)
+    ToStdout("  Mac Prefix: %s", mac_prefix)
+    ToStdout("  Type: %s", network_type)
+    ToStdout("  Size: %d", size)
+    ToStdout("  Free: %d (%.2f%%)", free_count,
              100 * float(free_count)/float(size))
-    ToStdout("  usage map:")
+    ToStdout("  Usage map:")
     idx = 0
     for line in wrap(map, width=64):
       ToStdout("     %s %s %d", str(idx).rjust(3), line.ljust(64), idx + 63)
@@ -290,8 +293,9 @@ def RemoveNetwork(opts, args):
 commands = {
   "add": (
     AddNetwork, ARGS_ONE_NETWORK,
-    [DRY_RUN_OPT, NETWORK_OPT, GATEWAY_OPT, ADD_RESERVED_IPS_OPT, TAG_ADD_OPT,
-     MAC_PREFIX_OPT, NETWORK_TYPE_OPT, NETWORK6_OPT, GATEWAY6_OPT],
+    [DRY_RUN_OPT, NETWORK_OPT, GATEWAY_OPT, ADD_RESERVED_IPS_OPT,
+     MAC_PREFIX_OPT, NETWORK_TYPE_OPT, NETWORK6_OPT, GATEWAY6_OPT,
+     TAG_ADD_OPT, NOCONFLICTSCHECK_OPT],
     "<network_name>", "Add a new IP network to the cluster"),
   "list": (
     ListNetworks, ARGS_MANY_NETWORKS,

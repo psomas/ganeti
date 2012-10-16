@@ -2498,6 +2498,8 @@ _NETWORK_SIMPLE_FIELDS = {
   "gateway6": ("IPv6Gateway", QFT_OTHER, 0, "The ipv6 gateway"),
   "mac_prefix": ("MacPrefix", QFT_OTHER, 0, "The mac prefix"),
   "network_type": ("NetworkType", QFT_OTHER, 0, "The network type"),
+  "serial_no": ("SerialNo", QFT_NUMBER, 0, _SERIAL_NO_DOC % "Network"),
+  "uuid": ("UUID", QFT_TEXT, 0, "Network UUID"),
   }
 
 

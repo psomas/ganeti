@@ -357,40 +357,44 @@ def _CheckCIDRNetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv4Network(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv4Network(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDRAddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv4Address(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv4Address(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDR6AddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv6Address(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv6Address(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 def _CheckCIDR6NetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  try:
-    ipaddr.IPv6Network(value)
-  except ipaddr.AddressValueError:
-    return False
+  if value != 'none':
+    try:
+      ipaddr.IPv6Network(value)
+    except ipaddr.AddressValueError:
+      return False
   return True
 
 class _AutoOpParamSlots(type):
@@ -2069,6 +2073,7 @@ class OpNetworkAdd(OpCode):
     ("add_reserved_ips", None,
      ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)), None),
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Network tags"),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ]
 
 class OpNetworkRemove(OpCode):

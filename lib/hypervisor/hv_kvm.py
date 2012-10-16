@@ -1067,9 +1067,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     hvp = instance.hvparams
     kernel_path = hvp[constants.HV_KERNEL_PATH]
     if kernel_path:
-      boot_disk = boot_cdrom = boot_floppy = boot_network = False
+      boot_cdrom = boot_floppy = boot_network = False
     else:
-      boot_disk = hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_DISK
       boot_cdrom = hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_CDROM
       boot_floppy = hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_FLOPPY
       boot_network = hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_NETWORK
@@ -1428,7 +1427,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     conf_hvp = instance.hvparams
     name = instance.name
     self._CheckDown(name)
-    boot_disk = conf_hvp[constants.HV_BOOT_ORDER] == constants.HT_BO_DISK
 
     temp_files = []
 
@@ -1655,12 +1653,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     return result
 
-  def HotAddDisk(self, instance, disk, dev_path, seq):
+  def HotAddDisk(self, instance, disk, dev_path, _):
     """Hotadd new disk to the VM
 
     """
     if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
       return disk.ToDict()
 
     _, v_major, v_min, _ = self._GetKVMVersion()
@@ -1669,16 +1667,16 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       command = ("drive_add dummy file=%s,if=none,id=drive%d,format=raw" %
                  (dev_path, idx))
 
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
 
       command = ("device_add virtio-blk-pci,bus=pci.0,addr=%s,"
                  "drive=drive%d,id=virtio-blk-pci.%d"
                  % (hex(disk.pci), idx, idx))
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       (kvm_cmd, kvm_nics,
        hvparams, block_devices) = self._LoadKVMRuntime(instance)
@@ -1688,12 +1686,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     return disk.ToDict()
 
-  def HotDelDisk(self, instance, disk, seq):
+  def HotDelDisk(self, instance, disk, _):
     """Hotdel disk to the VM
 
     """
     if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
       return disk.ToDict()
 
     _, v_major, v_min, _ = self._GetKVMVersion()
@@ -1701,13 +1699,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       idx = disk.idx
 
       command = "device_del virtio-blk-pci.%d" % idx
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       command = "drive_del drive%d" % idx
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       #output = self._CallMonitorCommand(instance.name, command)
       #for line in output.stdout.splitlines():
       #  logging.info("%s" % line)
@@ -1730,7 +1728,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     """
     if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
       return nic.ToDict()
 
     _, v_major, v_min, _ = self._GetKVMVersion()
@@ -1745,18 +1743,18 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
       command = ("netdev_add tap,id=netdev%d,fd=netdev%d"
                  % (idx, idx))
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       command = ("device_add virtio-net-pci,bus=pci.0,addr=%s,mac=%s,"
                  "netdev=netdev%d,id=virtio-net-pci.%d"
                  % (hex(nic.pci), mac, idx, idx))
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       self._ConfigureNIC(instance, seq, nic, tap)
 
@@ -1768,30 +1766,29 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     return nic.ToDict()
 
-  def HotDelNic(self, instance, nic, seq):
+  def HotDelNic(self, instance, nic, _):
     """Hotadd new nic to the VM
 
     """
     if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive" % instance.name)
+      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
       return nic.ToDict()
 
     _, v_major, v_min, _ = self._GetKVMVersion()
     if (v_major, v_min) >= (1, 0) and nic.pci:
-      mac = nic.mac
       idx = nic.idx
 
       command = "device_del virtio-net-pci.%d" % idx
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       command = "netdev_del netdev%d" % idx
-      logging.info("%s" % command)
+      logging.info("Run cmd %s", command)
       output = self._CallMonitorCommand(instance.name, command)
       for line in output.stdout.splitlines():
-        logging.info("%s" % line)
+        logging.info("%s", line)
 
       (kvm_cmd, kvm_nics,
        hvparams, block_devices) = self._LoadKVMRuntime(instance)

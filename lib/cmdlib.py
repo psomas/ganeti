@@ -8958,7 +8958,7 @@ def _GenerateUniqueNames(lu, exts):
 
 def _GetPCIInfo(lu, dev_type):
 
-  if lu.op.hotplug:
+  if (hasattr(lu, 'op') and lu.op.hotplug):
     # case of InstanceCreate()
     if hasattr(lu, 'hotplug_info'):
       if lu.hotplug_info is not None:
@@ -8973,7 +8973,7 @@ def _GetPCIInfo(lu, dev_type):
       lu.LogInfo("Choosing pci slot %d" % pci)
       return idx, pci
 
-    lu.LogWarning("Hotplug not supported for this instance.")
+  lu.LogWarning("Hotplug not supported for this instance.")
   return None, None
 
 
@@ -13294,11 +13294,12 @@ class LUInstanceSetParams(LogicalUnit):
 
     if self.op.hotplug and disk.pci:
       self.LogInfo("Trying to hotplug device.")
-      disk_ok, device_info = _AssembleInstanceDisks(self, self.instance,
-                                                    [disk], check=False)
+      _, device_info = _AssembleInstanceDisks(self, self.instance,
+                                              [disk], check=False)
       _, _, dev_path = device_info[0]
-      result = self.rpc.call_hot_add_disk(self.instance.primary_node,
-                                          self.instance, disk, dev_path, idx)
+      #TODO: handle result
+      self.rpc.call_hot_add_disk(self.instance.primary_node,
+                                 self.instance, disk, dev_path, idx)
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
@@ -13364,8 +13365,8 @@ class LUInstanceSetParams(LogicalUnit):
       if pci is not None:
         nic.idx = nic_idx
         nic.pci = pci
-        result = self.rpc.call_hot_add_nic(self.instance.primary_node,
-                                           self.instance, nic, idx)
+        self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                  self.instance, nic, idx)
     desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
@@ -13398,11 +13399,11 @@ class LUInstanceSetParams(LogicalUnit):
       self.LogInfo("Trying to hotplug device.")
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance, nic, idx)
-      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
-                                         self.instance, nic, idx)
+      self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                self.instance, nic, idx)
     return changes
 
-  def _RemoveNic(self, idx, nic, private):
+  def _RemoveNic(self, idx, nic, _):
     if nic.pci and not self.op.hotplug:
       raise errors.OpPrereqError("Cannot remove a nic that has been hotplugged"
                                  " without removing it with hotplug",

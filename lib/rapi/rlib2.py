@@ -687,7 +687,7 @@ class R_2_networks(baserlib.OpcodeResource):
 
 
 class R_2_networks_name(baserlib.OpcodeResource):
-  """/2/network/[network_name] resource.
+  """/2/networks/[network_name] resource.
 
   """
   DELETE_OPCODE = opcodes.OpNetworkRemove
@@ -717,7 +717,7 @@ class R_2_networks_name(baserlib.OpcodeResource):
       })
 
 class R_2_networks_name_connect(baserlib.OpcodeResource):
-  """/2/network/[network_name]/connect.
+  """/2/networks/[network_name]/connect resource.
 
   """
   PUT_OPCODE = opcodes.OpNetworkConnect
@@ -729,10 +729,11 @@ class R_2_networks_name_connect(baserlib.OpcodeResource):
     assert self.items
     return (self.request_body, {
       "network_name": self.items[0],
+      "dry_run": self.dryRun(),
       })
 
 class R_2_networks_name_disconnect(baserlib.OpcodeResource):
-  """/2/network/[network_name]/disconnect.
+  """/2/networks/[network_name]/disconnect resource.
 
   """
   PUT_OPCODE = opcodes.OpNetworkDisconnect
@@ -744,7 +745,24 @@ class R_2_networks_name_disconnect(baserlib.OpcodeResource):
     assert self.items
     return (self.request_body, {
       "network_name": self.items[0],
+      "dry_run": self.dryRun(),
       })
+
+class R_2_networks_name_modify(baserlib.OpcodeResource):
+  """/2/networks/[network_name]/modify resource.
+
+  """
+  PUT_OPCODE = opcodes.OpNetworkSetParams
+
+  def GetPutOpInput(self):
+    """Changes some parameters of network.
+
+    """
+    assert self.items
+    return (self.request_body, {
+      "network_name": self.items[0],
+      })
+
 
 class R_2_groups(baserlib.OpcodeResource):
   """/2/groups resource.
@@ -1515,6 +1533,14 @@ class R_2_groups_name_tags(_R_Tags):
 
   """
   TAG_LEVEL = constants.TAG_NODEGROUP
+
+class R_2_networks_name_tags(_R_Tags):
+  """ /2/networks/[network_name]/tags resource.
+
+  Manages per-network tags.
+
+  """
+  TAG_LEVEL = constants.TAG_NETWORK
 
 
 class R_2_tags(_R_Tags):

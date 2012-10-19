@@ -3204,9 +3204,9 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
       node_verify_param[constants.NV_VGLIST] = None
       node_verify_param[constants.NV_LVLIST] = vg_name
       node_verify_param[constants.NV_PVLIST] = [vg_name]
-      node_verify_param[constants.NV_DRBDLIST] = None
 
     if drbd_helper:
+      node_verify_param[constants.NV_DRBDLIST] = None
       node_verify_param[constants.NV_DRBDHELPER] = drbd_helper
 
     # bridge checks
@@ -8305,14 +8305,9 @@ class TLMigrateInstance(Tasklet):
     # check if failover must be forced instead of migration
     if (not self.cleanup and not self.failover and
         i_be[constants.BE_ALWAYS_FAILOVER]):
-      if self.fallback:
-        self.lu.LogInfo("Instance configured to always failover; fallback"
-                        " to failover")
-        self.failover = True
-      else:
-        raise errors.OpPrereqError("This instance has been configured to"
-                                   " always failover, please allow failover",
-                                   errors.ECODE_STATE)
+      self.lu.LogInfo("Instance configured to always failover; fallback"
+                      " to failover")
+      self.failover = True
 
     # check bridge existance
     _CheckInstanceBridgesExist(self.lu, instance, node=target_node)
@@ -11152,11 +11147,15 @@ class TLReplaceDisks(Tasklet):
           "Should not own any node group lock at this point"
 
     if not self.disks:
-      feedback_fn("No disks need replacement")
+      feedback_fn("No disks need replacement for instance '%s'" %
+                  self.instance.name)
       return
 
-    feedback_fn("Replacing disk(s) %s for %s" %
+    feedback_fn("Replacing disk(s) %s for instance '%s'" %
                 (utils.CommaJoin(self.disks), self.instance.name))
+    feedback_fn("Current primary node: %s", self.instance.primary_node)
+    feedback_fn("Current seconary node: %s",
+                utils.CommaJoin(self.instance.secondary_nodes))
 
     activate_disks = (self.instance.admin_state != constants.ADMINST_UP)
 

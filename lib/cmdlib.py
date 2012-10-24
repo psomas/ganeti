@@ -15568,6 +15568,7 @@ class LUNetworkAdd(LogicalUnit):
 
   def ExpandNames(self):
     self.network_uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
+    self.needed_locks = {}
     if self.op.conflicts_check:
       self.needed_locks = {
         locking.LEVEL_NODE: locking.ALL_SET,

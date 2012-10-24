@@ -69,6 +69,7 @@ def AddNetwork(opts, args):
                             mac_prefix=opts.mac_prefix,
                             network_type=opts.network_type,
                             add_reserved_ips=_HandleReservedIPs(opts.add_reserved_ips),
+                            conflicts_check=opts.conflicts_check,
                             tags=tags)
   SubmitOpCode(op, opts=opts)
 

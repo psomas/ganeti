@@ -1678,6 +1678,17 @@ def _GetDefaultIAllocator(cfg, iallocator):
   return iallocator
 
 
+def _InstanceRunning(lu, instance):
+  """Return True if instance is running else False."""
+
+  remote_info = lu.rpc.call_instance_info(instance.primary_node,
+                                          instance.name,
+                                          instance.hypervisor)
+  remote_info.Raise("Error checking node %s" % instance.primary_node)
+  instance_running = bool(remote_info.payload)
+  return instance_running
+
+
 class LUClusterPostInit(LogicalUnit):
   """Logical unit for running hooks after cluster initialization.
 
@@ -8726,7 +8737,7 @@ def _GetPCIInfo(lu, dev_type):
         return idx, pci
     # case of InstanceSetParams()
     elif lu.instance.hotplug_info is not None:
-      idx, pci = lu.cfg.GetPCIInfo(lu.instance.name, dev_type)
+      idx, pci = lu.cfg.GetPCIInfo(lu.instance, dev_type)
       lu.LogInfo("Choosing pci slot %d" % pci)
       return idx, pci
 
@@ -12819,7 +12830,7 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Failed to create volume %s (%s) on node '%s': %s",
                         disk.iv_name, disk, node, err)
 
-    if self.op.hotplug and disk.pci:
+    if self.op.hotplug and disk.pci and _InstanceRunning(self, self.instance):
       self.LogInfo("Trying to hotplug device.")
       _, device_info = _AssembleInstanceDisks(self, self.instance,
                                                     [disk], check=False)
@@ -12854,11 +12865,12 @@ class LUInstanceSetParams(LogicalUnit):
                                  " without removing it with hotplug",
                                  errors.ECODE_INVAL)
     if self.op.hotplug and root.pci:
-      self.LogInfo("Trying to hotplug device.")
-      self.rpc.call_hot_del_disk(self.instance.primary_node,
-                                 self.instance, root, idx)
-      _ShutdownInstanceDisks(self, self.instance, [root])
-      self.cfg.UpdatePCIInfo(self.instance.name, root.pci)
+      if _InstanceRunning(self, self.instance):
+        self.LogInfo("Trying to hotplug device.")
+        self.rpc.call_hot_del_disk(self.instance.primary_node,
+                                   self.instance, root, idx)
+        _ShutdownInstanceDisks(self, self.instance, [root])
+      self.cfg.UpdatePCIInfo(self.instance, root.pci)
 
     (anno_disk,) = _AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
@@ -12887,10 +12899,8 @@ class LUInstanceSetParams(LogicalUnit):
     #      handle errors
     #      return changes
     if self.op.hotplug:
-      nic_idx, pci = _GetPCIInfo(self, 'nics')
-      if pci is not None:
-        nic.idx = nic_idx
-        nic.pci = pci
+      nic.idx, nic.pci = _GetPCIInfo(self, 'nics')
+      if nic.pci is not None and _InstanceRunning(self, self.instance):
         self.rpc.call_hot_add_nic(self.instance.primary_node,
                                   self.instance, nic, idx)
     desc =  [
@@ -12920,7 +12930,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     #TODO: log warning in case hotplug is not possible
     #      handle errors
-    if self.op.hotplug and nic.pci:
+    if self.op.hotplug and nic.pci and _InstanceRunning(self, self.instance):
       self.LogInfo("Trying to hotplug device.")
       self.rpc.call_hot_del_nic(self.instance.primary_node,
                                 self.instance, nic, idx)
@@ -12936,10 +12946,11 @@ class LUInstanceSetParams(LogicalUnit):
     #TODO: log warning in case hotplug is not possible
     #      handle errors
     if self.op.hotplug and nic.pci:
-      self.LogInfo("Trying to hotplug device.")
-      self.rpc.call_hot_del_nic(self.instance.primary_node,
-                                self.instance, nic, idx)
-      self.cfg.UpdatePCIInfo(self.instance.name, nic.pci)
+      if _InstanceRunning(self, self.instance):
+        self.LogInfo("Trying to hotplug device.")
+        self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                  self.instance, nic, idx)
+      self.cfg.UpdatePCIInfo(self.instance, nic.pci)
 
 
   def Exec(self, feedback_fn):

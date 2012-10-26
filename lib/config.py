@@ -402,12 +402,11 @@ class ConfigWriter:
     if net_uuid:
       return self._UnlockedReserveIp(net_uuid, address, ec_id)
 
-  @locking.ssynchronized(_config_lock, shared=1)
-  def GetPCIInfo(self, instance_name, dev_type):
+  @locking.ssynchronized(_config_lock)
+  def GetPCIInfo(self, instance, dev_type):
 
-    instance = self._UnlockedGetInstanceInfo(instance_name)
     if not instance.hotplug_info:
-      return None, None 
+      return None, None
     idx = getattr(instance.hotplug_info, dev_type)
     setattr(instance.hotplug_info, dev_type, idx+1)
     pci = instance.hotplug_info.pci_pool.pop()
@@ -415,11 +414,12 @@ class ConfigWriter:
 
     return idx, pci
 
-  @locking.ssynchronized(_config_lock, shared=1)
-  def UpdatePCIInfo(self, instance_name, pci_slot):
+  @locking.ssynchronized(_config_lock)
+  def UpdatePCIInfo(self, instance, pci_slot):
 
-    instance = self._UnlockedGetInstanceInfo(instance_name)
     if instance.hotplug_info:
+      logging.info("Releasing PCI slot %d for instance %s",
+                    pci_slot, instance.name)
       instance.hotplug_info.pci_pool.append(pci_slot)
       self._WriteConfig()
 

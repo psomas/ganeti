@@ -169,12 +169,14 @@ class AddressPool(object):
     return address
 
   def GenerateFree(self):
-    """A generator for free addresses."""
-    def _iter_free():
-      for idx in self.all_reservations.search("0", 64):
-        yield str(self.network[idx])
+    """Returns the first free address of the network if any or
+       raises an error if it is full.
 
-    return _iter_free().next
+    """
+    if self.IsFull():
+      raise errors.AddressPoolError("%s is full" % self.network)
+    idx = self.all_reservations.search("0", 1)
+    return str(self.network[idx])
 
   def GetExternalReservations(self):
     """Returns a list of all externally reserved addresses"""

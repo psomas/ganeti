@@ -335,9 +335,9 @@ class ConfigWriter:
     """
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
-    if action == 'reserve':
+    if action == constants.RESERVE_ACTION:
       pool.Reserve(address)
-    elif action == 'release':
+    elif action == constants.RELEASE_ACTION:
       pool.Release(address)
 
   def _UnlockedReleaseIp(self, net_uuid, address, ec_id):
@@ -347,9 +347,8 @@ class ConfigWriter:
     as reserved.
 
     """
-    nobj = self._UnlockedGetNetwork(net_uuid)
-    pool = network.AddressPool(nobj)
-    self._temporary_ips.Reserve(ec_id, ('release', address, net_uuid))
+    self._temporary_ips.Reserve(ec_id,
+                                (constants.RELEASE_ACTION, address, net_uuid))
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReleaseIp(self, network, address, ec_id):
@@ -377,7 +376,7 @@ class ConfigWriter:
         ip = gen_free()
       except StopIteration:
         raise errors.ReservationError("Cannot generate IP. Network is full")
-      return ("reserve", ip, net_uuid)
+      return (constants.RESERVE_ACTION, ip, net_uuid)
 
     _ ,address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
     return address
@@ -395,7 +394,9 @@ class ConfigWriter:
     if isreserved:
       raise errors.ReservationError("IP address already in use")
 
-    return self._temporary_ips.Reserve(ec_id, ('reserve', address, net_uuid))
+    return self._temporary_ips.Reserve(ec_id,
+                                       (constants.RESERVE_ACTION,
+                                        address, net_uuid))
 
 
   @locking.ssynchronized(_config_lock, shared=1)
@@ -1449,7 +1450,7 @@ class ConfigWriter:
         net_uuid = self._UnlockedLookupNetwork(nic.network)
         if net_uuid:
           # Return all IP addresses to the respective address pools
-          self._UnlockedCommitIp('release', net_uuid, nic.ip)
+          self._UnlockedCommitIp(constants.RELEASE_ACTION, net_uuid, nic.ip)
 
 
     del self._config_data.instances[instance_name]

@@ -181,6 +181,14 @@ def TNone(val):
   return val is None
 
 
+@WithDesc("StringNone")
+def TStringNone(val):
+  """Checks if the given value is 'none'.
+
+  """
+  return val == 'none'
+
+
 @WithDesc("Boolean")
 def TBool(val):
   """Checks if the given value is a boolean.

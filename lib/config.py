@@ -39,7 +39,6 @@ import random
 import logging
 import time
 import itertools
-from functools import wraps
 
 from ganeti import errors
 from ganeti import locking
@@ -219,31 +218,6 @@ class ConfigWriter:
     """
     return os.path.exists(constants.CLUSTER_CONF_FILE)
 
-  def _GenerateMACPrefix(self, net=None):
-    def _get_mac_prefix(view_func):
-      def _decorator(*args, **kwargs):
-        prefix = self._config_data.cluster.mac_prefix
-        if net:
-          net_uuid = self._UnlockedLookupNetwork(net)
-          if net_uuid:
-            nobj = self._UnlockedGetNetwork(net_uuid)
-            if nobj.mac_prefix:
-              prefix = nobj.mac_prefix
-        suffix = view_func(*args, **kwargs)
-        return prefix+':'+suffix
-      return wraps(view_func)(_decorator)
-    return _get_mac_prefix
-
-  def _GenerateMACSuffix(self):
-    """Generate one mac address
-
-    """
-    byte1 = random.randrange(0, 256)
-    byte2 = random.randrange(0, 256)
-    byte3 = random.randrange(0, 256)
-    suffix = "%02x:%02x:%02x" % (byte1, byte2, byte3)
-    return suffix
-
   @locking.ssynchronized(_config_lock, shared=1)
   def GetNdParams(self, node):
     """Get the node params populated with cluster defaults.
@@ -290,6 +264,36 @@ class ConfigWriter:
     """
     return self._config_data.cluster.SimpleFillDP(group.diskparams)
 
+  def _UnlockedGetNetworkMACPrefix(self, net):
+    """Return the network mac prefix if it exists or the cluster level default.
+
+    """
+    prefix = None
+    if net:
+      net_uuid = self._UnlockedLookupNetwork(net)
+      if net_uuid:
+        nobj = self._UnlockedGetNetwork(net_uuid)
+        if nobj.mac_prefix:
+          prefix = nobj.mac_prefix
+
+    return prefix
+
+  def _GenerateOneMAC(self, prefix=None):
+    """Return a function that randomly generates a MAC suffic
+       and appends it to the given prefix. If prefix is not given get
+       the cluster level default.
+
+    """
+    if not prefix:
+      prefix = self._config_data.cluster.mac_prefix
+    def GenMac():
+      byte1 = random.randrange(0, 256)
+      byte2 = random.randrange(0, 256)
+      byte3 = random.randrange(0, 256)
+      mac = "%s:%02x:%02x:%02x" % (prefix, byte1, byte2, byte3)
+      return mac
+    return GenMac
+
   @locking.ssynchronized(_config_lock, shared=1)
   def GenerateMAC(self, net, ec_id):
     """Generate a MAC for an instance.
@@ -298,7 +302,8 @@ class ConfigWriter:
 
     """
     existing = self._AllMACs()
-    gen_mac = self._GenerateMACPrefix(net)(self._GenerateMACSuffix)
+    prefix = self._UnlockedGetNetworkMACPrefix(net)
+    gen_mac = self._GenerateOneMAC(prefix)
     return self._temporary_ids.Generate(existing, gen_mac, ec_id)
 
   @locking.ssynchronized(_config_lock, shared=1)
@@ -330,9 +335,9 @@ class ConfigWriter:
     """
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
-    if action == 'reserve':
+    if action == constants.RESERVE_ACTION:
       pool.Reserve(address)
-    elif action == 'release':
+    elif action == constants.RELEASE_ACTION:
       pool.Release(address)
 
   def _UnlockedReleaseIp(self, net_uuid, address, ec_id):
@@ -342,9 +347,8 @@ class ConfigWriter:
     as reserved.
 
     """
-    nobj = self._UnlockedGetNetwork(net_uuid)
-    pool = network.AddressPool(nobj)
-    self._temporary_ips.Reserve(ec_id, ('release', address, net_uuid))
+    self._temporary_ips.Reserve(ec_id,
+                                (constants.RELEASE_ACTION, address, net_uuid))
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReleaseIp(self, network, address, ec_id):
@@ -365,14 +369,13 @@ class ConfigWriter:
     net_uuid = self._UnlockedLookupNetwork(net)
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
-    gen_free = pool.GenerateFree()
 
     def gen_one():
       try:
-        ip = gen_free()
-      except StopIteration:
+        ip = pool.GenerateFree()
+      except errors.AddressPoolError:
         raise errors.ReservationError("Cannot generate IP. Network is full")
-      return ("reserve", ip, net_uuid)
+      return (constants.RESERVE_ACTION, ip, net_uuid)
 
     _ ,address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
     return address
@@ -390,7 +393,9 @@ class ConfigWriter:
     if isreserved:
       raise errors.ReservationError("IP address already in use")
 
-    return self._temporary_ips.Reserve(ec_id, ('reserve', address, net_uuid))
+    return self._temporary_ips.Reserve(ec_id,
+                                       (constants.RESERVE_ACTION,
+                                        address, net_uuid))
 
 
   @locking.ssynchronized(_config_lock, shared=1)
@@ -1465,7 +1470,7 @@ class ConfigWriter:
         net_uuid = self._UnlockedLookupNetwork(nic.network)
         if net_uuid:
           # Return all IP addresses to the respective address pools
-          self._UnlockedCommitIp('release', net_uuid, nic.ip)
+          self._UnlockedCommitIp(constants.RELEASE_ACTION, net_uuid, nic.ip)
 
 
     del self._config_data.instances[instance_name]

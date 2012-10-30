@@ -357,45 +357,41 @@ def _CheckCIDRNetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  if value != 'none':
-    try:
-      ipaddr.IPv4Network(value)
-    except ipaddr.AddressValueError:
-      return False
-  return True
+  try:
+    ipaddr.IPv4Network(value)
+    return True
+  except ipaddr.AddressValueError:
+    return False
 
 def _CheckCIDRAddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  if value != 'none':
-    try:
-      ipaddr.IPv4Address(value)
-    except ipaddr.AddressValueError:
-      return False
-  return True
+  try:
+    ipaddr.IPv4Address(value)
+    return True
+  except ipaddr.AddressValueError:
+    return False
 
 def _CheckCIDR6AddrNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  if value != 'none':
-    try:
-      ipaddr.IPv6Address(value)
-    except ipaddr.AddressValueError:
-      return False
-  return True
+  try:
+    ipaddr.IPv6Address(value)
+    return True
+  except ipaddr.AddressValueError:
+    return False
 
 def _CheckCIDR6NetNotation(value):
   """Ensure a given cidr notation type is valid.
 
   """
-  if value != 'none':
-    try:
-      ipaddr.IPv6Network(value)
-    except ipaddr.AddressValueError:
-      return False
-  return True
+  try:
+    ipaddr.IPv6Network(value)
+    return True
+  except ipaddr.AddressValueError:
+    return False
 
 class _AutoOpParamSlots(type):
   """Meta class for opcode definitions.
@@ -2100,14 +2096,16 @@ class OpNetworkSetParams(OpCode):
   OP_DSC_FIELD = "network_name"
   OP_PARAMS = [
     _PNetworkName,
-    _PNetworkType,
-    ("gateway", None, ht.TOr(ht.TNone, _CheckCIDRAddrNotation),
+    ("network_type", None, ht.TOr(ht.TNone, ht.TStringNone,_CheckNetworkType),
+     "Network type")
+    ("gateway", None, ht.TOr(ht.TNone, ht.TStringNone, _CheckCIDRAddrNotation),
      "IPv4 Gateway"),
-    ("network6", None, ht.TOr(ht.TNone, _CheckCIDR6NetNotation),
+    ("network6", None, ht.TOr(ht.TNone, ht.TStringNone, _CheckCIDR6NetNotation),
      "IPv6 Subnet"),
-    ("gateway6", None, ht.TOr(ht.TNone, _CheckCIDR6AddrNotation),
+    ("gateway6", None, ht.TOr(ht.TNone, ht.TStringNone,
+                              _CheckCIDR6AddrNotation),
      "IPv6 Gateway"),
-    ("mac_prefix", None, ht.TMaybeString,
+    ("mac_prefix", None, ht.TOr(ht.TMaybeString, ht.TStringNone),
      "Mac prefix that overrides cluster one"),
     ("add_reserved_ips", None,
      ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)),

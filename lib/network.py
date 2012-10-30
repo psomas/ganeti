@@ -38,6 +38,8 @@ class AddressPool(object):
   L{objects.Network} objects.
 
   """
+  FREE = bitarray('0')
+  RESERVED = bitarray('1')
   def __init__(self, network):
     """Initialize a new IPv4 address pool from an objects.Network object
 
@@ -63,14 +65,14 @@ class AddressPool(object):
 
     if self.net.reservations:
       self.reservations = bitarray()
-      self.reservations.fromstring(b64decode(self.net.reservations))
+      self.reservations.frombytes(b64decode(self.net.reservations))
     else:
       self.reservations = bitarray(self.network.numhosts)
       self.reservations.setall(False)
 
     if self.net.ext_reservations:
       self.ext_reservations = bitarray()
-      self.ext_reservations.fromstring(b64decode(self.net.ext_reservations))
+      self.ext_reservations.frombytes(b64decode(self.net.ext_reservations))
     else:
       self.ext_reservations = bitarray(self.network.numhosts)
       self.ext_reservations.setall(False)
@@ -97,8 +99,8 @@ class AddressPool(object):
 
   def _Update(self):
     """Write address pools back to the network object"""
-    self.net.ext_reservations = b64encode(self.ext_reservations.tostring())
-    self.net.reservations = b64encode(self.reservations.tostring())
+    self.net.ext_reservations = b64encode(self.ext_reservations.tobytes())
+    self.net.reservations = b64encode(self.reservations.tobytes())
 
   def _Mark(self, address, value=True, external=False):
     idx = self._GetAddrIndex(address)
@@ -176,14 +178,14 @@ class AddressPool(object):
   def GenerateFree(self):
     """A generator for free addresses."""
     def _iter_free():
-      for idx in self.all_reservations.search("0", 64):
+      for idx in self.all_reservations.search(self.FREE, 64):
         yield str(self.network[idx])
 
     return _iter_free().next
 
   def GetExternalReservations(self):
     """Returns a list of all externally reserved addresses"""
-    idxs = self.ext_reservations.search("1")
+    idxs = self.ext_reservations.search(self.RESERVED)
     return [str(self.network[idx]) for idx in idxs]
 
   @classmethod

@@ -182,7 +182,7 @@ class AddressPool(object):
     """
     if self.IsFull():
       raise errors.AddressPoolError("%s is full" % self.network)
-    idx = self.all_reservations.search(self.FREE, 1)
+    [idx] = self.all_reservations.search(self.FREE, 1)
     return str(self.network[idx])
 
   def GetExternalReservations(self):

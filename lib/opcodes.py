@@ -2097,7 +2097,7 @@ class OpNetworkSetParams(OpCode):
   OP_PARAMS = [
     _PNetworkName,
     ("network_type", None, ht.TOr(ht.TNone, ht.TStringNone,_CheckNetworkType),
-     "Network type")
+     "Network type"),
     ("gateway", None, ht.TOr(ht.TNone, ht.TStringNone, _CheckCIDRAddrNotation),
      "IPv4 Gateway"),
     ("network6", None, ht.TOr(ht.TNone, ht.TStringNone, _CheckCIDR6NetNotation),

@@ -233,6 +233,7 @@ pkgpython_PYTHON = \
 	lib/ssh.py \
 	lib/storage.py \
 	lib/uidpool.py \
+	lib/network.py \
 	lib/workerpool.py
 
 client_PYTHON = \
@@ -244,7 +245,9 @@ client_PYTHON = \
 	lib/client/gnt_instance.py \
 	lib/client/gnt_job.py \
 	lib/client/gnt_node.py \
-	lib/client/gnt_os.py
+	lib/client/gnt_network.py \
+	lib/client/gnt_os.py \
+	lib/client/gnt_storage.py
 
 hypervisor_PYTHON = \
 	lib/hypervisor/__init__.py \
@@ -323,6 +326,7 @@ docrst = \
 	doc/design-htools-2.3.rst \
 	doc/design-2.4.rst \
 	doc/design-2.5.rst \
+	doc/design-2.6.rst \
 	doc/design-draft.rst \
 	doc/design-oob.rst \
 	doc/design-cpu-pinning.rst \
@@ -482,8 +486,10 @@ gnt_scripts = \
 	scripts/gnt-group \
 	scripts/gnt-instance \
 	scripts/gnt-job \
+	scripts/gnt-network \
 	scripts/gnt-node \
-	scripts/gnt-os
+	scripts/gnt-os \
+	scripts/gnt-storage
 
 PYTHON_BOOTSTRAP_SBIN = \
 	daemons/ganeti-masterd \
@@ -685,16 +691,19 @@ man_MANS = \
 	man/ganeti-masterd.8 \
 	man/ganeti-noded.8 \
 	man/ganeti-os-interface.7 \
+	man/ganeti-extstorage-interface.7 \
 	man/ganeti-rapi.8 \
 	man/ganeti-watcher.8 \
 	man/gnt-backup.8 \
 	man/gnt-cluster.8 \
 	man/gnt-debug.8 \
 	man/gnt-group.8 \
+	man/gnt-network.8 \
 	man/gnt-instance.8 \
 	man/gnt-job.8 \
 	man/gnt-node.8 \
 	man/gnt-os.8 \
+	man/gnt-storage.8 \
 	man/hail.1 \
 	man/hbal.1 \
 	man/hcheck.1 \
@@ -1112,6 +1121,7 @@ lib/_autoconf.py: Makefile | lib/.dir
 	  echo "SSH_CONFIG_DIR = '$(SSH_CONFIG_DIR)'"; \
 	  echo "EXPORT_DIR = '$(EXPORT_DIR)'"; \
 	  echo "OS_SEARCH_PATH = [$(OS_SEARCH_PATH)]"; \
+	  echo "ES_SEARCH_PATH = [$(ES_SEARCH_PATH)]"; \
 	  echo "XEN_BOOTLOADER = '$(XEN_BOOTLOADER)'"; \
 	  echo "XEN_KERNEL = '$(XEN_KERNEL)'"; \
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \
@@ -1318,9 +1328,17 @@ hs-check: htools/test htools/hpc-htools $(HS_BUILT_TEST_HELPERS)
 	HBINARY="./htools/hpc-htools" ./htools/offline-test.sh
 
 # E111: indentation is not a multiple of four
+# E121: continuation line indentation is not a multiple of four
+#       (since our indent level is not 4)
+# E125: continuation line does not distinguish itself from next logical line
+#       (since our indent level is not 4)
+# E127: continuation line over-indented for visual indent
+#       (since our indent level is not 4)
+# E122,E123,E126,E128,E262,E272,E502,E711,: added temporarily to not
+#       modify stable code; do NOT merge these into master!
 # E261: at least two spaces before inline comment
 # E501: line too long (80 characters)
-PEP8_IGNORE = E111,E261,E501
+PEP8_IGNORE = E111,E121,E122,E123,E125,E126,E127,E128,E261,E262,E272,E501,E502,E711
 
 # For excluding pep8 expects filenames only, not whole paths
 PEP8_EXCLUDE = $(subst $(space),$(comma),$(strip $(notdir $(BUILT_PYTHON_SOURCES))))

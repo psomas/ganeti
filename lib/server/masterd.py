@@ -372,6 +372,15 @@ class ClientOps:
       op = opcodes.OpGroupQuery(names=names, output_fields=fields)
       return self._Query(op)
 
+    elif method == luxi.REQ_QUERY_NETWORKS:
+      (names, fields, use_locking) = args
+      logging.info("Received network query request for %s", names)
+      if use_locking:
+        raise errors.OpPrereqError("Sync queries are not allowed",
+                                   errors.ECODE_INVAL)
+      op = opcodes.OpNetworkQuery(names=names, output_fields=fields)
+      return self._Query(op)
+
     elif method == luxi.REQ_QUERY_EXPORTS:
       (nodes, use_locking) = args
       if use_locking:
@@ -462,7 +471,8 @@ class GanetiContext(object):
     self.glm = locking.GanetiLockManager(
                 self.cfg.GetNodeList(),
                 self.cfg.GetNodeGroupList(),
-                self.cfg.GetInstanceList())
+                self.cfg.GetInstanceList(),
+                self.cfg.GetNetworkList())
 
     self.cfg.SetContext(self)
 

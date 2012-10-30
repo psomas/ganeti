@@ -35,6 +35,7 @@ opcodes.
 
 import logging
 import re
+import ipaddr
 
 from ganeti import constants
 from ganeti import errors
@@ -162,6 +163,9 @@ _PIgnoreIpolicy = ("ignore_ipolicy", False, ht.TBool,
 _PAllowRuntimeChgs = ("allow_runtime_changes", True, ht.TBool,
                       "Allow runtime changes (eg. memory ballooning)")
 
+#: a required network name
+_PNetworkName = ("network_name", ht.NoDefault, ht.TNonEmptyString,
+                 "Set network name")
 
 #: OP_ID conversion regular expression
 _OPID_RE = re.compile("([a-z])([A-Z])")
@@ -195,6 +199,12 @@ _TSetParamsResult = \
 _TDiskParams = \
   ht.Comment("Disk parameters")(ht.TDictOf(ht.TElemOf(constants.IDISK_PARAMS),
                                            ht.TOr(ht.TNonEmptyString, ht.TInt)))
+
+#: Same as _TDiskParams but with NonEmptyString in the place of IDISK_PARAMS
+_TExtDiskParams = \
+  ht.Comment("ExtStorage Disk parameters")(ht.TDictOf(ht.TNonEmptyString,
+                                                      ht.TOr(ht.TNonEmptyString,
+                                                             ht.TInt)))
 
 _TQueryRow = \
   ht.TListOf(ht.TAnd(ht.TIsLength(2),
@@ -337,6 +347,55 @@ def _CheckStorageType(storage_type):
 _PStorageType = ("storage_type", ht.NoDefault, _CheckStorageType,
                  "Storage type")
 
+_CheckNetworkType = ht.TElemOf(constants.NETWORK_VALID_TYPES)
+
+#: Network type parameter
+_PNetworkType = ("network_type", None, ht.TOr(ht.TNone, _CheckNetworkType),
+                 "Network type")
+
+def _CheckCIDRNetNotation(value):
+  """Ensure a given cidr notation type is valid.
+
+  """
+  if value != 'none':
+    try:
+      ipaddr.IPv4Network(value)
+    except ipaddr.AddressValueError:
+      return False
+  return True
+
+def _CheckCIDRAddrNotation(value):
+  """Ensure a given cidr notation type is valid.
+
+  """
+  if value != 'none':
+    try:
+      ipaddr.IPv4Address(value)
+    except ipaddr.AddressValueError:
+      return False
+  return True
+
+def _CheckCIDR6AddrNotation(value):
+  """Ensure a given cidr notation type is valid.
+
+  """
+  if value != 'none':
+    try:
+      ipaddr.IPv6Address(value)
+    except ipaddr.AddressValueError:
+      return False
+  return True
+
+def _CheckCIDR6NetNotation(value):
+  """Ensure a given cidr notation type is valid.
+
+  """
+  if value != 'none':
+    try:
+      ipaddr.IPv6Network(value)
+    except ipaddr.AddressValueError:
+      return False
+  return True
 
 class _AutoOpParamSlots(type):
   """Meta class for opcode definitions.
@@ -1195,6 +1254,7 @@ class OpInstanceCreate(OpCode):
     ("identify_defaults", False, ht.TBool,
      "Reset instance parameters to default if equal"),
     ("ip_check", True, ht.TBool, _PIpCheckDoc),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ("mode", ht.NoDefault, ht.TElemOf(constants.INSTANCE_CREATE_MODES),
      "Instance creation mode"),
     ("nics", ht.NoDefault, ht.TListOf(_TestNicDef),
@@ -1222,8 +1282,59 @@ class OpInstanceCreate(OpCode):
     ("src_path", None, ht.TMaybeString, "Source directory for import"),
     ("start", True, ht.TBool, "Whether to start instance after creation"),
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Instance tags"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
     ]
   OP_RESULT = ht.Comment("instance nodes")(ht.TListOf(ht.TNonEmptyString))
+
+  def Validate(self, set_defaults):
+    """Validate opcode parameters, optionally setting default values.
+
+    @type set_defaults: bool
+    @param set_defaults: Whether to set default values
+    @raise errors.OpPrereqError: When a parameter value doesn't match
+                                 requirements
+
+    """
+    # Check if the template is DT_EXT
+    is_ext = False
+    for (attr_name, _, _, _) in self.GetAllParams():
+      if hasattr(self, attr_name):
+        if attr_name == "disk_template" and \
+           getattr(self, attr_name) == constants.DT_EXT:
+          is_ext = True
+
+    for (attr_name, default, test, _) in self.GetAllParams():
+      assert test == ht.NoType or callable(test)
+
+      if not hasattr(self, attr_name):
+        if default == ht.NoDefault:
+          raise errors.OpPrereqError("Required parameter '%s.%s' missing" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
+        elif set_defaults:
+          if callable(default):
+            dval = default()
+          else:
+            dval = default
+          setattr(self, attr_name, dval)
+
+      # If the template is DT_EXT and attr_name = disks
+      # set a new test method that allows passing of unknown parameters
+      if is_ext and attr_name == "disks":
+        test = ht.TListOf(_TExtDiskParams)
+
+      if test == ht.NoType:
+        # no tests here
+        continue
+
+      if set_defaults or hasattr(self, attr_name):
+        attr_val = getattr(self, attr_name)
+        if not test(attr_val):
+          logging.error("OpCode %s, parameter %s, has invalid type %s/value %s",
+                        self.OP_ID, attr_name, type(attr_val), attr_val)
+          raise errors.OpPrereqError("Parameter '%s.%s' fails validation" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
 
 
 class OpInstanceReinstall(OpCode):
@@ -1492,6 +1603,7 @@ class OpInstanceSetParams(OpCode):
   """
   TestNicModifications = _TestInstSetParamsModList(_TestNicDef)
   TestDiskModifications = _TestInstSetParamsModList(_TDiskParams)
+  TestExtDiskModifications = _TestInstSetParamsModList(_TExtDiskParams)
 
   OP_DSC_FIELD = "instance_name"
   OP_PARAMS = [
@@ -1525,8 +1637,61 @@ class OpInstanceSetParams(OpCode):
     ("wait_for_sync", True, ht.TBool,
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
+    ("allow_arbit_params", None, ht.TMaybeBool,
+     "Whether to allow the passing of arbitrary parameters to --disk(s)"),
     ]
   OP_RESULT = _TSetParamsResult
+
+  def Validate(self, set_defaults):
+    """Validate opcode parameters, optionally setting default values.
+
+    @type set_defaults: bool
+    @param set_defaults: Whether to set default values
+    @raise errors.OpPrereqError: When a parameter value doesn't match
+                                 requirements
+
+    """
+    # Check if the template is DT_EXT
+    allow_arbitrary_params = False
+    for (attr_name, _, _, _) in self.GetAllParams():
+      if hasattr(self, attr_name):
+        if attr_name == "allow_arbit_params" and \
+          getattr(self, attr_name) == True:
+          allow_arbitrary_params = True
+
+    for (attr_name, default, test, _) in self.GetAllParams():
+      assert test == ht.NoType or callable(test)
+
+      if not hasattr(self, attr_name):
+        if default == ht.NoDefault:
+          raise errors.OpPrereqError("Required parameter '%s.%s' missing" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
+        elif set_defaults:
+          if callable(default):
+            dval = default()
+          else:
+            dval = default
+          setattr(self, attr_name, dval)
+
+      # If `allow_arbit_params' is set, use the ExtStorage's test method for disks
+      if allow_arbitrary_params and attr_name == "disks":
+        test = OpInstanceSetParams.TestExtDiskModifications
+
+      if test == ht.NoType:
+        # no tests here
+        continue
+
+      if set_defaults or hasattr(self, attr_name):
+        attr_val = getattr(self, attr_name)
+        if not test(attr_val):
+          logging.error("OpCode %s, parameter %s, has invalid type %s/value %s",
+                        self.OP_ID, attr_name, type(attr_val), attr_val)
+          raise errors.OpPrereqError("Parameter '%s.%s' fails validation" %
+                                     (self.OP_ID, attr_name),
+                                     errors.ECODE_INVAL)
 
 
 class OpInstanceGrowDisk(OpCode):
@@ -1652,6 +1817,16 @@ class OpOsDiagnose(OpCode):
      "Which operating systems to diagnose"),
     ]
   OP_RESULT = _TOldQueryResult
+
+
+# ExtStorage opcodes
+class OpExtStorageDiagnose(OpCode):
+  """Compute the list of external storage providers."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString),
+     "Which ExtStorage Provider to diagnose"),
+    ]
 
 
 # Exports opcodes
@@ -1853,6 +2028,7 @@ class OpTestAllocator(OpCode):
     ("evac_mode", None,
      ht.TOr(ht.TNone, ht.TElemOf(constants.IALLOCATOR_NEVAC_MODES)), None),
     ("target_groups", None, ht.TMaybeListOf(ht.TNonEmptyString), None),
+    ("spindle_use", 1, ht.TPositiveInt, None),
     ]
 
 
@@ -1879,6 +2055,108 @@ class OpTestDummy(OpCode):
     ("submit_jobs", None, ht.NoType, None),
     ]
   WITH_LU = False
+
+
+# Network opcodes
+# Add a new network in the cluster
+class OpNetworkAdd(OpCode):
+  """Add an IP network to the cluster."""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    _PNetworkType,
+    ("network", None, ht.TAnd(ht.TString ,_CheckCIDRNetNotation),
+     "IPv4 Subnet"),
+    ("gateway", None, ht.TOr(ht.TNone, _CheckCIDRAddrNotation),
+     "IPv4 Gateway"),
+    ("network6", None, ht.TOr(ht.TNone, _CheckCIDR6NetNotation),
+     "IPv6 Subnet"),
+    ("gateway6", None, ht.TOr(ht.TNone, _CheckCIDR6AddrNotation),
+     "IPv6 Gateway"),
+    ("mac_prefix", None, ht.TMaybeString,
+     "Mac prefix that overrides cluster one"),
+    ("add_reserved_ips", None,
+     ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)),
+     "Which IPs to reserve"),
+    ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Network tags"),
+    ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ]
+  OP_RESULT = ht.TNone
+
+class OpNetworkRemove(OpCode):
+  """Remove an existing network from the cluster.
+     Must not be connected to any nodegroup.
+
+  """
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    _PForce,
+    ]
+  OP_RESULT = ht.TNone
+
+class OpNetworkSetParams(OpCode):
+  """Modify Network's parameters except for IPv4 subnet"""
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PNetworkName,
+    _PNetworkType,
+    ("gateway", None, ht.TOr(ht.TNone, _CheckCIDRAddrNotation),
+     "IPv4 Gateway"),
+    ("network6", None, ht.TOr(ht.TNone, _CheckCIDR6NetNotation),
+     "IPv6 Subnet"),
+    ("gateway6", None, ht.TOr(ht.TNone, _CheckCIDR6AddrNotation),
+     "IPv6 Gateway"),
+    ("mac_prefix", None, ht.TMaybeString,
+     "Mac prefix that overrides cluster one"),
+    ("add_reserved_ips", None,
+     ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)),
+     "Which external IPs to reserve"),
+    ("remove_reserved_ips", None,
+     ht.TOr(ht.TNone, ht.TListOf(_CheckCIDRAddrNotation)),
+     "Which external IPs to release"),
+    ]
+  OP_RESULT = ht.TNone
+
+class OpNetworkConnect(OpCode):
+  """Connect a Network to a specific Nodegroup with the defined netparams
+     (mode, link). Nics in this Network will inherit those params.
+     Produce errors if a NIC (that its not already assigned to a network)
+     has an IP that is contained in the Network this will produce error unless
+     --no-conflicts-check is passed.
+
+  """
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PGroupName,
+    _PNetworkName,
+    ("network_mode", None, ht.TString, "Connectivity mode"),
+    ("network_link", None, ht.TString, "Connectivity link"),
+    ("conflicts_check", True, ht.TBool, "Whether to check for conflicting IPs"),
+    ]
+  OP_RESULT = ht.TNone
+
+class OpNetworkDisconnect(OpCode):
+  """Disconnect a Network from a Nodegroup. Produce errors if NICs are
+     present in the Network unless --no-conficts-check option is passed.
+
+  """
+  OP_DSC_FIELD = "network_name"
+  OP_PARAMS = [
+    _PGroupName,
+    _PNetworkName,
+    ("conflicts_check", True, ht.TBool, "Whether to check for conflicting IPs"),
+    ]
+  OP_RESULT = ht.TNone
+
+class OpNetworkQuery(OpCode):
+  """Compute the list of networks."""
+  OP_PARAMS = [
+    _POutputFields,
+    ("names", ht.EmptyList, ht.TListOf(ht.TNonEmptyString),
+     "Empty list to query all groups, group names otherwise"),
+    ]
+  OP_RESULT = _TOldQueryResult
 
 
 def _GetOpList():

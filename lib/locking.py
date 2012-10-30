@@ -1465,6 +1465,7 @@ LEVEL_INSTANCE = 1
 LEVEL_NODEGROUP = 2
 LEVEL_NODE = 3
 LEVEL_NODE_RES = 4
+LEVEL_NETWORK = 5
 
 LEVELS = [
   LEVEL_CLUSTER,
@@ -1472,6 +1473,7 @@ LEVELS = [
   LEVEL_NODEGROUP,
   LEVEL_NODE,
   LEVEL_NODE_RES,
+  LEVEL_NETWORK,
   ]
 
 # Lock levels which are modifiable
@@ -1480,6 +1482,7 @@ LEVELS_MOD = frozenset([
   LEVEL_NODE,
   LEVEL_NODEGROUP,
   LEVEL_INSTANCE,
+  LEVEL_NETWORK,
   ])
 
 #: Lock level names (make sure to use singular form)
@@ -1489,6 +1492,7 @@ LEVEL_NAMES = {
   LEVEL_NODEGROUP: "nodegroup",
   LEVEL_NODE: "node",
   LEVEL_NODE_RES: "node-res",
+  LEVEL_NETWORK: "network",
   }
 
 # Constant for the big ganeti lock
@@ -1506,7 +1510,7 @@ class GanetiLockManager:
   """
   _instance = None
 
-  def __init__(self, nodes, nodegroups, instances):
+  def __init__(self, nodes, nodegroups, instances, networks):
     """Constructs a new GanetiLockManager object.
 
     There should be only a GanetiLockManager object at any time, so this
@@ -1531,8 +1535,8 @@ class GanetiLockManager:
       LEVEL_NODE: LockSet(nodes, "node", monitor=self._monitor),
       LEVEL_NODE_RES: LockSet(nodes, "node-res", monitor=self._monitor),
       LEVEL_NODEGROUP: LockSet(nodegroups, "nodegroup", monitor=self._monitor),
-      LEVEL_INSTANCE: LockSet(instances, "instance",
-                              monitor=self._monitor),
+      LEVEL_INSTANCE: LockSet(instances, "instance", monitor=self._monitor),
+      LEVEL_NETWORK: LockSet(networks, "network", monitor=self._monitor),
       }
 
     assert compat.all(ls.name == LEVEL_NAMES[level]

@@ -70,6 +70,10 @@ from ganeti.constants import (QFT_UNKNOWN, QFT_TEXT, QFT_BOOL, QFT_NUMBER,
                               RS_NORMAL, RS_UNKNOWN, RS_NODATA,
                               RS_UNAVAIL, RS_OFFLINE)
 
+(NETQ_CONFIG,
+ NETQ_GROUP,
+ NETQ_STATS,
+ NETQ_INST) = range(300, 304)
 
 # Constants for requesting data from the caller/data provider. Each property
 # collected/computed separately by the data provider should have its own to
@@ -1514,6 +1518,20 @@ def _GetInstNic(index, cb):
   return fn
 
 
+def _GetInstNicNetwork(ctx, _, nic): # pylint: disable=W0613
+  """Get a NIC's Network.
+
+  @type ctx: L{InstanceQueryData}
+  @type nic: L{objects.NIC}
+  @param nic: NIC object
+
+  """
+  if nic.network is None:
+    return _FS_UNAVAIL
+  else:
+    return nic.network
+
+
 def _GetInstNicIp(ctx, _, nic): # pylint: disable=W0613
   """Get a NIC's IP address.
 
@@ -1625,6 +1643,9 @@ def _GetInstanceNetworkFields():
     (_MakeField("nic.bridges", "NIC_bridges", QFT_OTHER,
                 "List containing each network interface's bridge"),
      IQ_CONFIG, 0, _GetInstAllNicBridges),
+    (_MakeField("nic.networks", "NIC_networks", QFT_OTHER,
+                "List containing each interface's network"), IQ_CONFIG, 0,
+     lambda ctx, inst: [nic.network for nic in inst.nics]),
     ]
 
   # NICs by number
@@ -1646,6 +1667,9 @@ def _GetInstanceNetworkFields():
       (_MakeField("nic.bridge/%s" % i, "NicBridge/%s" % i, QFT_TEXT,
                   "Bridge of %s network interface" % numtext),
        IQ_CONFIG, 0, _GetInstNic(i, _GetInstNicBridge)),
+      (_MakeField("nic.network/%s" % i, "NicNetwork/%s" % i, QFT_TEXT,
+                  "Network of %s network interface" % numtext),
+       IQ_CONFIG, 0, _GetInstNic(i, _GetInstNicNetwork)),
       ])
 
   aliases = [
@@ -1655,6 +1679,7 @@ def _GetInstanceNetworkFields():
     ("bridge", "nic.bridge/0"),
     ("nic_mode", "nic.mode/0"),
     ("nic_link", "nic.link/0"),
+    ("nic_network", "nic.network/0"),
     ]
 
   return (fields, aliases)
@@ -2180,6 +2205,36 @@ def _BuildOsFields():
   return _PrepareFieldList(fields, [])
 
 
+class ExtStorageInfo(objects.ConfigObject):
+  __slots__ = [
+    "name",
+    "node_status",
+    "nodegroup_status",
+    "parameters",
+    ]
+
+
+def _BuildExtStorageFields():
+  """Builds list of fields for extstorage provider queries.
+
+  """
+  fields = [
+    (_MakeField("name", "Name", QFT_TEXT, "ExtStorage provider name"),
+     None, 0, _GetItemAttr("name")),
+    (_MakeField("node_status", "NodeStatus", QFT_OTHER,
+                "Status from node"),
+     None, 0, _GetItemAttr("node_status")),
+    (_MakeField("nodegroup_status", "NodegroupStatus", QFT_OTHER,
+                "Overall Nodegroup status"),
+     None, 0, _GetItemAttr("nodegroup_status")),
+    (_MakeField("parameters", "Parameters", QFT_OTHER,
+                "ExtStorage provider parameters"),
+     None, 0, _GetItemAttr("parameters")),
+    ]
+
+  return _PrepareFieldList(fields, [])
+
+
 def _JobUnavailInner(fn, ctx, (job_id, job)): # pylint: disable=W0613
   """Return L{_FS_UNAVAIL} if job is None.
 
@@ -2401,6 +2456,139 @@ def _BuildClusterFields():
     ])
 
 
+class NetworkQueryData:
+  """Data container for network data queries.
+
+  """
+  def __init__(self, networks, network_to_groups,
+               network_to_instances, stats):
+    """Initializes this class.
+
+    @param networks: List of network objects
+    @type network_to_groups: dict; network UUID as key
+    @param network_to_groups: Per-network list of groups
+    @type network_to_instances: dict; network UUID as key
+    @param network_to_instances: Per-network list of instances
+    @type stats: dict; network UUID as key
+    @param stats: Per-network usage statistics
+
+    """
+    self.networks = networks
+    self.network_to_groups = network_to_groups
+    self.network_to_instances = network_to_instances
+    self.stats = stats
+
+  def __iter__(self):
+    """Iterate over all networks.
+
+    """
+    for net in self.networks:
+      if self.stats:
+        self.curstats = self.stats.get(net.uuid, None)
+      else:
+        self.curstats = None
+      yield net
+
+
+_NETWORK_SIMPLE_FIELDS = {
+  "name": ("Network", QFT_TEXT, 0, "The network"),
+  "network": ("Subnet", QFT_TEXT, 0, "The subnet"),
+  "gateway": ("Gateway", QFT_OTHER, 0, "The gateway"),
+  "network6": ("IPv6Subnet", QFT_OTHER, 0, "The ipv6 subnet"),
+  "gateway6": ("IPv6Gateway", QFT_OTHER, 0, "The ipv6 gateway"),
+  "mac_prefix": ("MacPrefix", QFT_OTHER, 0, "The mac prefix"),
+  "network_type": ("NetworkType", QFT_OTHER, 0, "The network type"),
+  "serial_no": ("SerialNo", QFT_NUMBER, 0, _SERIAL_NO_DOC % "Network"),
+  "uuid": ("UUID", QFT_TEXT, 0, "Network UUID"),
+  }
+
+
+_NETWORK_STATS_FIELDS = {
+  "free_count": ("FreeCount", QFT_NUMBER, 0, "How many addresses are free"),
+  "reserved_count": ("ReservedCount", QFT_NUMBER, 0, "How many addresses are reserved"),
+  "map": ("Map", QFT_TEXT, 0, "The actual mapping"),
+  "external_reservations": ("ExternalReservations", QFT_TEXT, 0, "The external reservations"),
+  }
+
+
+def _GetNetworkStatsField(field, kind, ctx, net):
+  """Gets the value of a "stats" field from L{NetworkQueryData}.
+
+  @param field: Field name
+  @param kind: Data kind, one of L{constants.QFT_ALL}
+  @type ctx: L{NetworkQueryData}
+
+  """
+
+  try:
+    value = ctx.curstats[field]
+  except KeyError:
+    return _FS_UNAVAIL
+
+  if kind == QFT_TEXT:
+    return value
+
+  assert kind in (QFT_NUMBER, QFT_UNIT)
+
+  # Try to convert into number
+  try:
+    return int(value)
+  except (ValueError, TypeError):
+    logging.exception("Failed to convert network field '%s' (value %r) to int",
+                      value, field)
+    return _FS_UNAVAIL
+
+
+def _BuildNetworkFields():
+  """Builds list of fields for network queries.
+
+  """
+  fields = [
+    (_MakeField("tags", "Tags", QFT_OTHER, "Tags"), IQ_CONFIG, 0,
+     lambda ctx, inst: list(inst.GetTags())),
+    ]
+
+  # Add simple fields
+  fields.extend([
+    (_MakeField(name, title, kind, doc),
+     NETQ_CONFIG, 0, _GetItemAttr(name))
+     for (name, (title, kind, flags, doc)) in _NETWORK_SIMPLE_FIELDS.items()
+    ])
+
+  def _GetLength(getter):
+    return lambda ctx, network: len(getter(ctx)[network.uuid])
+
+  def _GetSortedList(getter):
+    return lambda ctx, network: utils.NiceSort(getter(ctx)[network.uuid])
+
+  network_to_groups = operator.attrgetter("network_to_groups")
+  network_to_instances = operator.attrgetter("network_to_instances")
+
+  # Add fields for node groups
+  fields.extend([
+    (_MakeField("group_cnt", "NodeGroups", QFT_NUMBER, "Number of nodegroups"),
+     NETQ_GROUP, 0, _GetLength(network_to_groups)),
+	(_MakeField("group_list", "GroupList", QFT_OTHER, "List of nodegroups"),
+     NETQ_GROUP, 0, _GetSortedList(network_to_groups)),
+    ])
+
+  # Add fields for instances
+  fields.extend([
+    (_MakeField("inst_cnt", "Instances", QFT_NUMBER, "Number of instances"),
+     NETQ_INST, 0, _GetLength(network_to_instances)),
+    (_MakeField("inst_list", "InstanceList", QFT_OTHER, "List of instances"),
+     NETQ_INST, 0, _GetSortedList(network_to_instances)),
+    ])
+
+  # Add fields for usage statistics
+  fields.extend([
+    (_MakeField(name, title, kind, doc), NETQ_STATS, 0,
+    compat.partial(_GetNetworkStatsField, name, kind))
+    for (name, (title, kind, flags, doc)) in _NETWORK_STATS_FIELDS.items()
+    ])
+
+  return _PrepareFieldList(fields, [])
+
 #: Fields for cluster information
 CLUSTER_FIELDS = _BuildClusterFields()
 
@@ -2419,11 +2607,17 @@ GROUP_FIELDS = _BuildGroupFields()
 #: Fields available for operating system queries
 OS_FIELDS = _BuildOsFields()
 
+#: Fields available for extstorage provider queries
+EXTSTORAGE_FIELDS = _BuildExtStorageFields()
+
 #: Fields available for job queries
 JOB_FIELDS = _BuildJobFields()
 
 #: Fields available for exports
 EXPORT_FIELDS = _BuildExportFields()
+
+#: Fields available for network queries
+NETWORK_FIELDS = _BuildNetworkFields()
 
 #: All available resources
 ALL_FIELDS = {
@@ -2433,8 +2627,10 @@ ALL_FIELDS = {
   constants.QR_LOCK: LOCK_FIELDS,
   constants.QR_GROUP: GROUP_FIELDS,
   constants.QR_OS: OS_FIELDS,
+  constants.QR_EXTSTORAGE: EXTSTORAGE_FIELDS,
   constants.QR_JOB: JOB_FIELDS,
   constants.QR_EXPORT: EXPORT_FIELDS,
+  constants.QR_NETWORK: NETWORK_FIELDS,
   }
 
 #: All available field lists

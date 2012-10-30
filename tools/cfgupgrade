@@ -94,6 +94,32 @@ def CheckHostname(path):
                   " the master node", ssconf_master_node, hostname)
   return False
 
+def UpgradeNetworks(config_data):
+  networks = config_data.get("networks", None)
+  if not networks:
+    config_data["networks"] = {}
+
+
+def UpgradeGroups(config_data):
+  for group in config_data["nodegroups"].values():
+    networks = group.get("networks", None)
+    if not networks:
+      group["networks"] = {}
+
+def UpgradeInstances(config_data):
+  for i in config_data["instances"].values():
+    print("Updating Instance %s" % i["name"])
+    try:
+      del i["hotplugs"]
+    except:
+      pass
+    for n in i["nics"]:
+      print("Updating Instance nic with idx %d" % n["idx"])
+      try:
+        del n["idx"]
+      except:
+        pass
+
 
 def main():
   """Main program.
@@ -236,6 +262,10 @@ def main():
     logging.info("Removing watcher state file %s", options.WATCHER_STATEFILE)
     if not options.dry_run:
       utils.RemoveFile(options.WATCHER_STATEFILE)
+
+  UpgradeNetworks(config_data)
+  UpgradeGroups(config_data)
+  UpgradeInstances(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

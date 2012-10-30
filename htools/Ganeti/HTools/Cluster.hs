@@ -483,7 +483,7 @@ allocateOnSingle nl inst new_pdx =
     Instance.instMatchesPolicy inst (Node.iPolicy p)
     new_p <- Node.addPri p inst
     let new_nl = Container.add new_pdx new_p nl
-        new_score = compCV nl
+        new_score = compCV new_nl
     return (new_nl, new_inst, [new_p], new_score)
 
 -- | Tries to allocate an instance on a given pair of nodes.
@@ -898,6 +898,12 @@ nodeEvacInstance nl il mode inst@(Instance.Instance
 
 nodeEvacInstance nl il mode inst@(Instance.Instance
                                   {Instance.diskTemplate = dt@DTRbd})
+                 gdx avail_nodes =
+                   failOnSecondaryChange mode dt >>
+                   evacOneNodeOnly nl il inst gdx avail_nodes
+
+nodeEvacInstance nl il mode inst@(Instance.Instance
+                                  {Instance.diskTemplate = dt@DTExt})
                  gdx avail_nodes =
                    failOnSecondaryChange mode dt >>
                    evacOneNodeOnly nl il inst gdx avail_nodes

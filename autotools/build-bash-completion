@@ -131,6 +131,15 @@ def WritePreamble(sw):
     sw.DecIndent()
   sw.Write("}")
 
+  sw.Write("_ganeti_network() {")
+  sw.IncIndent()
+  try:
+    networks_path = os.path.join(constants.DATA_DIR, "ssconf_networks")
+    sw.Write("cat %s 2>/dev/null || :", utils.ShellQuote(networks_path))
+  finally:
+    sw.DecIndent()
+  sw.Write("}")
+
   # Params: <offset> <options with values> <options without values>
   # Result variable: $first_arg_idx
   sw.Write("_ganeti_find_first_arg() {")
@@ -341,10 +350,14 @@ class CompletionWriter:
           WriteCompReply(sw, "-W \"$(_ganeti_instances)\"", cur=cur)
         elif suggest == cli.OPT_COMPL_ONE_OS:
           WriteCompReply(sw, "-W \"$(_ganeti_os)\"", cur=cur)
+        elif suggest == cli.OPT_COMPL_ONE_EXTSTORAGE:
+          WriteCompReply(sw, "-W \"$(_ganeti_extstorage)\"", cur=cur)
         elif suggest == cli.OPT_COMPL_ONE_IALLOCATOR:
           WriteCompReply(sw, "-W \"$(_ganeti_iallocator)\"", cur=cur)
         elif suggest == cli.OPT_COMPL_ONE_NODEGROUP:
           WriteCompReply(sw, "-W \"$(_ganeti_nodegroup)\"", cur=cur)
+        elif suggest == cli.OPT_COMPL_ONE_NETWORK:
+          WriteCompReply(sw, "-W \"$(_ganeti_network)\"", cur=cur)
         elif suggest == cli.OPT_COMPL_INST_ADD_NODES:
           sw.Write("local tmp= node1= pfx= curvalue=\"${optcur#*:}\"")
 
@@ -442,10 +455,14 @@ class CompletionWriter:
           choices = "$(_ganeti_nodes)"
         elif isinstance(arg, cli.ArgGroup):
           choices = "$(_ganeti_nodegroup)"
+        elif isinstance(arg, cli.ArgNetwork):
+          choices = "$(_ganeti_network)"
         elif isinstance(arg, cli.ArgJobId):
           choices = "$(_ganeti_jobs)"
         elif isinstance(arg, cli.ArgOs):
           choices = "$(_ganeti_os)"
+        elif isinstance(arg, cli.ArgExtStorage):
+          choices = "$(_ganeti_extstorage)"
         elif isinstance(arg, cli.ArgFile):
           choices = ""
           compgenargs.append("-f")
@@ -622,6 +639,11 @@ def main():
   buf = StringIO()
   sw = utils.ShellWriter(buf)
 
+  # Remember original state of extglob and enable it (required for pattern
+  # matching; must be enabled while parsing script)
+  sw.Write("gnt_shopt_extglob=$(shopt -p extglob || :)")
+  sw.Write("shopt -s extglob")
+
   WritePreamble(sw)
 
   # gnt-* scripts
@@ -637,6 +659,10 @@ def main():
   burnin = build.LoadModule("tools/burnin")
   WriteCompletion(sw, "%s/burnin" % constants.TOOLSDIR, "_ganeti_burnin",
                   opts=burnin.OPTIONS, args=burnin.ARGUMENTS)
+
+  # Reset extglob to original value
+  sw.Write("[[ -n \"$gnt_shopt_extglob\" ]] && $gnt_shopt_extglob")
+  sw.Write("unset gnt_shopt_extglob")
 
   print buf.getvalue()
 

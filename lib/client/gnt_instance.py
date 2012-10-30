@@ -218,6 +218,7 @@ def ListInstances(opts, args):
 
   fmtoverride = dict.fromkeys(["tags", "disk.sizes", "nic.macs", "nic.ips",
                                "nic.modes", "nic.links", "nic.bridges",
+                               "nic.networks",
                                "snodes", "snodes.group", "snodes.group.uuid"],
                               (lambda value: ",".join(str(item)
                                                       for item in value),
@@ -486,8 +487,12 @@ def ReinstallInstance(opts, args):
                                      osparams=opts.osparams)
     jex.QueueJob(instance_name, op)
 
-  jex.WaitOrShow(not opts.submit_only)
-  return 0
+  results = jex.WaitOrShow(not opts.submit_only)
+
+  if compat.all(map(compat.fst, results)):
+    return constants.EXIT_SUCCESS
+  else:
+    return constants.EXIT_FAILURE
 
 
 def RemoveInstance(opts, args):
@@ -1257,9 +1262,10 @@ def ShowInstanceConfig(opts, args):
     FormatParameterDict(buf, instance["be_instance"], be_actual, level=2)
     # TODO(ganeti 2.7) rework the NICs as well
     buf.write("    - NICs:\n")
-    for idx, (ip, mac, mode, link) in enumerate(instance["nics"]):
-      buf.write("      - nic/%d: MAC: %s, IP: %s, mode: %s, link: %s\n" %
-                (idx, mac, ip, mode, link))
+    for idx, (ip, mac, mode, link, network, _) in enumerate(instance["nics"]):
+      buf.write("      - nic/%d: MAC: %s, IP: %s,"
+                " mode: %s, link: %s, network: %s\n" %
+                (idx, mac, ip, mode, link, network))
     buf.write("  Disk template: %s\n" % instance["disk_template"])
     buf.write("  Disks:\n")
 
@@ -1403,9 +1409,15 @@ def SetInstanceParams(opts, args):
   else:
     offline = None
 
+  if opts.hotplug:
+    hotplug = True
+  else:
+    hotplug = False
+
   op = opcodes.OpInstanceSetParams(instance_name=args[0],
                                    nics=nics,
                                    disks=disks,
+                                   hotplug=hotplug,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
                                    hvparams=opts.hvparams,
@@ -1417,7 +1429,9 @@ def SetInstanceParams(opts, args):
                                    force=opts.force,
                                    wait_for_sync=opts.wait_for_sync,
                                    offline=offline,
-                                   ignore_ipolicy=opts.ignore_ipolicy)
+                                   conflicts_check=opts.conflicts_check,
+                                   ignore_ipolicy=opts.ignore_ipolicy,
+                                   allow_arbit_params=opts.allow_arbit_params)
 
   # even if here we process the result, we allow submit only
   result = SubmitOrSend(op, opts)
@@ -1517,6 +1531,7 @@ add_opts = [
   FORCE_VARIANT_OPT,
   NO_INSTALL_OPT,
   IGNORE_IPOLICY_OPT,
+  HOTPLUG_OPT,
   ]
 
 commands = {
@@ -1596,14 +1611,15 @@ commands = {
     [AUTO_REPLACE_OPT, DISKIDX_OPT, IALLOCATOR_OPT, EARLY_RELEASE_OPT,
      NEW_SECONDARY_OPT, ON_PRIMARY_OPT, ON_SECONDARY_OPT, SUBMIT_OPT,
      DRY_RUN_OPT, PRIORITY_OPT, IGNORE_IPOLICY_OPT],
-    "[-s|-p|-n NODE|-I NAME] <instance>",
-    "Replaces all disks for the instance"),
+    "[-s|-p|-a|-n NODE|-I NAME] <instance>",
+    "Replaces disks for the instance"),
   "modify": (
     SetInstanceParams, ARGS_ONE_INSTANCE,
     [BACKEND_OPT, DISK_OPT, FORCE_OPT, HVOPTS_OPT, NET_OPT, SUBMIT_OPT,
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
-     ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT],
+     ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
+     NOCONFLICTSCHECK_OPT, HOTPLUG_OPT, ALLOW_ARBITPARAMS_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

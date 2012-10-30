@@ -123,6 +123,7 @@ $(THH.declareSADT "DiskTemplate"
        , ("DTBlock",      'C.dtBlock)
        , ("DTDrbd8",      'C.dtDrbd8)
        , ("DTRbd",        'C.dtRbd)
+       , ("DTExt",        'C.dtExt)
        ])
 $(THH.makeJSONInstance ''DiskTemplate)
 
@@ -141,6 +142,7 @@ templateMirrorType DTPlain      = MirrorNone
 templateMirrorType DTBlock      = MirrorExternal
 templateMirrorType DTDrbd8      = MirrorInternal
 templateMirrorType DTRbd        = MirrorExternal
+templateMirrorType DTExt        = MirrorExternal
 
 -- | The Group allocation policy type.
 --

@@ -240,6 +240,7 @@ DAEMONS_LOGFILES = {
   }
 
 LOG_OS_DIR = LOG_DIR + "os"
+LOG_ES_DIR = LOG_DIR + "extstorage"
 LOG_WATCHER = LOG_DIR + "watcher.log"
 LOG_COMMANDS = LOG_DIR + "commands.log"
 LOG_BURNIN = LOG_DIR + "burnin.log"
@@ -261,6 +262,7 @@ SYSLOG_ONLY = "only"
 SYSLOG_SOCKET = "/dev/log"
 
 OS_SEARCH_PATH = _autoconf.OS_SEARCH_PATH
+ES_SEARCH_PATH = _autoconf.ES_SEARCH_PATH
 EXPORT_DIR = _autoconf.EXPORT_DIR
 
 EXPORT_CONF_FILE = "config.ini"
@@ -369,6 +371,7 @@ HTYPE_CLUSTER = "CLUSTER"
 HTYPE_NODE = "NODE"
 HTYPE_GROUP = "GROUP"
 HTYPE_INSTANCE = "INSTANCE"
+HTYPE_NETWORK = "NETWORK"
 
 HKR_SKIP = 0
 HKR_FAIL = 1
@@ -427,19 +430,21 @@ DT_FILE = "file"
 DT_SHARED_FILE = "sharedfile"
 DT_BLOCK = "blockdev"
 DT_RBD = "rbd"
+DT_EXT = "ext"
 
 # the set of network-mirrored disk templates
 DTS_INT_MIRROR = frozenset([DT_DRBD8])
 
 # the set of externally-mirrored disk templates (e.g. SAN, NAS)
-DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK, DT_RBD])
+DTS_EXT_MIRROR = frozenset([DT_SHARED_FILE, DT_BLOCK, DT_RBD, DT_EXT])
 
 # the set of non-lvm-based disk templates
 DTS_NOT_LVM = frozenset([DT_DISKLESS, DT_FILE, DT_SHARED_FILE,
-                         DT_BLOCK, DT_RBD])
+                         DT_BLOCK, DT_RBD, DT_EXT])
 
 # the set of disk templates which can be grown
-DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE, DT_RBD])
+DTS_GROWABLE = frozenset([DT_PLAIN, DT_DRBD8, DT_FILE, DT_SHARED_FILE,
+                          DT_RBD, DT_EXT])
 
 # the set of disk templates that allow adoption
 DTS_MAY_ADOPT = frozenset([DT_PLAIN, DT_BLOCK])
@@ -459,15 +464,17 @@ LD_DRBD8 = "drbd8"
 LD_FILE = "file"
 LD_BLOCKDEV = "blockdev"
 LD_RBD = "rbd"
+LD_EXT = "ext"
 LOGICAL_DISK_TYPES = frozenset([
   LD_LV,
   LD_DRBD8,
   LD_FILE,
   LD_BLOCKDEV,
   LD_RBD,
+  LD_EXT,
   ])
 
-LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV, LD_RBD])
+LDS_BLOCK = frozenset([LD_LV, LD_DRBD8, LD_BLOCKDEV, LD_RBD, LD_EXT])
 
 # drbd constants
 DRBD_HMAC_ALG = "md5"
@@ -563,7 +570,8 @@ DISK_TEMPLATES = frozenset([
   DT_FILE,
   DT_SHARED_FILE,
   DT_BLOCK,
-  DT_RBD
+  DT_RBD,
+  DT_EXT
   ])
 
 FILE_DRIVER = frozenset([FD_LOOP, FD_BLKTAP])
@@ -601,11 +609,13 @@ TAG_CLUSTER = "cluster"
 TAG_NODEGROUP = "nodegroup"
 TAG_NODE = "node"
 TAG_INSTANCE = "instance"
+TAG_NETWORK = "network"
 VALID_TAG_TYPES = frozenset([
   TAG_CLUSTER,
   TAG_NODEGROUP,
   TAG_NODE,
   TAG_INSTANCE,
+  TAG_NETWORK,
   ])
 MAX_TAG_LEN = 128
 MAX_TAGS_PER_OBJ = 4096
@@ -673,6 +683,31 @@ OS_PARAMETERS_FILE = "parameters.list"
 
 OS_VALIDATE_PARAMETERS = "parameters"
 OS_VALIDATE_CALLS = frozenset([OS_VALIDATE_PARAMETERS])
+
+# External Storage (ES) related constants
+ES_ACTION_CREATE = "create"
+ES_ACTION_REMOVE = "remove"
+ES_ACTION_GROW = "grow"
+ES_ACTION_ATTACH = "attach"
+ES_ACTION_DETACH = "detach"
+ES_ACTION_VERIFY = "verify"
+
+ES_SCRIPT_CREATE = ES_ACTION_CREATE
+ES_SCRIPT_REMOVE = ES_ACTION_REMOVE
+ES_SCRIPT_GROW = ES_ACTION_GROW
+ES_SCRIPT_ATTACH = ES_ACTION_ATTACH
+ES_SCRIPT_DETACH = ES_ACTION_DETACH
+ES_SCRIPT_VERIFY = ES_ACTION_VERIFY
+ES_SCRIPTS = frozenset([
+  ES_SCRIPT_CREATE,
+  ES_SCRIPT_REMOVE,
+  ES_SCRIPT_GROW,
+  ES_SCRIPT_ATTACH,
+  ES_SCRIPT_DETACH,
+  ES_SCRIPT_VERIFY
+  ])
+
+ES_PARAMETERS_FILE = "parameters.list"
 
 # ssh constants
 SSH_CONFIG_DIR = _autoconf.SSH_CONFIG_DIR
@@ -1089,8 +1124,17 @@ NIC_LINK = "link"
 
 NIC_MODE_BRIDGED = "bridged"
 NIC_MODE_ROUTED = "routed"
+NIC_IP_POOL = "pool"
 
 NIC_VALID_MODES = frozenset([NIC_MODE_BRIDGED, NIC_MODE_ROUTED])
+
+# An extra description of the network.
+# Can be used by hooks/kvm-vif-bridge to apply different rules
+NETWORK_TYPE_PRIVATE = "private"
+NETWORK_TYPE_PUBLIC = "public"
+
+NETWORK_VALID_TYPES = frozenset([VALUE_NONE, NETWORK_TYPE_PRIVATE,
+                                 NETWORK_TYPE_PUBLIC])
 
 NICS_PARAMETER_TYPES = {
   NIC_MODE: VTYPE_STRING,
@@ -1105,12 +1149,14 @@ IDISK_MODE = "mode"
 IDISK_ADOPT = "adopt"
 IDISK_VG = "vg"
 IDISK_METAVG = "metavg"
+IDISK_PROVIDER = "provider"
 IDISK_PARAMS_TYPES = {
   IDISK_SIZE: VTYPE_SIZE,
   IDISK_MODE: VTYPE_STRING,
   IDISK_ADOPT: VTYPE_STRING,
   IDISK_VG: VTYPE_STRING,
   IDISK_METAVG: VTYPE_STRING,
+  IDISK_PROVIDER: VTYPE_STRING,
   }
 IDISK_PARAMS = frozenset(IDISK_PARAMS_TYPES.keys())
 
@@ -1119,11 +1165,13 @@ INIC_MAC = "mac"
 INIC_IP = "ip"
 INIC_MODE = "mode"
 INIC_LINK = "link"
+INIC_NETWORK = "network"
 INIC_PARAMS_TYPES = {
   INIC_IP: VTYPE_MAYBE_STRING,
   INIC_LINK: VTYPE_STRING,
   INIC_MAC: VTYPE_STRING,
   INIC_MODE: VTYPE_STRING,
+  INIC_NETWORK: VTYPE_MAYBE_STRING,
   }
 INIC_PARAMS = frozenset(INIC_PARAMS_TYPES.keys())
 
@@ -1624,6 +1672,8 @@ QR_GROUP = "group"
 QR_OS = "os"
 QR_JOB = "job"
 QR_EXPORT = "export"
+QR_NETWORK = "network"
+QR_EXTSTORAGE = "extstorage"
 
 #: List of resources which can be queried using L{opcodes.OpQuery}
 QR_VIA_OP = frozenset([
@@ -1633,6 +1683,8 @@ QR_VIA_OP = frozenset([
   QR_GROUP,
   QR_OS,
   QR_EXPORT,
+  QR_NETWORK,
+  QR_EXTSTORAGE,
   ])
 
 #: List of resources which can be queried using Local UniX Interface
@@ -1724,6 +1776,7 @@ SS_HYPERVISOR_LIST = "hypervisor_list"
 SS_MAINTAIN_NODE_HEALTH = "maintain_node_health"
 SS_UID_POOL = "uid_pool"
 SS_NODEGROUPS = "nodegroups"
+SS_NETWORKS = "networks"
 
 SS_FILE_PERMS = 0444
 
@@ -1871,6 +1924,8 @@ DISK_LD_DEFAULTS = {
   LD_RBD: {
     LDP_POOL: "rbd"
     },
+  LD_EXT: {
+    },
   }
 
 # readability shortcuts
@@ -1907,6 +1962,8 @@ DISK_DT_DEFAULTS = {
     },
   DT_RBD: {
     RBD_POOL: DISK_LD_DEFAULTS[LD_RBD][LDP_POOL]
+    },
+  DT_EXT: {
     },
   }
 
@@ -2067,6 +2124,7 @@ VALID_ALLOC_POLICIES = [
 
 # Temporary external/shared storage parameters
 BLOCKDEV_DRIVER_MANUAL = "manual"
+EXTSTORAGE_SAMPLE_PROVIDER = "rbd"
 
 # qemu-img path, required for ovfconverter
 QEMUIMG_PATH = _autoconf.QEMUIMG_PATH

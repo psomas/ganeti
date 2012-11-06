@@ -8980,6 +8980,9 @@ def _GetPCIInfo(lu, dev_type):
       if lu.hotplug_info is not None:
         idx = getattr(lu.hotplug_info, dev_type)
         setattr(lu.hotplug_info, dev_type, idx+1)
+        if dev_type == 'disks' and idx == 0:
+          lu.LogInfo("Disk 0 cannot be hotpluggable.")
+          return None, None
         pci = lu.hotplug_info.pci_pool.pop()
         lu.LogInfo("Choosing pci slot %d" % pci)
         return idx, pci

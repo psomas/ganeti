@@ -64,7 +64,7 @@ ACCEPT_OFFLINE_NODE = object()
 (ED_OBJECT_DICT,
  ED_OBJECT_DICT_LIST,
  ED_INST_DICT,
- ED_INST_DICT_HVP_BEP,
+ ED_INST_DICT_HVP_BEP_DP,
  ED_NODE_TO_DISK_DICT,
  ED_INST_DICT_OSP_DP,
  ED_IMPEXP_IO,
@@ -73,7 +73,8 @@ ACCEPT_OFFLINE_NODE = object()
  ED_COMPRESS,
  ED_BLOCKDEV_RENAME,
  ED_DISKS_DICT_DP,
- ED_SINGLE_DISK_DICT_DP) = range(1, 14)
+ ED_SINGLE_DISK_DICT_DP,
+ ED_NIC_DICT) = range(1, 15)
 
 
 def _Prepare(calls):
@@ -266,7 +267,7 @@ _INSTANCE_CALLS = [
     ("instance", ED_INST_DICT, "Instance object"),
     ], None, _MigrationStatusPostProc, "Report migration status"),
   ("instance_start", SINGLE, None, TMO_NORMAL, [
-    ("instance_hvp_bep", ED_INST_DICT_HVP_BEP, None),
+    ("instance_hvp_bep", ED_INST_DICT_HVP_BEP_DP, None),
     ("startup_paused", None, None),
     ], None, None, "Starts an instance"),
   ("instance_os_add", SINGLE, None, TMO_1DAY, [
@@ -274,6 +275,27 @@ _INSTANCE_CALLS = [
     ("reinstall", None, None),
     ("debug", None, None),
     ], None, None, "Starts an instance"),
+  ("hot_add_nic", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "Nic dict to hotplug"),
+    ("seq", None, "Nic seq to hotplug"),
+    ], None, None, "Adds a nic to a running instance"),
+  ("hot_del_nic", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("nic", ED_NIC_DICT, "nic dict to remove"),
+    ("seq", None, "Nic seq to hotplug"),
+    ], None, None, "Removes a nic to a running instance"),
+  ("hot_add_disk", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("disk", ED_OBJECT_DICT, "Disk dict to hotplug"),
+    ("dev_path", None, "Device path"),
+    ("seq", None, "Disk seq to hotplug"),
+    ], None, None, "Adds a nic to a running instance"),
+  ("hot_del_disk", SINGLE, None, TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("disk", ED_OBJECT_DICT, "Disk dict to remove"),
+    ("seq", None, "Disk seq to hotplug"),
+    ], None, None, "Removes a nic to a running instance"),
   ]
 
 _IMPEXP_CALLS = [
@@ -435,6 +457,11 @@ _OS_CALLS = [
     ], None, _OsGetPostProc, "Returns an OS definition"),
   ]
 
+_EXTSTORAGE_CALLS = [
+  ("extstorage_diagnose", MULTI, None, TMO_FAST, [], None, None,
+   "Request a diagnose of ExtStorage Providers"),
+  ]
+
 _NODE_CALLS = [
   ("node_has_ip_address", SINGLE, None, TMO_FAST, [
     ("address", None, "IP address"),
@@ -503,7 +530,7 @@ CALLS = {
   "RpcClientDefault": \
     _Prepare(_IMPEXP_CALLS + _X509_CALLS + _OS_CALLS + _NODE_CALLS +
              _FILE_STORAGE_CALLS + _MISC_CALLS + _INSTANCE_CALLS +
-             _BLOCKDEV_CALLS + _STORAGE_CALLS),
+             _BLOCKDEV_CALLS + _STORAGE_CALLS + _EXTSTORAGE_CALLS),
   "RpcClientJobQueue": _Prepare([
     ("jobqueue_update", MULTI, None, TMO_URGENT, [
       ("file_name", None, None),

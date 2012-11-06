@@ -53,6 +53,7 @@ __all__ = [
   # Command line options
   "ABSOLUTE_OPT",
   "ADD_UIDS_OPT",
+  "ADD_RESERVED_IPS_OPT",
   "ALLOCATABLE_OPT",
   "ALLOC_POLICY_OPT",
   "ALL_OPT",
@@ -86,9 +87,12 @@ __all__ = [
   "FORCE_FILTER_OPT",
   "FORCE_OPT",
   "FORCE_VARIANT_OPT",
+  "GATEWAY_OPT",
+  "GATEWAY6_OPT",
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
+  "HOTPLUG_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -110,6 +114,9 @@ __all__ = [
   "MC_OPT",
   "MIGRATION_MODE_OPT",
   "NET_OPT",
+  "NETWORK_OPT",
+  "NETWORK6_OPT",
+  "NETWORK_TYPE_OPT",
   "NEW_CLUSTER_CERT_OPT",
   "NEW_CLUSTER_DOMAIN_SECRET_OPT",
   "NEW_CONFD_HMAC_KEY_OPT",
@@ -117,6 +124,7 @@ __all__ = [
   "NEW_SECONDARY_OPT",
   "NEW_SPICE_CERT_OPT",
   "NIC_PARAMS_OPT",
+  "NOCONFLICTSCHECK_OPT",
   "NODE_FORCE_JOIN_OPT",
   "NODE_LIST_OPT",
   "NODE_PLACEMENT_OPT",
@@ -159,6 +167,7 @@ __all__ = [
   "READD_OPT",
   "REBOOT_TYPE_OPT",
   "REMOVE_INSTANCE_OPT",
+  "REMOVE_RESERVED_IPS_OPT",
   "REMOVE_UIDS_OPT",
   "RESERVED_LVS_OPT",
   "RUNTIME_MEM_OPT",
@@ -200,6 +209,7 @@ __all__ = [
   "HV_STATE_OPT",
   "IGNORE_IPOLICY_OPT",
   "INSTANCE_POLICY_OPTS",
+  "ALLOW_ARBITPARAMS_OPT",
   # Generic functions for CLI programs
   "ConfirmOperation",
   "CreateIPolicyFromOpts",
@@ -233,11 +243,13 @@ __all__ = [
   "ARGS_MANY_INSTANCES",
   "ARGS_MANY_NODES",
   "ARGS_MANY_GROUPS",
+  "ARGS_MANY_NETWORKS",
   "ARGS_NONE",
   "ARGS_ONE_INSTANCE",
   "ARGS_ONE_NODE",
   "ARGS_ONE_GROUP",
   "ARGS_ONE_OS",
+  "ARGS_ONE_NETWORK",
   "ArgChoice",
   "ArgCommand",
   "ArgFile",
@@ -245,8 +257,10 @@ __all__ = [
   "ArgHost",
   "ArgInstance",
   "ArgJobId",
+  "ArgNetwork",
   "ArgNode",
   "ArgOs",
+  "ArgExtStorage",
   "ArgSuggest",
   "ArgUnknown",
   "OPT_COMPL_INST_ADD_NODES",
@@ -255,7 +269,9 @@ __all__ = [
   "OPT_COMPL_ONE_INSTANCE",
   "OPT_COMPL_ONE_NODE",
   "OPT_COMPL_ONE_NODEGROUP",
+  "OPT_COMPL_ONE_NETWORK",
   "OPT_COMPL_ONE_OS",
+  "OPT_COMPL_ONE_EXTSTORAGE",
   "cli_option",
   "SplitNodeOption",
   "CalculateOSNames",
@@ -353,6 +369,11 @@ class ArgNode(_Argument):
   """
 
 
+class ArgNetwork(_Argument):
+  """Network argument.
+
+  """
+
 class ArgGroup(_Argument):
   """Node group argument.
 
@@ -389,11 +410,19 @@ class ArgOs(_Argument):
   """
 
 
+class ArgExtStorage(_Argument):
+  """ExtStorage argument.
+
+  """
+
+
 ARGS_NONE = []
 ARGS_MANY_INSTANCES = [ArgInstance()]
+ARGS_MANY_NETWORKS = [ArgNetwork()]
 ARGS_MANY_NODES = [ArgNode()]
 ARGS_MANY_GROUPS = [ArgGroup()]
 ARGS_ONE_INSTANCE = [ArgInstance(min=1, max=1)]
+ARGS_ONE_NETWORK = [ArgNetwork(min=1, max=1)]
 ARGS_ONE_NODE = [ArgNode(min=1, max=1)]
 # TODO
 ARGS_ONE_GROUP = [ArgGroup(min=1, max=1)]
@@ -413,6 +442,7 @@ def _ExtractTagsObject(opts, args):
     retval = kind, kind
   elif kind in (constants.TAG_NODEGROUP,
                 constants.TAG_NODE,
+                constants.TAG_NETWORK,
                 constants.TAG_INSTANCE):
     if not args:
       raise errors.OpPrereqError("no arguments passed to the command")
@@ -635,16 +665,20 @@ def check_maybefloat(option, opt, value): # pylint: disable=W0613
  OPT_COMPL_ONE_NODE,
  OPT_COMPL_ONE_INSTANCE,
  OPT_COMPL_ONE_OS,
+ OPT_COMPL_ONE_EXTSTORAGE,
  OPT_COMPL_ONE_IALLOCATOR,
+ OPT_COMPL_ONE_NETWORK,
  OPT_COMPL_INST_ADD_NODES,
- OPT_COMPL_ONE_NODEGROUP) = range(100, 107)
+ OPT_COMPL_ONE_NODEGROUP) = range(100, 109)
 
 OPT_COMPL_ALL = frozenset([
   OPT_COMPL_MANY_NODES,
   OPT_COMPL_ONE_NODE,
   OPT_COMPL_ONE_INSTANCE,
   OPT_COMPL_ONE_OS,
+  OPT_COMPL_ONE_EXTSTORAGE,
   OPT_COMPL_ONE_IALLOCATOR,
+  OPT_COMPL_ONE_NETWORK,
   OPT_COMPL_INST_ADD_NODES,
   OPT_COMPL_ONE_NODEGROUP,
   ])
@@ -1431,6 +1465,55 @@ ABSOLUTE_OPT = cli_option("--absolute", dest="absolute",
                           help="Marks the grow as absolute instead of the"
                           " (default) relative mode")
 
+NETWORK_OPT = cli_option("--network",
+                         action="store", default=None, dest="network",
+                         help="IP network in CIDR notation")
+
+GATEWAY_OPT = cli_option("--gateway",
+                         action="store", default=None, dest="gateway",
+                         help="IP address of the router (gateway)")
+
+ADD_RESERVED_IPS_OPT = cli_option("--add-reserved-ips",
+                                  action="store", default=None,
+                                  dest="add_reserved_ips",
+                                  help="Comma-separated list of"
+                                  " reserved IPs to add")
+
+REMOVE_RESERVED_IPS_OPT = cli_option("--remove-reserved-ips",
+                                     action="store", default=None,
+                                     dest="remove_reserved_ips",
+                                     help="Comma-delimited list of"
+                                     " reserved IPs to remove")
+
+NETWORK_TYPE_OPT = cli_option("--network-type",
+                              action="store", default=None, dest="network_type",
+                              help="Network type: private, public, None")
+
+NETWORK6_OPT = cli_option("--network6",
+                          action="store", default=None, dest="network6",
+                          help="IP network in CIDR notation")
+
+GATEWAY6_OPT = cli_option("--gateway6",
+                          action="store", default=None, dest="gateway6",
+                          help="IP6 address of the router (gateway)")
+
+NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
+                                  dest="conflicts_check",
+                                  default=True,
+                                  action="store_false",
+                                  help="Don't check for conflicting IPs")
+
+HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
+                         action="store_true", default=False,
+                         help="Enable disk/nic hotplug")
+
+ALLOW_ARBITPARAMS_OPT = cli_option("--allow-arbit-params",
+                                   dest="allow_arbit_params",
+                                   action="store_true", default=None,
+                                   help="Allow arbitrary parameters"
+                                   " to be passed to --disk(s)"
+                                   " option (used by ExtStorage)")
+
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]
 
@@ -1447,6 +1530,7 @@ COMMON_CREATE_OPTS = [
   NET_OPT,
   NODE_PLACEMENT_OPT,
   NOIPCHECK_OPT,
+  NOCONFLICTSCHECK_OPT,
   NONAMECHECK_OPT,
   NONICS_OPT,
   NWSYNC_OPT,
@@ -2390,10 +2474,16 @@ def GenericInstanceCreate(mode, opts, args):
   else:
     raise errors.ProgrammerError("Invalid creation mode %s" % mode)
 
+  if opts.hotplug:
+    hotplug = True
+  else:
+    hotplug = False
+
   op = opcodes.OpInstanceCreate(instance_name=instance,
                                 disks=disks,
                                 disk_template=opts.disk_template,
                                 nics=nics,
+                                conflicts_check=opts.conflicts_check,
                                 pnode=pnode, snode=snode,
                                 ip_check=opts.ip_check,
                                 name_check=opts.name_check,
@@ -2412,6 +2502,7 @@ def GenericInstanceCreate(mode, opts, args):
                                 src_node=src_node,
                                 src_path=src_path,
                                 tags=tags,
+                                hotplug=hotplug,
                                 no_install=no_install,
                                 identify_defaults=identify_defaults,
                                 ignore_ipolicy=opts.ignore_ipolicy)

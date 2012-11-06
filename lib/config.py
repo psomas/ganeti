@@ -50,6 +50,7 @@ from ganeti import serializer
 from ganeti import uidpool
 from ganeti import netutils
 from ganeti import runtime
+from ganeti import network
 
 
 _config_lock = locking.SharedLock("ConfigWriter")
@@ -105,6 +106,13 @@ class TemporaryReservationManager:
     for holder_reserved in self._ec_reserved.values():
       all_reserved.update(holder_reserved)
     return all_reserved
+
+  def GetECReserved(self, ec_id):
+    ec_reserved = set()
+    if ec_id in self._ec_reserved:
+      ec_reserved.update(self._ec_reserved[ec_id])
+    return ec_reserved
+
 
   def Generate(self, existing, generate_one_fn, ec_id):
     """Generate a new resource of this type
@@ -176,8 +184,10 @@ class ConfigWriter:
     self._temporary_macs = TemporaryReservationManager()
     self._temporary_secrets = TemporaryReservationManager()
     self._temporary_lvs = TemporaryReservationManager()
+    self._temporary_ips = TemporaryReservationManager()
     self._all_rms = [self._temporary_ids, self._temporary_macs,
-                     self._temporary_secrets, self._temporary_lvs]
+                     self._temporary_secrets, self._temporary_lvs,
+                     self._temporary_ips]
     # Note: in order to prevent errors when resolving our name in
     # _DistributeConfig, we compute it here once and reuse it; it's
     # better to raise an error before starting to modify the config
@@ -207,17 +217,6 @@ class ConfigWriter:
 
     """
     return os.path.exists(constants.CLUSTER_CONF_FILE)
-
-  def _GenerateOneMAC(self):
-    """Generate one mac address
-
-    """
-    prefix = self._config_data.cluster.mac_prefix
-    byte1 = random.randrange(0, 256)
-    byte2 = random.randrange(0, 256)
-    byte3 = random.randrange(0, 256)
-    mac = "%s:%02x:%02x:%02x" % (prefix, byte1, byte2, byte3)
-    return mac
 
   @locking.ssynchronized(_config_lock, shared=1)
   def GetNdParams(self, node):
@@ -265,15 +264,47 @@ class ConfigWriter:
     """
     return self._config_data.cluster.SimpleFillDP(group.diskparams)
 
+  def _UnlockedGetNetworkMACPrefix(self, net):
+    """Return the network mac prefix if it exists or the cluster level default.
+
+    """
+    prefix = None
+    if net:
+      net_uuid = self._UnlockedLookupNetwork(net)
+      if net_uuid:
+        nobj = self._UnlockedGetNetwork(net_uuid)
+        if nobj.mac_prefix:
+          prefix = nobj.mac_prefix
+
+    return prefix
+
+  def _GenerateOneMAC(self, prefix=None):
+    """Return a function that randomly generates a MAC suffic
+       and appends it to the given prefix. If prefix is not given get
+       the cluster level default.
+
+    """
+    if not prefix:
+      prefix = self._config_data.cluster.mac_prefix
+    def GenMac():
+      byte1 = random.randrange(0, 256)
+      byte2 = random.randrange(0, 256)
+      byte3 = random.randrange(0, 256)
+      mac = "%s:%02x:%02x:%02x" % (prefix, byte1, byte2, byte3)
+      return mac
+    return GenMac
+
   @locking.ssynchronized(_config_lock, shared=1)
-  def GenerateMAC(self, ec_id):
+  def GenerateMAC(self, net, ec_id):
     """Generate a MAC for an instance.
 
     This should check the current instances for duplicates.
 
     """
     existing = self._AllMACs()
-    return self._temporary_ids.Generate(existing, self._GenerateOneMAC, ec_id)
+    prefix = self._UnlockedGetNetworkMACPrefix(net)
+    gen_mac = self._GenerateOneMAC(prefix)
+    return self._temporary_ids.Generate(existing, gen_mac, ec_id)
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveMAC(self, mac, ec_id):
@@ -288,6 +319,114 @@ class ConfigWriter:
       raise errors.ReservationError("mac already in use")
     else:
       self._temporary_macs.Reserve(ec_id, mac)
+
+  def _UnlockedCommitTemporaryIps(self, ec_id):
+    """Commit all reserved IP address to their respective pools
+
+    """
+    for action, address, net_uuid in self._temporary_ips.GetECReserved(ec_id):
+      self._UnlockedCommitIp(action, net_uuid, address)
+
+  def _UnlockedCommitIp(self, action, net_uuid, address):
+    """Commit a reserved IP address to an IP pool.
+
+    The IP address is taken from the network's IP pool and marked as reserved.
+
+    """
+    nobj = self._UnlockedGetNetwork(net_uuid)
+    pool = network.AddressPool(nobj)
+    if action == constants.RESERVE_ACTION:
+      pool.Reserve(address)
+    elif action == constants.RELEASE_ACTION:
+      pool.Release(address)
+
+  def _UnlockedReleaseIp(self, net_uuid, address, ec_id):
+    """Give a specific IP address back to an IP pool.
+
+    The IP address is returned to the IP pool designated by pool_id and marked
+    as reserved.
+
+    """
+    self._temporary_ips.Reserve(ec_id,
+                                (constants.RELEASE_ACTION, address, net_uuid))
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def ReleaseIp(self, network, address, ec_id):
+    """Give a specified IP address back to an IP pool.
+
+    This is just a wrapper around _UnlockedReleaseIp.
+
+    """
+    net_uuid = self._UnlockedLookupNetwork(network)
+    if net_uuid:
+      self._UnlockedReleaseIp(net_uuid, address, ec_id)
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GenerateIp(self, net, ec_id):
+    """Find a free IPv4 address for an instance.
+
+    """
+    net_uuid = self._UnlockedLookupNetwork(net)
+    nobj = self._UnlockedGetNetwork(net_uuid)
+    pool = network.AddressPool(nobj)
+
+    def gen_one():
+      try:
+        ip = pool.GenerateFree()
+      except errors.AddressPoolError:
+        raise errors.ReservationError("Cannot generate IP. Network is full")
+      return (constants.RESERVE_ACTION, ip, net_uuid)
+
+    _ ,address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
+    return address
+
+  def _UnlockedReserveIp(self, net_uuid, address, ec_id):
+    """Reserve a given IPv4 address for use by an instance.
+
+    """
+    nobj = self._UnlockedGetNetwork(net_uuid)
+    pool = network.AddressPool(nobj)
+    try:
+      isreserved = pool.IsReserved(address)
+    except errors.AddressPoolError:
+      raise errors.ReservationError("IP address not in network")
+    if isreserved:
+      raise errors.ReservationError("IP address already in use")
+
+    return self._temporary_ips.Reserve(ec_id,
+                                       (constants.RESERVE_ACTION,
+                                        address, net_uuid))
+
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def ReserveIp(self, net, address, ec_id):
+    """Reserve a given IPv4 address for use by an instance.
+
+    """
+    net_uuid = self._UnlockedLookupNetwork(net)
+    if net_uuid:
+      return self._UnlockedReserveIp(net_uuid, address, ec_id)
+
+  @locking.ssynchronized(_config_lock)
+  def GetPCIInfo(self, instance, dev_type):
+
+    if not instance.hotplug_info:
+      return None, None
+    idx = getattr(instance.hotplug_info, dev_type)
+    setattr(instance.hotplug_info, dev_type, idx+1)
+    pci = instance.hotplug_info.pci_pool.pop()
+    self._WriteConfig()
+
+    return idx, pci
+
+  @locking.ssynchronized(_config_lock)
+  def UpdatePCIInfo(self, instance, pci_slot):
+
+    if instance.hotplug_info:
+      logging.info("Releasing PCI slot %d for instance %s",
+                    pci_slot, instance.name)
+      instance.hotplug_info.pci_pool.append(pci_slot)
+      self._WriteConfig()
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
@@ -680,7 +819,7 @@ class ConfigWriter:
         else:
           raise errors.ProgrammerError("NIC mode '%s' not handled" % nic_mode)
 
-        _AddIpAddress("%s/%s" % (link, nic.ip),
+        _AddIpAddress("%s/%s/%s" % (link, nic.ip, nic.network),
                       "instance:%s/nic:%d" % (instance.name, idx))
 
     for ip, owners in ips.items():
@@ -1262,6 +1401,7 @@ class ConfigWriter:
     self._config_data.instances[instance.name] = instance
     self._config_data.cluster.serial_no += 1
     self._UnlockedReleaseDRBDMinors(instance.name)
+    self._UnlockedCommitTemporaryIps(ec_id)
     self._WriteConfig()
 
   def _EnsureUUID(self, item, ec_id):
@@ -1322,6 +1462,16 @@ class ConfigWriter:
     network_port = getattr(inst, "network_port", None)
     if network_port is not None:
       self._config_data.cluster.tcpudp_port_pool.add(network_port)
+
+    instance = self._UnlockedGetInstanceInfo(instance_name)
+
+    for nic in instance.nics:
+      if nic.network is not None and nic.ip is not None:
+        net_uuid = self._UnlockedLookupNetwork(nic.network)
+        if net_uuid:
+          # Return all IP addresses to the respective address pools
+          self._UnlockedCommitIp(constants.RELEASE_ACTION, net_uuid, nic.ip)
+
 
     del self._config_data.instances[instance_name]
     self._config_data.cluster.serial_no += 1
@@ -2094,6 +2244,9 @@ class ConfigWriter:
     nodegroups = ["%s %s" % (nodegroup.uuid, nodegroup.name) for nodegroup in
                   self._config_data.nodegroups.values()]
     nodegroups_data = fn(utils.NiceSort(nodegroups))
+    networks = ["%s %s" % (net.uuid, net.name) for net in
+                self._config_data.networks.values()]
+    networks_data = fn(utils.NiceSort(networks))
 
     ssconf_values = {
       constants.SS_CLUSTER_NAME: cluster.cluster_name,
@@ -2118,6 +2271,7 @@ class ConfigWriter:
       constants.SS_MAINTAIN_NODE_HEALTH: str(cluster.maintain_node_health),
       constants.SS_UID_POOL: uid_pool,
       constants.SS_NODEGROUPS: nodegroups_data,
+      constants.SS_NETWORKS: networks_data,
       }
     bad_values = [(k, v) for k, v in ssconf_values.items()
                   if not isinstance(v, (str, basestring))]
@@ -2191,7 +2345,7 @@ class ConfigWriter:
     return self._config_data.HasAnyDiskOfType(dev_type)
 
   @locking.ssynchronized(_config_lock)
-  def Update(self, target, feedback_fn):
+  def Update(self, target, feedback_fn, ec_id=None):
     """Notify function to be called after updates.
 
     This function must be called when an object (as returned by
@@ -2219,6 +2373,8 @@ class ConfigWriter:
       test = target in self._config_data.instances.values()
     elif isinstance(target, objects.NodeGroup):
       test = target in self._config_data.nodegroups.values()
+    elif isinstance(target, objects.Network):
+      test = target in self._config_data.networks.values()
     else:
       raise errors.ProgrammerError("Invalid object type (%s) passed to"
                                    " ConfigWriter.Update" % type(target))
@@ -2236,6 +2392,10 @@ class ConfigWriter:
     if isinstance(target, objects.Instance):
       self._UnlockedReleaseDRBDMinors(target.name)
 
+    if ec_id is not None:
+      # Commit all ips reserved by OpInstanceSetParams and OpGroupSetParams
+      self._UnlockedCommitTemporaryIps(ec_id)
+
     self._WriteConfig(feedback_fn=feedback_fn)
 
   @locking.ssynchronized(_config_lock)
@@ -2245,3 +2405,196 @@ class ConfigWriter:
     """
     for rm in self._all_rms:
       rm.DropECReservations(ec_id)
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetAllNetworksInfo(self):
+    """Get the configuration of all networks
+
+    """
+    return dict(self._config_data.networks)
+
+  def _UnlockedGetNetworkList(self):
+    """Get the list of networks.
+
+    This function is for internal use, when the config lock is already held.
+
+    """
+    return self._config_data.networks.keys()
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetworkList(self):
+    """Get the list of networks.
+
+    @return: array of networks, ex. ["main", "vlan100", "200]
+
+    """
+    return self._UnlockedGetNetworkList()
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetworkNames(self):
+    """Get a list of network names
+
+    """
+    names = [network.name
+             for network in self._config_data.networks.values()]
+    return names
+
+  def _UnlockedGetNetwork(self, uuid):
+    """Returns information about a network.
+
+    This function is for internal use, when the config lock is already held.
+
+    """
+    if uuid not in self._config_data.networks:
+      return None
+
+    return self._config_data.networks[uuid]
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetNetwork(self, uuid):
+    """Returns information about a network.
+
+    It takes the information from the configuration file.
+
+    @param uuid: UUID of the network
+
+    @rtype: L{objects.Network}
+    @return: the network object
+
+    """
+    return self._UnlockedGetNetwork(uuid)
+
+  @locking.ssynchronized(_config_lock)
+  def AddNetwork(self, net, ec_id, check_uuid=True):
+    """Add a network to the configuration.
+
+    @type net: L{objects.Network}
+    @param net: the Network object to add
+    @type ec_id: string
+    @param ec_id: unique id for the job to use when creating a missing UUID
+
+    """
+    self._UnlockedAddNetwork(net, ec_id, check_uuid)
+    self._WriteConfig()
+
+  def _UnlockedAddNetwork(self, net, ec_id, check_uuid):
+    """Add a network to the configuration.
+
+    """
+    logging.info("Adding network %s to configuration", net.name)
+
+    if check_uuid:
+      self._EnsureUUID(net, ec_id)
+
+    existing_uuid = self._UnlockedLookupNetwork(net.name)
+    if existing_uuid:
+      raise errors.OpPrereqError("Desired network name '%s' already"
+                                 " exists as a network (UUID: %s)" %
+                                 (net.name, existing_uuid),
+                                 errors.ECODE_EXISTS)
+    net.serial_no = 1
+    self._config_data.networks[net.uuid] = net
+    self._config_data.cluster.serial_no += 1
+
+  def _UnlockedLookupNetwork(self, target):
+    """Lookup a network's UUID.
+
+    @type target: string
+    @param target: network name or UUID
+    @rtype: string
+    @return: network UUID
+    @raises errors.OpPrereqError: when the target network cannot be found
+
+    """
+    if target in self._config_data.networks:
+      return target
+    for net in self._config_data.networks.values():
+      if net.name == target:
+        return net.uuid
+    return None
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def LookupNetwork(self, target):
+    """Lookup a network's UUID.
+
+    This function is just a wrapper over L{_UnlockedLookupNetwork}.
+
+    @type target: string
+    @param target: network name or UUID
+    @rtype: string
+    @return: network UUID
+
+    """
+    return self._UnlockedLookupNetwork(target)
+
+  @locking.ssynchronized(_config_lock)
+  def RemoveNetwork(self, network_uuid):
+    """Remove a network from the configuration.
+
+    @type network_uuid: string
+    @param network_uuid: the UUID of the network to remove
+
+    """
+    logging.info("Removing network %s from configuration", network_uuid)
+
+    if network_uuid not in self._config_data.networks:
+      raise errors.ConfigurationError("Unknown network '%s'" % network_uuid)
+
+    del self._config_data.networks[network_uuid]
+    self._config_data.cluster.serial_no += 1
+    self._WriteConfig()
+
+  def _UnlockedGetGroupNetParams(self, net, node):
+    """Get the netparams (mode, link) of a network.
+
+    Get a network's netparams for a given node.
+
+    @type net: string
+    @param net: network name
+    @type node: string
+    @param node: node name
+    @rtype: dict or None
+    @return: netparams
+
+    """
+    net_uuid = self._UnlockedLookupNetwork(net)
+    if net_uuid is None:
+      return None
+
+    node_info = self._UnlockedGetNodeInfo(node)
+    nodegroup_info = self._UnlockedGetNodeGroup(node_info.group)
+    netparams = nodegroup_info.networks.get(net_uuid, None)
+
+    return netparams
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def GetGroupNetParams(self, net, node):
+    """Locking wrapper of _UnlockedGetGroupNetParams()
+
+    """
+    return self._UnlockedGetGroupNetParams(net, node)
+
+
+  @locking.ssynchronized(_config_lock, shared=1)
+  def CheckIPInNodeGroup(self, ip, node):
+    """Check for conflictig IP.
+
+    @type ip: string
+    @param ip: ip address
+    @type node: string
+    @param node: node name
+    @rtype: (string, dict) or (None, None)
+    @return: (network name, netparams)
+
+    """
+    if ip is None:
+      return (None, None)
+    node_info = self._UnlockedGetNodeInfo(node)
+    nodegroup_info = self._UnlockedGetNodeGroup(node_info.group)
+    for net_uuid in nodegroup_info.networks.keys():
+      net_info = self._UnlockedGetNetwork(net_uuid)
+      pool = network.AddressPool(net_info)
+      if pool._Contains(ip):
+        return (net_info.name, nodegroup_info.networks[net_uuid])
+
+    return (None, None)

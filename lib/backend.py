@@ -1519,6 +1519,34 @@ def GetMigrationStatus(instance):
   except Exception, err:  # pylint: disable=W0703
     _Fail("Failed to get migration status: %s", err, exc=True)
 
+def HotAddDisk(instance, disk, dev_path, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddDisk(instance, disk, dev_path, seq)
+
+def HotDelDisk(instance, disk, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelDisk(instance, disk, seq)
+
+def HotAddNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddNic(instance, nic, seq)
+
+def HotDelNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelNic(instance, nic, seq)
+
 
 def BlockdevCreate(disk, size, owner, on_primary, info):
   """Creates a block device for an instance.
@@ -2431,6 +2459,8 @@ def OSEnvironment(instance, inst_os, debug=0):
       result["NIC_%d_BRIDGE" % idx] = nic.nicparams[constants.NIC_LINK]
     if nic.nicparams[constants.NIC_LINK]:
       result["NIC_%d_LINK" % idx] = nic.nicparams[constants.NIC_LINK]
+    if nic.network:
+      result["NIC_%d_NETWORK" % idx] = nic.network
     if constants.HV_NIC_TYPE in instance.hvparams:
       result["NIC_%d_FRONTEND_TYPE" % idx] = \
         instance.hvparams[constants.HV_NIC_TYPE]
@@ -2439,6 +2469,51 @@ def OSEnvironment(instance, inst_os, debug=0):
   for source, kind in [(instance.beparams, "BE"), (instance.hvparams, "HV")]:
     for key, value in source.items():
       result["INSTANCE_%s_%s" % (kind, key)] = str(value)
+
+  return result
+
+
+def DiagnoseExtStorage(top_dirs=None):
+  """Compute the validity for all ExtStorage Providers.
+
+  @type top_dirs: list
+  @param top_dirs: the list of directories in which to
+      search (if not given defaults to
+      L{constants.ES_SEARCH_PATH})
+  @rtype: list of L{objects.ExtStorage}
+  @return: a list of tuples (name, path, status, diagnose, parameters)
+      for all (potential) ExtStorage Providers under all
+      search paths, where:
+          - name is the (potential) ExtStorage Provider
+          - path is the full path to the ExtStorage Provider
+          - status True/False is the validity of the ExtStorage Provider
+          - diagnose is the error message for an invalid ExtStorage Provider,
+            otherwise empty
+          - parameters is a list of (name, help) parameters, if any
+
+  """
+  if top_dirs is None:
+    top_dirs = constants.ES_SEARCH_PATH
+
+  result = []
+  for dir_name in top_dirs:
+    if os.path.isdir(dir_name):
+      try:
+        f_names = utils.ListVisibleFiles(dir_name)
+      except EnvironmentError, err:
+        logging.exception("Can't list the ExtStorage directory %s: %s",
+                          dir_name, err)
+        break
+      for name in f_names:
+        es_path = utils.PathJoin(dir_name, name)
+        status, es_inst = bdev.ExtStorageFromDisk(name, base_dir=dir_name)
+        if status:
+          diagnose = ""
+          parameters = es_inst.supported_parameters
+        else:
+          diagnose = es_inst
+          parameters = []
+        result.append((name, es_path, status, diagnose, parameters))
 
   return result
 
@@ -2547,6 +2622,8 @@ def FinalizeExport(instance, snap_disks):
     config.set(constants.INISECT_INS, "nic%d_mac" %
                nic_count, "%s" % nic.mac)
     config.set(constants.INISECT_INS, "nic%d_ip" % nic_count, "%s" % nic.ip)
+    config.set(constants.INISECT_INS, "nic%d_network" % nic_count,
+               "%s" % nic.network)
     for param in constants.NICS_PARAMETER_TYPES:
       config.set(constants.INISECT_INS, "nic%d_%s" % (nic_count, param),
                  "%s" % nic.nicparams.get(param, None))

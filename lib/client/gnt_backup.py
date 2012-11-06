@@ -129,6 +129,7 @@ import_opts = [
   SRC_DIR_OPT,
   SRC_NODE_OPT,
   IGNORE_IPOLICY_OPT,
+  HOTPLUG_OPT,
   ]
 
 

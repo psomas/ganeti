@@ -50,7 +50,7 @@ from socket import AF_INET
 
 
 __all__ = ["ConfigObject", "ConfigData", "NIC", "Disk", "Instance",
-           "OS", "Node", "NodeGroup", "Cluster", "FillDict"]
+           "OS", "Node", "NodeGroup", "Cluster", "FillDict", "Network"]
 
 _TIMESTAMPS = ["ctime", "mtime"]
 _UUID = ["uuid"]
@@ -439,6 +439,7 @@ class ConfigData(ConfigObject):
     "nodes",
     "nodegroups",
     "instances",
+    "networks",
     "serial_no",
     ] + _TIMESTAMPS
 
@@ -451,7 +452,7 @@ class ConfigData(ConfigObject):
     """
     mydict = super(ConfigData, self).ToDict()
     mydict["cluster"] = mydict["cluster"].ToDict()
-    for key in "nodes", "instances", "nodegroups":
+    for key in "nodes", "instances", "nodegroups", "networks":
       mydict[key] = self._ContainerToDicts(mydict[key])
 
     return mydict
@@ -466,6 +467,7 @@ class ConfigData(ConfigObject):
     obj.nodes = cls._ContainerFromDicts(obj.nodes, dict, Node)
     obj.instances = cls._ContainerFromDicts(obj.instances, dict, Instance)
     obj.nodegroups = cls._ContainerFromDicts(obj.nodegroups, dict, NodeGroup)
+    obj.networks = cls._ContainerFromDicts(obj.networks, dict, Network)
     return obj
 
   def HasAnyDiskOfType(self, dev_type):
@@ -502,11 +504,16 @@ class ConfigData(ConfigObject):
       # gives a good approximation.
       if self.HasAnyDiskOfType(constants.LD_DRBD8):
         self.cluster.drbd_usermode_helper = constants.DEFAULT_DRBD_HELPER
+    if self.networks is None:
+      self.networks = {}
+
+class HotplugInfo(ConfigObject):
+  __slots__ = ["nics", "disks", "pci_pool"]
 
 
 class NIC(ConfigObject):
   """Config object representing a network card."""
-  __slots__ = ["mac", "ip", "nicparams"]
+  __slots__ = ["idx", "pci", "mac", "ip", "network", "nicparams", "netinfo"]
 
   @classmethod
   def CheckParameterSyntax(cls, nicparams):
@@ -530,7 +537,7 @@ class NIC(ConfigObject):
 
 class Disk(ConfigObject):
   """Config object representing a block device."""
-  __slots__ = ["dev_type", "logical_id", "physical_id",
+  __slots__ = ["idx", "pci", "dev_type", "logical_id", "physical_id",
                "children", "iv_name", "size", "mode", "params"]
 
   def CreateOnSecondary(self):
@@ -605,7 +612,8 @@ class Disk(ConfigObject):
 
     """
     if self.dev_type in [constants.LD_LV, constants.LD_FILE,
-                         constants.LD_BLOCKDEV, constants.LD_RBD]:
+                         constants.LD_BLOCKDEV, constants.LD_RBD,
+                         constants.LD_EXT]:
       result = [node]
     elif self.dev_type in constants.LDS_DRBD:
       result = [self.logical_id[0], self.logical_id[1]]
@@ -681,7 +689,7 @@ class Disk(ConfigObject):
 
     """
     if self.dev_type in (constants.LD_LV, constants.LD_FILE,
-                         constants.LD_RBD):
+                         constants.LD_RBD, constants.LD_EXT):
       self.size += amount
     elif self.dev_type == constants.LD_DRBD8:
       if self.children:
@@ -934,6 +942,9 @@ class Disk(ConfigObject):
                  params)
       result.append(params)
 
+    elif disk_template == constants.DT_EXT:
+      result.append(constants.DISK_LD_DEFAULTS[constants.LD_EXT])
+
     return result
 
 
@@ -1033,6 +1044,7 @@ class Instance(TaggableObject):
     "admin_state",
     "nics",
     "disks",
+    "hotplug_info",
     "disk_template",
     "network_port",
     "serial_no",
@@ -1163,6 +1175,8 @@ class Instance(TaggableObject):
       else:
         nlist = []
       bo[attr] = nlist
+    if self.hotplug_info:
+      bo['hotplug_info'] = self.hotplug_info.ToDict()
     return bo
 
   @classmethod
@@ -1180,6 +1194,8 @@ class Instance(TaggableObject):
     obj = super(Instance, cls).FromDict(val)
     obj.nics = cls._ContainerFromDicts(obj.nics, list, NIC)
     obj.disks = cls._ContainerFromDicts(obj.disks, list, Disk)
+    if "hotplug_info" in val:
+      obj.hotplug_info = HotplugInfo.FromDict(val["hotplug_info"])
     return obj
 
   def UpgradeConfig(self):
@@ -1259,6 +1275,23 @@ class OS(ConfigObject):
 
     """
     return cls.SplitNameVariant(name)[1]
+
+
+class ExtStorage(ConfigObject):
+  """Config object representing an External Storage Provider.
+
+  """
+  __slots__ = [
+    "name",
+    "path",
+    "create_script",
+    "remove_script",
+    "grow_script",
+    "attach_script",
+    "detach_script",
+    "verify_script",
+    "supported_parameters",
+    ]
 
 
 class NodeHvState(ConfigObject):
@@ -1389,6 +1422,7 @@ class NodeGroup(TaggableObject):
     "hv_state_static",
     "disk_state_static",
     "alloc_policy",
+    "networks",
     ] + _TIMESTAMPS + _UUID
 
   def ToDict(self):
@@ -1435,6 +1469,9 @@ class NodeGroup(TaggableObject):
       self.diskparams = {}
     if self.ipolicy is None:
       self.ipolicy = MakeEmptyIPolicy()
+
+    if self.networks is None:
+      self.networks = {}
 
   def FillND(self, node):
     """Return filled out ndparams for L{objects.Node}
@@ -2018,6 +2055,26 @@ class InstanceConsole(ConfigObject):
                                          constants.CONS_SPICE,
                                          constants.CONS_SSH]
     return True
+
+
+class Network(TaggableObject):
+  """Object representing a network definition for ganeti.
+
+  """
+  __slots__ = [
+    "name",
+    "serial_no",
+    "network_type",
+    "mac_prefix",
+    "family",
+    "network",
+    "network6",
+    "gateway",
+    "gateway6",
+    "size",
+    "reservations",
+    "ext_reservations",
+    ] + _TIMESTAMPS + _UUID
 
 
 class SerializableConfigParser(ConfigParser.SafeConfigParser):

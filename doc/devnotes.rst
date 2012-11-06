@@ -66,6 +66,13 @@ different python version)::
   $ ./autogen.sh && \
     ./configure --prefix=/usr/local --sysconfdir=/etc --localstatedir=/var
 
+Note that doing development on a machine which already has Ganeti
+installed is problematic, as ``PYTHONPATH`` behaviour can be confusing
+(see Issue 170 for a bit of history/details; in general it works if
+the installed and developed versions are very similar, and/or if
+PYTHONPATH is customised correctly). As such, in general it's
+recommended to use a "clean" machine for ganeti development.
+
 Haskell development notes
 -------------------------
 
@@ -102,9 +109,9 @@ documentation, the second one with profiling enabled.
 Packaging notes
 ===============
 
-Ganeti is mostly developped and tested on `Debian
+Ganeti is mostly developed and tested on `Debian
 <http://www.debian.org/>`_-based distributions, while still keeping
-adoptability to other Linux distributions in mind.
+adaptability to other Linux distributions in mind.
 
 The ``doc/examples/`` directory contains a number of potentially useful
 scripts and configuration files. Some of them might need adjustment

@@ -65,7 +65,7 @@ def Delay(opts, args):
                            on_master=opts.on_master,
                            on_nodes=opts.on_nodes,
                            repeat=opts.repeat)
-  SubmitOpCode(op, opts=opts)
+  SubmitOrSend(op, opts)
 
   return 0
 
@@ -174,7 +174,8 @@ def TestAllocator(opts, args):
                                direction=opts.direction,
                                allocator=opts.iallocator,
                                evac_mode=opts.evac_mode,
-                               target_groups=target_groups)
+                               target_groups=target_groups,
+                               spindle_use=opts.spindle_use)
   result = SubmitOpCode(op, opts=opts)
   ToStdout("%s" % result)
   return 0
@@ -623,7 +624,7 @@ commands = {
                 action="append", help="Select nodes to sleep on"),
      cli_option("-r", "--repeat", type="int", default="0", dest="repeat",
                 help="Number of times to repeat the sleep"),
-     DRY_RUN_OPT, PRIORITY_OPT,
+     DRY_RUN_OPT, PRIORITY_OPT, SUBMIT_OPT,
      ],
     "[opts...] <duration>", "Executes a TestDelay OpCode"),
   "submit-job": (
@@ -672,6 +673,8 @@ commands = {
                       utils.CommaJoin(constants.IALLOCATOR_NEVAC_MODES))),
      cli_option("--target-groups", help="Target groups for relocation",
                 default=[], action="append"),
+     cli_option("--spindle-use", help="How many spindles to use",
+                default=1, type="int"),
      DRY_RUN_OPT, PRIORITY_OPT,
      ],
     "{opts...} <instance>", "Executes a TestAllocator OpCode"),

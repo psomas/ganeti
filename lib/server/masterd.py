@@ -66,6 +66,18 @@ EXIT_NOTMASTER = constants.EXIT_NOTMASTER
 EXIT_NODESETUP_ERROR = constants.EXIT_NODESETUP_ERROR
 
 
+def _LogNewJob(status, info, ops):
+  """Log information about a recently submitted job.
+
+  """
+  if status:
+    logging.info("New job with id %s, summary: %s",
+                 info, utils.CommaJoin(op.Summary() for op in ops))
+  else:
+    logging.info("Failed to submit job, reason: '%s', summary: %s",
+                 info, utils.CommaJoin(op.Summary() for op in ops))
+
+
 class ClientRequestWorker(workerpool.BaseWorker):
   # pylint: disable=W0221
   def RunTask(self, server, message, client):
@@ -267,18 +279,23 @@ class ClientOps:
     # TODO: Rewrite to not exit in each 'if/elif' branch
 
     if method == luxi.REQ_SUBMIT_JOB:
-      logging.info("Received new job")
+      logging.info("Receiving new job")
       (job_def, ) = args
       ops = [opcodes.OpCode.LoadOpCode(state) for state in job_def]
-      return queue.SubmitJob(ops)
+      job_id = queue.SubmitJob(ops)
+      _LogNewJob(True, job_id, ops)
+      return job_id
 
     elif method == luxi.REQ_SUBMIT_MANY_JOBS:
-      logging.info("Received multiple jobs")
+      logging.info("Receiving multiple jobs")
       (job_defs, ) = args
       jobs = []
       for ops in job_defs:
         jobs.append([opcodes.OpCode.LoadOpCode(state) for state in ops])
-      return queue.SubmitManyJobs(jobs)
+      job_ids = queue.SubmitManyJobs(jobs)
+      for ((status, job_id), ops) in zip(job_ids, jobs):
+        _LogNewJob(status, job_id, ops)
+      return job_ids
 
     elif method == luxi.REQ_CANCEL_JOB:
       (job_id, ) = args
@@ -372,6 +389,15 @@ class ClientOps:
       op = opcodes.OpGroupQuery(names=names, output_fields=fields)
       return self._Query(op)
 
+    elif method == luxi.REQ_QUERY_NETWORKS:
+      (names, fields, use_locking) = args
+      logging.info("Received network query request for %s", names)
+      if use_locking:
+        raise errors.OpPrereqError("Sync queries are not allowed",
+                                   errors.ECODE_INVAL)
+      op = opcodes.OpNetworkQuery(names=names, output_fields=fields)
+      return self._Query(op)
+
     elif method == luxi.REQ_QUERY_EXPORTS:
       (nodes, use_locking) = args
       if use_locking:
@@ -462,7 +488,8 @@ class GanetiContext(object):
     self.glm = locking.GanetiLockManager(
                 self.cfg.GetNodeList(),
                 self.cfg.GetNodeGroupList(),
-                self.cfg.GetInstanceList())
+                self.cfg.GetInstanceList(),
+                self.cfg.GetNetworkList())
 
     self.cfg.SetContext(self)
 

@@ -95,6 +95,16 @@ def CheckHostname(path):
   return False
 
 
+def UpgradeInstances(config_data):
+  for instance in config_data["instances"].values():
+    hotplug_info = instance.get("hotplug_info", None)
+    if hotplug_info:
+      try:
+        del hotplug_info["pci_pool"]
+      except:
+        pass
+
+
 def main():
   """Main program.
 
@@ -236,6 +246,8 @@ def main():
     logging.info("Removing watcher state file %s", options.WATCHER_STATEFILE)
     if not options.dry_run:
       utils.RemoveFile(options.WATCHER_STATEFILE)
+
+  UpgradeInstances(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

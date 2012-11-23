@@ -504,7 +504,7 @@ class ConfigData(ConfigObject):
         self.cluster.drbd_usermode_helper = constants.DEFAULT_DRBD_HELPER
 
 class HotplugInfo(ConfigObject):
-  __slots__ = ["nics", "disks", "pci_pool"]
+  __slots__ = ["nics", "disks"]
 
 
 class NIC(ConfigObject):

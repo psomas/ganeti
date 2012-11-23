@@ -290,25 +290,13 @@ class ConfigWriter:
       self._temporary_macs.Reserve(ec_id, mac)
 
   @locking.ssynchronized(_config_lock)
-  def GetPCIInfo(self, instance, dev_type):
+  def GetHotplugIndex(self, instance, dev_type):
 
-    if not instance.hotplug_info:
-      return None, None
     idx = getattr(instance.hotplug_info, dev_type)
-    setattr(instance.hotplug_info, dev_type, idx+1)
-    pci = instance.hotplug_info.pci_pool.pop()
+    setattr(instance.hotplug_info, dev_type, idx + 1)
     self._WriteConfig()
 
-    return idx, pci
-
-  @locking.ssynchronized(_config_lock)
-  def UpdatePCIInfo(self, instance, pci_slot):
-
-    if instance.hotplug_info:
-      logging.info("Releasing PCI slot %d for instance %s",
-                    pci_slot, instance.name)
-      instance.hotplug_info.pci_pool.append(pci_slot)
-      self._WriteConfig()
+    return idx
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):

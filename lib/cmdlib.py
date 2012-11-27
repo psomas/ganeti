@@ -8972,28 +8972,33 @@ def _GenerateUniqueNames(lu, exts):
     results.append("%s%s" % (new_id, val))
   return results
 
-def _GetPCIInfo(lu, dev_type):
 
-  if (hasattr(lu, 'op') and lu.op.hotplug):
-    # case of InstanceCreate()
-    if hasattr(lu, 'hotplug_info'):
-      if lu.hotplug_info is not None:
-        idx = getattr(lu.hotplug_info, dev_type)
-        setattr(lu.hotplug_info, dev_type, idx+1)
-        if dev_type == 'disks' and idx == 0:
-          lu.LogInfo("Disk 0 cannot be hotpluggable.")
-          return None, None
-        pci = lu.hotplug_info.pci_pool.pop()
-        lu.LogInfo("Choosing pci slot %d" % pci)
-        return idx, pci
-    # case of InstanceSetParams()
-    elif lu.instance.hotplug_info is not None:
-      idx, pci = lu.cfg.GetPCIInfo(lu.instance, dev_type)
-      lu.LogInfo("Choosing pci slot %d" % pci)
-      return idx, pci
+def _GetHotplugIndex(lu, dev_type):
 
-  lu.LogWarning("Hotplug not supported for this instance.")
-  return None, None
+  # case of InstanceCreate()
+  # keep backwards compat and naming
+  if hasattr(lu, 'hotplug_info'):
+    if lu.hotplug_info is not None:
+      idx = getattr(lu.hotplug_info, dev_type)
+      setattr(lu.hotplug_info, dev_type, idx + 1)
+      return idx
+  # case of InstanceSetParams()
+  # give every device a idx so that it can be hotplugable
+  elif lu.instance.hotplug_info is not None:
+    idx = lu.cfg.GetHotplugIndex(lu.instance, dev_type)
+    return idx
+
+  return None
+
+
+def _DeviceHotplugable(dev):
+
+  return dev.idx is not None
+
+
+def _HotplugEnabled(instance):
+
+  return instance.hotplug_info is not None
 
 
 def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
@@ -9012,14 +9017,15 @@ def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
                           logical_id=(vgnames[1], names[1]),
                           params={})
 
-  disk_idx, pci = _GetPCIInfo(lu, 'disks')
-  drbd_dev = objects.Disk(idx=disk_idx, pci=pci,
-                          dev_type=constants.LD_DRBD8, size=size,
+  drbd_dev = objects.Disk(dev_type=constants.LD_DRBD8, size=size,
                           logical_id=(primary, secondary, port,
                                       p_minor, s_minor,
                                       shared_secret),
                           children=[dev_data, dev_meta],
                           iv_name=iv_name, params={})
+  if lu.op.hotplug:
+    drbd_dev.idx = _GetHotplugIndex(lu, 'disks')
+
   return drbd_dev
 
 
@@ -9141,13 +9147,15 @@ def _GenerateDiskTemplate(lu, template_name, instance_name, primary_node,
       feedback_fn("* disk %s, size %s" %
                   (disk_index, utils.FormatUnit(size, "h")))
 
-      disk_idx, pci = _GetPCIInfo(lu, 'disks')
+      disk_obj = objects.Disk(dev_type=dev_type, size=size,
+                              logical_id=logical_id_fn(idx, disk_index, disk),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk[constants.IDISK_MODE],
+                              params={})
+      if lu.op.hotplug:
+        disk_obj.idx = _GetHotplugIndex(lu, 'disks')
 
-      disks.append(objects.Disk(dev_type=dev_type, size=size,
-                                logical_id=logical_id_fn(idx, disk_index, disk),
-                                iv_name="disk/%d" % disk_index,
-                                mode=disk[constants.IDISK_MODE],
-                                params=params, idx=disk_idx, pci=pci))
+      disks.append(disk_obj)
 
   return disks
 
@@ -10044,8 +10052,8 @@ class LUInstanceCreate(LogicalUnit):
     self.hotplug_info = None
     if self.op.hotplug:
       self.LogInfo("Enabling hotplug.")
-      self.hotplug_info = objects.HotplugInfo(disks=0, nics=0,
-                                              pci_pool=list(range(16,32)))
+      self.hotplug_info = objects.HotplugInfo(disks=0, nics=0)
+
     # NIC buildup
     self.nics = []
     for idx, nic in enumerate(self.op.nics):
@@ -10116,10 +10124,12 @@ class LUInstanceCreate(LogicalUnit):
 
       check_params = cluster.SimpleFillNIC(nicparams)
       objects.NIC.CheckParameterSyntax(check_params)
-      nic_idx, pci = _GetPCIInfo(self, 'nics')
-      self.nics.append(objects.NIC(idx=nic_idx, pci=pci,
-                                   mac=mac, ip=nic_ip, network=net,
-                                   nicparams=check_params))
+      nic_obj = objects.NIC(mac=mac, ip=nic_ip,
+                            network=net, nicparams=check_params)
+      if self.op.hotplug:
+        nic_obj.idx = _GetHotplugIndex(self, 'nics')
+
+      self.nics.append(nic_obj)
 
     # disk checks/pre-build
     default_vg = self.cfg.GetVGName()
@@ -13315,14 +13325,17 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Failed to create volume %s (%s) on node '%s': %s",
                         disk.iv_name, disk, node, err)
 
-    if self.op.hotplug and disk.pci and _InstanceRunning(self, self.instance):
+    if self.op.hotplug and _HotplugEnabled(self.instance):
       self.LogInfo("Trying to hotplug device.")
       _, device_info = _AssembleInstanceDisks(self, self.instance,
                                               [disk], check=False)
       _, _, dev_path = device_info[0]
       #TODO: handle result
-      self.rpc.call_hot_add_disk(self.instance.primary_node,
-                                 self.instance, disk, dev_path, idx)
+      result = self.rpc.call_hot_add_disk(self.instance.primary_node,
+                                          self.instance, disk, dev_path, idx)
+      result.Raise("Could not hotplug device.")
+      disk.pci = result.payload
+
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
@@ -13344,18 +13357,13 @@ class LUInstanceSetParams(LogicalUnit):
     """
     #TODO: log warning in case hotplug is not possible
     #      handle errors
-    if root.pci and not self.op.hotplug:
-      raise errors.OpPrereqError("Cannot remove a disk that has"
-                                 " been hotplugged"
-                                 " without removing it with hotplug",
-                                 errors.ECODE_INVAL)
-    if self.op.hotplug and root.pci:
-      if _InstanceRunning(self, self.instance):
-        self.LogInfo("Trying to hotplug device.")
-        self.rpc.call_hot_del_disk(self.instance.primary_node,
-                                   self.instance, root, idx)
-        _ShutdownInstanceDisks(self, self.instance, [root])
-      self.cfg.UpdatePCIInfo(self.instance, root.pci)
+    if self.op.hotplug and _DeviceHotplugable(root):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_disk(self.instance.primary_node,
+                                          self.instance, root, idx)
+      result.Raise("Could not hotplug device.")
+      self.LogInfo("Hotplug done.")
+      _ShutdownInstanceDisks(self, self.instance, [root])
 
     (anno_disk,) = _AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
@@ -13384,11 +13392,14 @@ class LUInstanceSetParams(LogicalUnit):
     #TODO: log warning in case hotplug is not possible
     #      handle errors
     #      return changes
-    if self.op.hotplug:
-      nic.idx, nic.pci = _GetPCIInfo(self, 'nics')
-      if nic.pci is not None and _InstanceRunning(self, self.instance):
-        self.rpc.call_hot_add_nic(self.instance.primary_node,
-                                  self.instance, nic, idx)
+    if self.op.hotplug and _HotplugEnabled(self.instance):
+      nic.idx = _GetHotplugIndex(self, 'nics')
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device")
+      nic.pci = result.payload
+      self.Log("Hotplug done.")
+
     desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
@@ -13417,27 +13428,29 @@ class LUInstanceSetParams(LogicalUnit):
 
     #TODO: log warning in case hotplug is not possible
     #      handle errors
-    if self.op.hotplug and nic.pci and _InstanceRunning(self, self.instance):
+    if self.op.hotplug and _DeviceHotplugable(nic):
       self.LogInfo("Trying to hotplug device.")
-      self.rpc.call_hot_del_nic(self.instance.primary_node,
-                                self.instance, nic, idx)
-      self.rpc.call_hot_add_nic(self.instance.primary_node,
-                                self.instance, nic, idx)
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
+      nic.pci = result.payload
+
     return changes
 
   def _RemoveNic(self, idx, nic, _):
-    if nic.pci and not self.op.hotplug:
-      raise errors.OpPrereqError("Cannot remove a nic that has been hotplugged"
-                                 " without removing it with hotplug",
-                                 errors.ECODE_INVAL)
     #TODO: log warning in case hotplug is not possible
     #      handle errors
-    if self.op.hotplug and nic.pci:
-      if _InstanceRunning(self, self.instance):
-        self.LogInfo("Trying to hotplug device.")
-        self.rpc.call_hot_del_nic(self.instance.primary_node,
-                                  self.instance, nic, idx)
-      self.cfg.UpdatePCIInfo(self.instance, nic.pci)
+    if self.op.hotplug and _DeviceHotplugable(nic):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
 
 
   def Exec(self, feedback_fn):

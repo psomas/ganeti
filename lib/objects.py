@@ -508,7 +508,7 @@ class ConfigData(ConfigObject):
       self.networks = {}
 
 class HotplugInfo(ConfigObject):
-  __slots__ = ["nics", "disks", "pci_pool"]
+  __slots__ = ["nics", "disks"]
 
 
 class NIC(ConfigObject):

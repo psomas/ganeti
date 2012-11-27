@@ -107,6 +107,16 @@ def UpgradeGroups(config_data):
       group["networks"] = {}
 
 
+def UpgradeInstances(config_data):
+  for instance in config_data["instances"].values():
+    hotplug_info = instance.get("hotplug_info", None)
+    if hotplug_info:
+      try:
+        del hotplug_info["pci_pool"]
+      except:
+        pass
+
+
 def main():
   """Main program.
 

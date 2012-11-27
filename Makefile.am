@@ -375,6 +375,7 @@ docinput = \
 	doc/design-chained-jobs.rst \
 	doc/design-cpu-pinning.rst \
 	doc/design-draft.rst \
+	doc/design-hotplug.rst \
 	doc/design-htools-2.3.rst \
 	doc/design-http-server.rst \
 	doc/design-impexp2.rst \

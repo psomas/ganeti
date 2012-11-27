@@ -17,6 +17,7 @@ Design document drafts
    design-partitioned.rst
    design-monitoring-agent.rst
    design-linuxha.rst
+   design-hotplug.rst
 
 .. vim: set textwidth=72 :
 .. Local Variables:

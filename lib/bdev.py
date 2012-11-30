@@ -2513,14 +2513,12 @@ class RADOSBlockDevice(BlockDev):
     volumefield = 2
     devicefield = 4
 
-    field_sep = "\t"
-
     lines = output.splitlines()
-    splitted_lines = map(lambda l: l.split(field_sep), lines)
+    splitted_lines = map(lambda l: l.split(), lines)
 
     # Check empty output.
     if not splitted_lines:
-      _ThrowError("rbd showmapped returned empty output")
+      return None
 
     # Check showmapped header line, to determine number of fields.
     field_cnt = len(splitted_lines[0])

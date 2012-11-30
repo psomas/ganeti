@@ -9151,7 +9151,7 @@ def _GenerateDiskTemplate(lu, template_name, instance_name, primary_node,
                               logical_id=logical_id_fn(idx, disk_index, disk),
                               iv_name="disk/%d" % disk_index,
                               mode=disk[constants.IDISK_MODE],
-                              params={})
+                              params=params)
       if lu.op.hotplug:
         disk_obj.idx = _GetHotplugIndex(lu, 'disks')
 

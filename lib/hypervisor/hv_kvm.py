@@ -1503,7 +1503,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         taps.append(tapname)
         if (v_major, v_min) >= (0, 12):
           nic_val = "%s,mac=%s" % (nic_model, nic.mac)
-          if nic.idx:
+          if nic.idx is not None:
             nic_val += (",netdev=netdev%d,id=virtio-net-pci.%d" %
                         (nic.idx, nic.idx))
             if nic.pci is not None:

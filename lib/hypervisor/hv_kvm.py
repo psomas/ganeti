@@ -38,6 +38,7 @@ import socket
 import stat
 import StringIO
 import fdsend
+from bitarray import bitarray
 try:
   import affinity   # pylint: disable=F0401
 except ImportError:
@@ -68,6 +69,7 @@ IFF_TAP = 0x0002
 IFF_NO_PI = 0x1000
 IFF_VNET_HDR = 0x4000
 
+FREE = bitarray("0")
 
 def _ProbeTapVnetHdr(fd):
   """Check whether to enable the IFF_VNET_HDR flag.
@@ -511,6 +513,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _CPU_INFO_RE = re.compile(r"cpu\s+\#(\d+).*thread_id\s*=\s*(\d+)", re.I)
   _CPU_INFO_CMD = "info cpus"
   _CONT_CMD = "cont"
+
+  _INFO_PCI_RE = re.compile(r'Bus.*device[ ]*(\d+).*')
+  _INFO_PCI_CMD = "info pci"
+
 
   ANCILLARY_FILES = [
     _KVM_NETWORK_SCRIPT,
@@ -1018,18 +1024,21 @@ class KVMHypervisor(hv_base.BaseHypervisor):
           boot_val = ",boot=on"
       drive_val = "file=%s,format=raw%s%s" % \
                   (dev_path, boot_val, cache_val)
-      if cfdev.pci:
+      if cfdev.idx is not None:
         #TODO: name id after model
-        drive_val += (",bus=0,unit=%d,if=none,id=drive%d" %
-                      (cfdev.pci, cfdev.idx))
+        drive_val += (",if=none,id=drive%d" % cfdev.idx)
+        if cfdev.pci is not None:
+          drive_val += (",bus=0,unit=%d" % cfdev.pci)
       else:
         drive_val += if_val
 
       kvm_cmd.extend(["-drive", drive_val])
 
-      if cfdev.pci:
-        dev_val = ("%s,bus=pci.0,addr=%s,drive=drive%d,id=virtio-blk-pci.%d" %
-                   (disk_model, hex(cfdev.pci), cfdev.idx, cfdev.idx))
+      if cfdev.idx is not None:
+        dev_val = ("%s,drive=drive%d,id=virtio-blk-pci.%d" %
+                    (disk_model, cfdev.idx, cfdev.idx))
+        if cfdev.pci is not None:
+          dev_val += ",bus=pci.0,addr=%s" % hex(cfdev.pci)
         kvm_cmd.extend(["-device", dev_val])
 
     return kvm_cmd
@@ -1493,16 +1502,17 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         tapfds.append(tapfd)
         taps.append(tapname)
         if (v_major, v_min) >= (0, 12):
-          if nic.pci:
-            nic_idx = nic.idx
+          nic_val = "%s,mac=%s" % (nic_model, nic.mac)
+          if nic.idx is not None:
+            nic_val += (",netdev=netdev%d,id=virtio-net-pci.%d" %
+                        (nic.idx, nic.idx))
+            if nic.pci is not None:
+              nic_val += (",bus=pci.0,addr=%s" % hex(nic.pci))
           else:
-            nic_idx = nic_seq
-          nic_val = ("%s,mac=%s,netdev=netdev%d" %
-                     (nic_model, nic.mac, nic_idx))
-          if nic.pci:
-            nic_val += (",bus=pci.0,addr=%s,id=virtio-net-pci.%d" %
-                        (hex(nic.pci), nic_idx))
-          tap_val = "type=tap,id=netdev%d,fd=%d%s" % (nic_idx, tapfd, tap_extra)
+            nic_val += (",netdev=netdev%d,id=virtio-net-pci.%d" %
+                        (nic_seq, nic_seq))
+          tap_val = ("type=tap,id=netdev%d,fd=%d%s" %
+                     (nic.idx or nic_seq, tapfd, tap_extra))
           kvm_cmd.extend(["-netdev", tap_val, "-device", nic_val])
         else:
           nic_val = "nic,vlan=%s,macaddr=%s,model=%s" % (nic_seq,
@@ -1653,16 +1663,36 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     return result
 
+  def _FindFreePCISlot(self, instance_name):
+    slots = bitarray(32)
+    slots.setall(False)
+    output = self._CallMonitorCommand(instance_name, self._INFO_PCI_CMD)
+    for line in output.stdout.splitlines():
+      match = self._INFO_PCI_RE.search(line)
+      if match:
+        slot = int(match.group(1))
+        slots[slot] = True
+
+    free = slots.search(FREE, 1)
+    if not free:
+      raise errors.HypervisorError("All PCI slots occupied")
+
+    return int(free[0])
+
+  def _HotplugEnabled(self, instance_name):
+    if not self._InstancePidAlive(instance_name)[2]:
+      logging.info("Cannot hotplug. Instance %s not alive", instance_name)
+      return False
+
+    _, v_major, v_min, _ = self._GetKVMVersion()
+    return (v_major, v_min) >= (1, 0)
+
   def HotAddDisk(self, instance, disk, dev_path, _):
     """Hotadd new disk to the VM
 
     """
-    if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
-      return disk.ToDict()
-
-    _, v_major, v_min, _ = self._GetKVMVersion()
-    if (v_major, v_min) >= (1, 0) and disk.pci:
+    if self._HotplugEnabled(instance.name):
+      disk.pci = self._FindFreePCISlot(instance.name)
       idx = disk.idx
       command = ("drive_add dummy file=%s,if=none,id=drive%d,format=raw" %
                  (dev_path, idx))
@@ -1684,18 +1714,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       new_kvm_runtime = (kvm_cmd, kvm_nics, hvparams, block_devices)
       self._SaveKVMRuntime(instance, new_kvm_runtime)
 
-    return disk.ToDict()
+    return disk.pci
 
   def HotDelDisk(self, instance, disk, _):
     """Hotdel disk to the VM
 
     """
-    if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
-      return disk.ToDict()
-
-    _, v_major, v_min, _ = self._GetKVMVersion()
-    if (v_major, v_min) >= (1, 0) and disk.pci:
+    if self._HotplugEnabled(instance.name):
       idx = disk.idx
 
       command = "device_del virtio-blk-pci.%d" % idx
@@ -1721,18 +1746,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       new_kvm_runtime = (kvm_cmd, kvm_nics, hvparams, block_devices)
       self._SaveKVMRuntime(instance, new_kvm_runtime)
 
-    return disk.ToDict()
-
   def HotAddNic(self, instance, nic, seq):
     """Hotadd new nic to the VM
 
     """
-    if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
-      return nic.ToDict()
-
-    _, v_major, v_min, _ = self._GetKVMVersion()
-    if (v_major, v_min) >= (1, 0) and nic.pci:
+    if self._HotplugEnabled(instance.name):
+      nic.pci = self._FindFreePCISlot(instance.name)
       mac = nic.mac
       idx = nic.idx
 
@@ -1764,18 +1783,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       new_kvm_runtime = (kvm_cmd, kvm_nics, hvparams, block_devices)
       self._SaveKVMRuntime(instance, new_kvm_runtime)
 
-    return nic.ToDict()
+    return nic.pci
 
   def HotDelNic(self, instance, nic, _):
     """Hotadd new nic to the VM
 
     """
-    if not self._InstancePidAlive(instance.name)[2]:
-      logging.info("Cannot hotplug. Instance %s not alive", instance.name)
-      return nic.ToDict()
-
-    _, v_major, v_min, _ = self._GetKVMVersion()
-    if (v_major, v_min) >= (1, 0) and nic.pci:
+    if self._HotplugEnabled(instance.name):
       idx = nic.idx
 
       command = "device_del virtio-net-pci.%d" % idx
@@ -1800,7 +1814,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       new_kvm_runtime = (kvm_cmd, kvm_nics, hvparams, block_devices)
       self._SaveKVMRuntime(instance, new_kvm_runtime)
 
-    return nic.ToDict()
 
   def _PassTapFd(self, instance, fd, nic):
     monsock = utils.ShellQuote(self._InstanceMonitor(instance.name))

@@ -1,4 +1,4 @@
-snf-ganeti (2.6.1+ippool11+hotplug3+extstorage3-1) unstable; urgency=low
+snf-ganeti (2.6.1+ippool11+hotplug5+extstorage3+fixes-1) unstable; urgency=low
 
   GRNET-specific package against google's master branch
   The package contains google's current master branch +

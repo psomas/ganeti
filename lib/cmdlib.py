@@ -66,7 +66,6 @@ from ganeti.masterd import iallocator
 
 import ganeti.masterd.instance # pylint: disable=W0611
 
-
 # States of instance
 INSTANCE_DOWN = [constants.ADMINST_DOWN]
 INSTANCE_ONLINE = [constants.ADMINST_DOWN, constants.ADMINST_UP]
@@ -6860,7 +6859,7 @@ class LUInstanceActivateDisks(NoHooksLU):
 
 
 def _AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
-                           ignore_size=False):
+                           ignore_size=False, check=True):
   """Prepare the block devices for an instance.
 
   This sets up the block devices on all nodes.
@@ -6886,7 +6885,8 @@ def _AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   device_info = []
   disks_ok = True
   iname = instance.name
-  disks = _ExpandCheckDisks(instance, disks)
+  if check:
+    disks = _ExpandCheckDisks(instance, disks)
 
   # With the two passes mechanism we try to reduce the window of
   # opportunity for the race condition of switching DRBD to primary
@@ -9379,6 +9379,11 @@ def _GenerateUniqueNames(lu, exts):
   return results
 
 
+def _DeviceHotplugable(dev):
+
+  return dev.uuid is not None
+
+
 def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
                          iv_name, p_minor, s_minor):
   """Generate a drbd8 device complete with its children.
@@ -9395,12 +9400,14 @@ def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
                           size=constants.DRBD_META_SIZE,
                           logical_id=(vgnames[1], names[1]),
                           params={})
+
   drbd_dev = objects.Disk(dev_type=constants.LD_DRBD8, size=size,
                           logical_id=(primary, secondary, port,
                                       p_minor, s_minor,
                                       shared_secret),
                           children=[dev_data, dev_meta],
                           iv_name=iv_name, params={})
+
   return drbd_dev
 
 
@@ -9887,9 +9894,10 @@ def _CreateInstanceAllocRequest(op, disks, nics, beparams, node_whitelist):
                                        node_whitelist=node_whitelist)
 
 
-def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
+def _ComputeNics(lu, op, cluster, default_ip, cfg, ec_id):
   """Computes the nics.
 
+  @param lu: The LU
   @param op: The instance opcode
   @param cluster: Cluster configuration object
   @param default_ip: The default ip to assign
@@ -9972,7 +9980,7 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
     net_uuid = cfg.LookupNetwork(net)
     nic_obj = objects.NIC(mac=mac, ip=nic_ip,
                           network=net_uuid,
-                          nicparams=nicparams)
+                          nicparams=check_params)
 
     nic_obj.uuid = cfg.GenerateUniqueID(ec_id)
     nic_obj.name = nic.get(constants.IDEV_NAME, None)
@@ -10630,8 +10638,10 @@ class LUInstanceCreate(LogicalUnit):
     if self.op.identify_defaults:
       self._RevertToDefaults(cluster)
 
+    self.dev_idxs = { "disks": 0, "nics": 0 }
+
     # NIC buildup
-    self.nics = _ComputeNics(self.op, cluster, self.check_ip, self.cfg,
+    self.nics = _ComputeNics(self, self.op, cluster, self.check_ip, self.cfg,
                              self.proc.GetECId())
 
     # disk checks/pre-build
@@ -10968,6 +10978,7 @@ class LUInstanceCreate(LogicalUnit):
                             hvparams=self.op.hvparams,
                             hypervisor=self.op.hypervisor,
                             osparams=self.op.osparams,
+                            dev_idxs=self.dev_idxs,
                             )
 
     if self.op.tags:
@@ -11257,7 +11268,7 @@ class LUInstanceMultiAlloc(NoHooksLU):
       node_whitelist = None
 
     insts = [_CreateInstanceAllocRequest(op, _ComputeDisks(op, default_vg),
-                                         _ComputeNics(op, cluster, None,
+                                         _ComputeNics(self, op, cluster, None,
                                                       self.cfg, ec_id),
                                          _ComputeFullBeParams(op, cluster),
                                          node_whitelist)
@@ -13154,13 +13165,16 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
         if remove_fn is not None:
           remove_fn(absidx, item, private)
 
+        #TODO: include a hotplugged msg in changes
         changes = [("%s/%s" % (kind, absidx), "remove")]
 
         assert container[absidx] == item
         del container[absidx]
       elif op == constants.DDM_MODIFY:
         if modify_fn is not None:
+          #TODO: include a hotplugged msg in changes
           changes = modify_fn(absidx, item, params, private)
+
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
 
@@ -13916,7 +13930,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in instance.nics]
       ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                         self._CreateNewNic, self._ApplyNicMods, None)
+                         self._CreateNewNic, self._ApplyNicMods,
+                         self._RemoveNic)
       self._new_nics = nics
       ispec[constants.ISPEC_NIC_COUNT] = len(self._new_nics)
     else:
@@ -13950,6 +13965,7 @@ class LUInstanceSetParams(LogicalUnit):
                (group_info, group_info.name,
                 utils.CommaJoin(set(res_max + res_min))))
         raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
+
 
   def _ConvertPlainToDrbd(self, feedback_fn):
     """Converts an instance from plain to drbd.
@@ -14102,6 +14118,16 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Failed to create volume %s (%s) on node '%s': %s",
                         disk.iv_name, disk, node, err)
 
+    if self.op.hotplug:
+      self.LogInfo("Trying to hotplug device.")
+      _, device_info = _AssembleInstanceDisks(self, self.instance,
+                                              [disk], check=False)
+      _, _, dev_path = device_info[0]
+      result = self.rpc.call_hot_add_disk(self.instance.primary_node,
+                                          self.instance, disk, dev_path, idx)
+      result.Raise("Could not hotplug device.")
+      self.LogInfo("Hotplug done.")
+
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
@@ -14122,6 +14148,15 @@ class LUInstanceSetParams(LogicalUnit):
     """Removes a disk.
 
     """
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(root):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_disk(self.instance.primary_node,
+                                          self.instance, root, idx)
+      result.Raise("Could not hotplug device.")
+      self.LogInfo("Hotplug done.")
+      _ShutdownInstanceDisks(self, self.instance, [root])
+
     (anno_disk,) = _AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
       self.cfg.SetDiskID(disk, node)
@@ -14149,13 +14184,21 @@ class LUInstanceSetParams(LogicalUnit):
     nic_obj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
     nic_obj.name = params.get(constants.IDEV_NAME, None)
 
-    return (nic_obj, [
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug:
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic_obj, idx)
+      result.Raise("Could not hotplug device")
+      self.Log("Hotplug done.")
+
+    desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, private.filled[constants.NIC_MODE],
-       private.filled[constants.NIC_LINK],
-       net)),
-      ])
+       private.filled[constants.NIC_LINK], net)),
+      ]
+
+    return (nic_obj, desc)
 
   def _ApplyNicMods(self, idx, nic, params, private):
     """Modifies a network interface.
@@ -14180,7 +14223,28 @@ class LUInstanceSetParams(LogicalUnit):
       for (key, val) in nic.nicparams.items():
         changes.append(("nic.%s/%d" % (key, idx), val))
 
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(nic):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
+
     return changes
+
+  def _RemoveNic(self, idx, nic, _):
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(nic):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
+
 
   def Exec(self, feedback_fn):
     """Modifies an instance.

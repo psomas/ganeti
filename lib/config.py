@@ -413,6 +413,12 @@ class ConfigWriter:
     if net_uuid:
       return self._UnlockedReserveIp(net_uuid, address, ec_id)
 
+  @locking.ssynchronized(_config_lock)
+  def UpdateDeviceUniqueIdx(self, instance, dev_type):
+
+    instance.dev_idxs[dev_type] += 1
+    self._WriteConfig()
+
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
     """Reserve an VG/LV pair for an instance.

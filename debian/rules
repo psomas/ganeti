@@ -80,7 +80,7 @@ install: build
 	   $(HTOOLS_DIR)/usr/lib/ganeti/iallocators/
 
 	mkdir -p $(HTOOLS_DIR)/usr/share/man/man1
-	for i in htools hail hbal hscan hspace hinfo hcheck; do \
+	for i in hroller htools hail hbal hscan hspace hinfo hcheck; do \
 	  mv $(GANETI_DIR)/usr/share/man/man1/$${i}.1 \
 	     $(HTOOLS_DIR)/usr/share/man/man1/ ; \
 	done

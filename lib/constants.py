@@ -163,7 +163,7 @@ DAEMON_UTIL = _autoconf.PKGLIBDIR + "/daemon-util"
 SETUP_SSH = _autoconf.TOOLSDIR + "/setup-ssh"
 KVM_IFUP = _autoconf.PKGLIBDIR + "/kvm-ifup"
 KVM_CONSOLE_WRAPPER = _autoconf.PKGLIBDIR + "/tools/kvm-console-wrapper"
-XM_CONSOLE_WRAPPER = _autoconf.PKGLIBDIR + "/tools/xm-console-wrapper"
+XEN_CONSOLE_WRAPPER = _autoconf.PKGLIBDIR + "/tools/xen-console-wrapper"
 ETC_HOSTS = "/etc/hosts"
 DEFAULT_FILE_STORAGE_DIR = _autoconf.FILE_STORAGE_DIR
 DEFAULT_SHARED_FILE_STORAGE_DIR = _autoconf.SHARED_FILE_STORAGE_DIR
@@ -274,6 +274,15 @@ XEN_CMD_XM = "xm"
 XEN_CMD_XL = "xl"
 # FIXME: This will be made configurable using hvparams in Ganeti 2.7
 XEN_CMD = _autoconf.XEN_CMD
+# When the Xen toolstack used is "xl", live migration requires the source host
+# to connect to the target host via ssh (xl runs this command). We need to pass
+# the command xl runs some extra info so that it can use Ganeti's key
+# verification and not fail. Note that this string is incomplete: it must be
+# filled with the cluster name before being used.
+XL_SSH_CMD = ("ssh -l root -oGlobalKnownHostsFile=%s"
+              " -oUserKnownHostsFile=/dev/null"
+              " -oCheckHostIp=no -oStrictHostKeyChecking=yes"
+              " -oHostKeyAlias=%%s") % SSH_KNOWN_HOSTS_FILE
 
 KVM_PATH = _autoconf.KVM_PATH
 KVM_KERNEL = _autoconf.KVM_KERNEL

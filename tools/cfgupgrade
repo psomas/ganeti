@@ -34,6 +34,7 @@ import optparse
 import logging
 import time
 from cStringIO import StringIO
+from bitarray import bitarray
 
 from ganeti import constants
 from ganeti import serializer
@@ -43,6 +44,7 @@ from ganeti import bootstrap
 from ganeti import config
 from ganeti import netutils
 from ganeti import pathutils
+from ganeti import objects
 
 
 options = None
@@ -113,12 +115,29 @@ def UpgradeGroups(config_data):
 
 def UpgradeInstances(config_data):
   for instance in config_data["instances"].values():
+    nics = len(instance["nics"])
+    disks = len(instance["disks"])
+
     hotplug_info = instance.get("hotplug_info", None)
     if hotplug_info:
+      print("Found hotplug_info for instance %s" % instance['name'])
       try:
-        del hotplug_info["pci_pool"]
+        del instance["hotplug_info"]
+        print("Deleting deprecated hotplug_info")
       except KeyError:
         pass
+
+    print("Adding dev_idxs to instance %s" % instance['name'])
+    instance['dev_idxs'] = { "disks": disks, "nics": nics }
+
+    pci_reservations = instance.get("pci_reservations", None)
+    if pci_reservations:
+      try:
+        del instance["pci_reservations"]
+        print("Deleting deprecated pci_reservations")
+      except KeyError:
+        pass
+
 
 
 def main():

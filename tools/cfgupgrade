@@ -123,11 +123,23 @@ def UpgradeInstances(config_data):
           print("NIC with network name %s found."
                 " Substituting with uuid %s." % (name, uuid))
           nic["network"] = uuid
-
-    hotplug_info = inst.get("hotplug_info", None)
-    if hotplug_info:
       try:
-        del hotplug_info["pci_pool"]
+        del nic["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
+
+    for disk in inst["disks"]:
+      try:
+        del disk["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
+
+    for attr in ("dev_idxs", "hotplug_info", "hotplugs", "pci_reservations"):
+      try:
+        del inst[attr]
+        print("Deleting deprecated %s" % attr)
       except KeyError:
         pass
 

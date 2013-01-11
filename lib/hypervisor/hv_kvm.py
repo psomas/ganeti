@@ -517,6 +517,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _INFO_PCI_RE = re.compile(r'Bus.*device[ ]*(\d+).*')
   _INFO_PCI_CMD = "info pci"
 
+  _DEFAULT_MACHINE_VERSION_RE = re.compile(r"(\S+).*\(default\)")
 
   ANCILLARY_FILES = [
     _KVM_NETWORK_SCRIPT,
@@ -1060,6 +1061,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     pidfile = self._InstancePidFile(instance.name)
     kvm = constants.KVM_PATH
     kvm_cmd = [kvm]
+    kvm_cmd.extend(["-M", self._GetDefaultMachineVersion()])
     # used just by the vnc server, if enabled
     kvm_cmd.extend(["-name", instance.name])
     kvm_cmd.extend(["-m", instance.beparams[constants.BE_MAXMEM]])
@@ -1879,6 +1881,21 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         utils.KillProcess(pid)
       else:
         self._CallMonitorCommand(name, "system_powerdown")
+
+  @classmethod
+  def _GetDefaultMachineVersion(cls):
+    """Return the default hardware revision (e.g. pc-1.1)
+
+    """
+    result = utils.RunCmd([constants.KVM_PATH, "-M", "?"])
+    if result.failed:
+      raise errors.HypervisorError("Unable to get default hardware revision")
+    for line in result.output.splitlines():
+      match = cls._DEFAULT_MACHINE_VERSION_RE.match(line)
+      if match:
+        return match.group(1)
+
+    return "pc"
 
   def CleanupInstance(self, instance_name):
     """Cleanup after a stopped instance

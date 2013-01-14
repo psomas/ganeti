@@ -496,6 +496,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     constants.HV_REBOOT_BEHAVIOR:
       hv_base.ParamInSet(True, constants.REBOOT_BEHAVIORS),
     constants.HV_CPU_MASK: hv_base.OPT_MULTI_CPU_MASK_CHECK,
+    constants.HV_KVM_MACHINE_VERSION: hv_base.NO_CHECK,
     }
 
   _MIGRATION_STATUS_RE = re.compile("Migration\s+status:\s+(\w+)",
@@ -1061,7 +1062,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     pidfile = self._InstancePidFile(instance.name)
     kvm = constants.KVM_PATH
     kvm_cmd = [kvm]
-    kvm_cmd.extend(["-M", self._GetDefaultMachineVersion()])
     # used just by the vnc server, if enabled
     kvm_cmd.extend(["-name", instance.name])
     kvm_cmd.extend(["-m", instance.beparams[constants.BE_MAXMEM]])
@@ -1076,6 +1076,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       kvm_cmd.extend(["-no-reboot"])
 
     hvp = instance.hvparams
+    mversion = hvp[constants.HV_KVM_MACHINE_VERSION]
+    if not mversion:
+      mversion = self._GetDefaultMachineVersion()
+    kvm_cmd.extend(["-M", mversion])
     kernel_path = hvp[constants.HV_KERNEL_PATH]
     if kernel_path:
       boot_cdrom = boot_floppy = boot_network = False

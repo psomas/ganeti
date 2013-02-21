@@ -7597,6 +7597,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     constants.IDISK_VG,
     constants.IDISK_METAVG,
     constants.IDISK_PROVIDER,
+    constants.IDEV_NAME,
     ]))
 
   def _RunAllocator(self):
@@ -9462,6 +9463,7 @@ def _GenerateDiskTemplate(
                                       minors[idx * 2], minors[idx * 2 + 1])
       disk_dev.mode = disk[constants.IDISK_MODE]
       disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
+      disk_dev.name = disk.get(constants.IDEV_NAME, None)
       disks.append(disk_dev)
   else:
     if secondary_nodes:
@@ -9528,6 +9530,7 @@ def _GenerateDiskTemplate(
                               mode=disk[constants.IDISK_MODE],
                               params=params)
       disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
+      disk_dev.name = disk.get(constants.IDEV_NAME, None)
       disks.append(disk_dev)
 
   return disks
@@ -9972,6 +9975,7 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
                           nicparams=nicparams)
 
     nic_obj.uuid = cfg.GenerateUniqueID(ec_id)
+    nic_obj.name = nic.get(constants.IDEV_NAME, None)
 
     nics.append(nic_obj)
 
@@ -10010,7 +10014,9 @@ def _ComputeDisks(op, default_vg):
                                  op.disk_template), errors.ECODE_INVAL)
 
     data_vg = disk.get(constants.IDISK_VG, default_vg)
+    name = disk.get(constants.IDEV_NAME, None)
     new_disk = {
+      constants.IDEV_NAME: name,
       constants.IDISK_SIZE: size,
       constants.IDISK_MODE: mode,
       constants.IDISK_VG: data_vg,
@@ -14106,6 +14112,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     disk.mode = params[constants.IDISK_MODE]
+    disk.name = params[constants.IDEV_MODE]
 
     return [
       ("disk.mode/%d" % idx, disk.mode),
@@ -14140,6 +14147,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     nic_obj = objects.NIC(mac=mac, ip=ip, network=net_uuid, nicparams=nicparams)
     nic_obj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
+    nic_obj.name = params.get(constants.IDEV_NAME, None)
 
     return (nic_obj, [
       ("nic.%d" % idx,
@@ -14155,7 +14163,7 @@ class LUInstanceSetParams(LogicalUnit):
     """
     changes = []
 
-    for key in [constants.INIC_MAC, constants.INIC_IP]:
+    for key in [constants.IDEV_NAME, constants.INIC_MAC, constants.INIC_IP]:
       if key in params:
         changes.append(("nic.%s/%d" % (key, idx), params[key]))
         setattr(nic, key, params[key])

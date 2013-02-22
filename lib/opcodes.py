@@ -1618,24 +1618,16 @@ def _TestInstSetParamsModList(fn):
   """Generates a check for modification lists.
 
   """
-  # Old format
-  # TODO: Remove in version 2.8 including support in LUInstanceSetParams
-  old_mod_item_fn = \
-    ht.TAnd(ht.TIsLength(2), ht.TItems([
-      ht.TOr(ht.TElemOf(constants.DDMS_VALUES), ht.TNonNegativeInt),
-      fn,
-      ]))
-
   # New format, supporting adding/removing disks/NICs at arbitrary indices
   mod_item_fn = \
     ht.TAnd(ht.TIsLength(3), ht.TItems([
       ht.TElemOf(constants.DDMS_VALUES_WITH_MODIFY),
-      ht.Comment("Disk index, can be negative, e.g. -1 for last disk")(ht.TInt),
+      ht.Comment("Disk ident, can be negative, e.g. -1 for last disk")
+                (ht.TString),
       fn,
       ]))
 
-  return ht.TOr(ht.Comment("Recommended")(ht.TListOf(mod_item_fn)),
-                ht.Comment("Deprecated")(ht.TListOf(old_mod_item_fn)))
+  return ht.Comment("Recommended")(ht.TListOf(mod_item_fn))
 
 
 class OpInstanceSetParams(OpCode):

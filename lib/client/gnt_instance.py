@@ -1211,51 +1211,37 @@ def _ConvertNicDiskModifications(mods):
   """
   result = []
 
-  for (idx, params) in mods:
-    if idx == constants.DDM_ADD:
-      # Add item as last item (legacy interface)
-      action = constants.DDM_ADD
-      idxno = -1
-    elif idx == constants.DDM_REMOVE:
-      # Remove last item (legacy interface)
-      action = constants.DDM_REMOVE
-      idxno = -1
-    else:
-      # Modifications and adding/removing at arbitrary indices
-      try:
-        idxno = int(idx)
-      except (TypeError, ValueError):
-        raise errors.OpPrereqError("Non-numeric index '%s'" % idx,
+  for (ident, params) in mods:
+    # Modifications and adding/removing at arbitrary indices
+
+    add = params.pop(constants.DDM_ADD, _MISSING)
+    remove = params.pop(constants.DDM_REMOVE, _MISSING)
+    modify = params.pop(constants.DDM_MODIFY, _MISSING)
+
+    if modify is _MISSING:
+      if not (add is _MISSING or remove is _MISSING):
+        raise errors.OpPrereqError("Cannot add and remove at the same time",
                                    errors.ECODE_INVAL)
-
-      add = params.pop(constants.DDM_ADD, _MISSING)
-      remove = params.pop(constants.DDM_REMOVE, _MISSING)
-      modify = params.pop(constants.DDM_MODIFY, _MISSING)
-
-      if modify is _MISSING:
-        if not (add is _MISSING or remove is _MISSING):
-          raise errors.OpPrereqError("Cannot add and remove at the same time",
-                                     errors.ECODE_INVAL)
-        elif add is not _MISSING:
-          action = constants.DDM_ADD
-        elif remove is not _MISSING:
-          action = constants.DDM_REMOVE
-        else:
-          action = constants.DDM_MODIFY
-
-      elif add is _MISSING and remove is _MISSING:
-        action = constants.DDM_MODIFY
+      elif add is not _MISSING:
+        action = constants.DDM_ADD
+      elif remove is not _MISSING:
+        action = constants.DDM_REMOVE
       else:
-        raise errors.OpPrereqError("Cannot modify and add/remove at the"
-                                   " same time", errors.ECODE_INVAL)
+        action = constants.DDM_MODIFY
 
-      assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
+    elif add is _MISSING and remove is _MISSING:
+      action = constants.DDM_MODIFY
+    else:
+      raise errors.OpPrereqError("Cannot modify and add/remove at the"
+                                 " same time", errors.ECODE_INVAL)
+
+    assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
 
     if action == constants.DDM_REMOVE and params:
       raise errors.OpPrereqError("Not accepting parameters on removal",
                                  errors.ECODE_INVAL)
 
-    result.append((action, idxno, params))
+    result.append((action, ident, params))
 
   return result
 

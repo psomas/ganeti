@@ -15,6 +15,7 @@ Design document drafts
    design-autorepair.rst
    design-partitioned.rst
    design-monitoring-agent.rst
+   design-device-uuid-name.rst
 
 .. vim: set textwidth=72 :
 .. Local Variables:

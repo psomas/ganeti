@@ -66,7 +66,6 @@ from ganeti.masterd import iallocator
 
 import ganeti.masterd.instance # pylint: disable=W0611
 
-
 # States of instance
 INSTANCE_DOWN = [constants.ADMINST_DOWN]
 INSTANCE_ONLINE = [constants.ADMINST_DOWN, constants.ADMINST_UP]
@@ -1020,18 +1019,32 @@ def _CheckOutputFields(static, dynamic, selected):
                                % ",".join(delta), errors.ECODE_INVAL)
 
 
-def _CheckGlobalHvParams(params):
-  """Validates that given hypervisor params are not global ones.
+def _CheckParamsNotGlobal(params, glob_pars, kind, bad_levels, good_levels):
+  """Make sure that none of the given paramters is global.
 
-  This will ensure that instances don't get customised versions of
-  global params.
+  If a global parameter is found, an L{errors.OpPrereqError} exception is
+  raised. This is used to avoid setting global parameters for individual nodes.
+
+  @type params: dictionary
+  @param params: Parameters to check
+  @type glob_pars: dictionary
+  @param glob_pars: Forbidden parameters
+  @type kind: string
+  @param kind: Kind of parameters (e.g. "node")
+  @type bad_levels: string
+  @param bad_levels: Level(s) at which the parameters are forbidden (e.g.
+      "instance")
+  @type good_levels: strings
+  @param good_levels: Level(s) at which the parameters are allowed (e.g.
+      "cluster or group")
 
   """
-  used_globals = constants.HVC_GLOBALS.intersection(params)
+  used_globals = glob_pars.intersection(params)
   if used_globals:
-    msg = ("The following hypervisor parameters are global and cannot"
-           " be customized at instance level, please modify them at"
-           " cluster level: %s" % utils.CommaJoin(used_globals))
+    msg = ("The following %s parameters are global and cannot"
+           " be customized at %s level, please modify them at"
+           " %s level: %s" %
+           (kind, bad_levels, good_levels, utils.CommaJoin(used_globals)))
     raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
 
 
@@ -1385,7 +1398,7 @@ def _ExpandInstanceName(cfg, name):
 
 
 def _BuildNetworkHookEnv(name, subnet, gateway, network6, gateway6,
-                         network_type, mac_prefix, tags):
+                         mac_prefix, tags):
   """Builds network related env variables for hooks
 
   This builds the hook environment from individual variables.
@@ -1400,8 +1413,6 @@ def _BuildNetworkHookEnv(name, subnet, gateway, network6, gateway6,
   @param network6: the ipv6 subnet
   @type gateway6: string
   @param gateway6: the ipv6 gateway
-  @type network_type: string
-  @param network_type: the type of the network
   @type mac_prefix: string
   @param mac_prefix: the mac_prefix
   @type tags: list
@@ -1421,8 +1432,6 @@ def _BuildNetworkHookEnv(name, subnet, gateway, network6, gateway6,
     env["NETWORK_GATEWAY6"] = gateway6
   if mac_prefix:
     env["NETWORK_MAC_PREFIX"] = mac_prefix
-  if network_type:
-    env["NETWORK_TYPE"] = network_type
   if tags:
     env["NETWORK_TAGS"] = " ".join(tags)
 
@@ -1453,7 +1462,7 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
   @type vcpus: string
   @param vcpus: the count of VCPUs the instance has
   @type nics: list
-  @param nics: list of tuples (ip, mac, mode, link, network) representing
+  @param nics: list of tuples (ip, mac, mode, link, net, netinfo) representing
       the NICs the instance has
   @type disk_template: string
   @param disk_template: the disk template of the instance
@@ -1495,24 +1504,14 @@ def _BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
       env["INSTANCE_NIC%d_MAC" % idx] = mac
       env["INSTANCE_NIC%d_MODE" % idx] = mode
       env["INSTANCE_NIC%d_LINK" % idx] = link
-      if network:
-        env["INSTANCE_NIC%d_NETWORK" % idx] = net
-        if netinfo:
-          nobj = objects.Network.FromDict(netinfo)
-          if nobj.network:
-            env["INSTANCE_NIC%d_NETWORK_SUBNET" % idx] = nobj.network
-          if nobj.gateway:
-            env["INSTANCE_NIC%d_NETWORK_GATEWAY" % idx] = nobj.gateway
-          if nobj.network6:
-            env["INSTANCE_NIC%d_NETWORK_SUBNET6" % idx] = nobj.network6
-          if nobj.gateway6:
-            env["INSTANCE_NIC%d_NETWORK_GATEWAY6" % idx] = nobj.gateway6
-          if nobj.mac_prefix:
-            env["INSTANCE_NIC%d_NETWORK_MAC_PREFIX" % idx] = nobj.mac_prefix
-          if nobj.network_type:
-            env["INSTANCE_NIC%d_NETWORK_TYPE" % idx] = nobj.network_type
-          if nobj.tags:
-            env["INSTANCE_NIC%d_NETWORK_TAGS" % idx] = " ".join(nobj.tags)
+      if netinfo:
+        nobj = objects.Network.FromDict(netinfo)
+        env.update(nobj.HooksDict("INSTANCE_NIC%d_" % idx))
+      elif network:
+        # FIXME: broken network reference: the instance NIC specifies a
+        # network, but the relevant network entry was not in the config. This
+        # should be made impossible.
+        env["INSTANCE_NIC%d_NETWORK_NAME" % idx] = net
       if mode == constants.NIC_MODE_BRIDGED:
         env["INSTANCE_NIC%d_BRIDGE" % idx] = link
   else:
@@ -1551,20 +1550,15 @@ def _NICToTuple(lu, nic):
   @param nic: nic to convert to hooks tuple
 
   """
-  ip = nic.ip
-  mac = nic.mac
   cluster = lu.cfg.GetClusterInfo()
   filled_params = cluster.SimpleFillNIC(nic.nicparams)
   mode = filled_params[constants.NIC_MODE]
   link = filled_params[constants.NIC_LINK]
-  net = nic.network
   netinfo = None
-  if net:
-    net_uuid = lu.cfg.LookupNetwork(net)
-    if net_uuid:
-      nobj = lu.cfg.GetNetwork(net_uuid)
-      netinfo = objects.Network.ToDict(nobj)
-  return (ip, mac, mode, link, net, netinfo)
+  if nic.network:
+    nobj = lu.cfg.GetNetwork(nic.network)
+    netinfo = objects.Network.ToDict(nobj)
+  return (nic.ip, nic.mac, mode, link, nic.network, netinfo)
 
 
 def _NICListToTuple(lu, nics):
@@ -2027,6 +2021,10 @@ class _VerifyErrors(object):
     """
     ltype = kwargs.get(self.ETYPE_FIELD, self.ETYPE_ERROR)
     itype, etxt, _ = ecode
+    # If the error code is in the list of ignored errors, demote the error to a
+    # warning
+    if etxt in self.op.ignore_errors:     # pylint: disable=E1101
+      ltype = self.ETYPE_WARNING
     # first complete the msg
     if args:
       msg = msg % args
@@ -2041,26 +2039,17 @@ class _VerifyErrors(object):
       msg = "%s: %s%s: %s" % (ltype, itype, item, msg)
     # and finally report it via the feedback_fn
     self._feedback_fn("  - %s" % msg) # Mix-in. pylint: disable=E1101
+    # do not mark the operation as failed for WARN cases only
+    if ltype == self.ETYPE_ERROR:
+      self.bad = True
 
-  def _ErrorIf(self, cond, ecode, *args, **kwargs):
+  def _ErrorIf(self, cond, *args, **kwargs):
     """Log an error message if the passed condition is True.
 
     """
-    cond = (bool(cond)
-            or self.op.debug_simulate_errors) # pylint: disable=E1101
-
-    # If the error code is in the list of ignored errors, demote the error to a
-    # warning
-    (_, etxt, _) = ecode
-    if etxt in self.op.ignore_errors:     # pylint: disable=E1101
-      kwargs[self.ETYPE_FIELD] = self.ETYPE_WARNING
-
-    if cond:
-      self._Error(ecode, *args, **kwargs)
-
-    # do not mark the operation as failed for WARN cases only
-    if kwargs.get(self.ETYPE_FIELD, self.ETYPE_ERROR) == self.ETYPE_ERROR:
-      self.bad = self.bad or cond
+    if (bool(cond)
+        or self.op.debug_simulate_errors): # pylint: disable=E1101
+      self._Error(*args, **kwargs)
 
 
 class LUClusterVerify(NoHooksLU):
@@ -3499,22 +3488,11 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
         nimg.sbp[pnode].append(instance)
 
     es_flags = rpc.GetExclusiveStorageForNodeNames(self.cfg, self.my_node_names)
-    es_unset_nodes = []
     # The value of exclusive_storage should be the same across the group, so if
     # it's True for at least a node, we act as if it were set for all the nodes
     self._exclusive_storage = compat.any(es_flags.values())
     if self._exclusive_storage:
       node_verify_param[constants.NV_EXCLUSIVEPVS] = True
-      es_unset_nodes = [n for (n, es) in es_flags.items()
-                        if not es]
-
-    if es_unset_nodes:
-      self._Error(constants.CV_EGROUPMIXEDESFLAG, self.group_info.name,
-                  "The exclusive_storage flag should be uniform in a group,"
-                  " but these nodes have it unset: %s",
-                  utils.CommaJoin(utils.NiceSort(es_unset_nodes)))
-      self.LogWarning("Some checks required by exclusive storage will be"
-                      " performed also on nodes with the flag unset")
 
     # At this point, we have the in-memory data structures complete,
     # except for the runtime information, which we'll gather next
@@ -5772,6 +5750,7 @@ class _InstanceQuery(_QueryBase):
       lu.needed_locks[locking.LEVEL_INSTANCE] = self.wanted
       lu.needed_locks[locking.LEVEL_NODEGROUP] = []
       lu.needed_locks[locking.LEVEL_NODE] = []
+      lu.needed_locks[locking.LEVEL_NETWORK] = []
       lu.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_REPLACE
 
     self.do_grouplocks = (self.do_locking and
@@ -5790,6 +5769,12 @@ class _InstanceQuery(_QueryBase):
               for group_uuid in lu.cfg.GetInstanceNodeGroups(instance_name))
       elif level == locking.LEVEL_NODE:
         lu._LockInstancesNodes() # pylint: disable=W0212
+
+      elif level == locking.LEVEL_NETWORK:
+        lu.needed_locks[locking.LEVEL_NETWORK] = \
+          frozenset(net_uuid
+                    for instance_name in lu.owned_locks(locking.LEVEL_INSTANCE)
+                    for net_uuid in lu.cfg.GetInstanceNetworks(instance_name))
 
   @staticmethod
   def _CheckGroupLocks(lu):
@@ -5881,10 +5866,17 @@ class _InstanceQuery(_QueryBase):
       nodes = None
       groups = None
 
+    if query.IQ_NETWORKS in self.requested_data:
+      net_uuids = itertools.chain(*(lu.cfg.GetInstanceNetworks(i.name)
+                                    for i in instance_list))
+      networks = dict((uuid, lu.cfg.GetNetwork(uuid)) for uuid in net_uuids)
+    else:
+      networks = None
+
     return query.InstanceQueryData(instance_list, lu.cfg.GetClusterInfo(),
                                    disk_usage, offline_nodes, bad_nodes,
                                    live_data, wrongnode_inst, consinfo,
-                                   nodes, groups)
+                                   nodes, groups, networks)
 
 
 class LUQuery(NoHooksLU):
@@ -6144,6 +6136,8 @@ class LUNodeAdd(LogicalUnit):
 
     if self.op.ndparams:
       utils.ForceDictType(self.op.ndparams, constants.NDS_PARAMETER_TYPES)
+      _CheckParamsNotGlobal(self.op.ndparams, constants.NDC_GLOBALS, "node",
+                            "node", "cluster or group")
 
     if self.op.hv_state:
       self.new_hv_state = _MergeAndVerifyHvState(self.op.hv_state, None)
@@ -6169,9 +6163,6 @@ class LUNodeAdd(LogicalUnit):
     if vg_name is not None:
       vparams = {constants.NV_PVLIST: [vg_name]}
       excl_stor = _IsExclusiveStorageEnabledNode(cfg, self.new_node)
-      if self.op.ndparams:
-        excl_stor = self.op.ndparams.get(constants.ND_EXCLUSIVE_STORAGE,
-                                         excl_stor)
       cname = self.cfg.GetClusterName()
       result = rpcrunner.call_node_verify_light([node], vparams, cname)[node]
       (errmsgs, _) = _CheckNodePVs(result.payload, excl_stor)
@@ -6569,6 +6560,8 @@ class LUNodeSetParams(LogicalUnit):
     if self.op.ndparams:
       new_ndparams = _GetUpdatedParams(self.node.ndparams, self.op.ndparams)
       utils.ForceDictType(new_ndparams, constants.NDS_PARAMETER_TYPES)
+      _CheckParamsNotGlobal(self.op.ndparams, constants.NDC_GLOBALS, "node",
+                            "node", "cluster or group")
       self.new_ndparams = new_ndparams
 
     if self.op.hv_state:
@@ -6866,7 +6859,7 @@ class LUInstanceActivateDisks(NoHooksLU):
 
 
 def _AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
-                           ignore_size=False):
+                           ignore_size=False, check=True):
   """Prepare the block devices for an instance.
 
   This sets up the block devices on all nodes.
@@ -6892,7 +6885,8 @@ def _AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   device_info = []
   disks_ok = True
   iname = instance.name
-  disks = _ExpandCheckDisks(instance, disks)
+  if check:
+    disks = _ExpandCheckDisks(instance, disks)
 
   # With the two passes mechanism we try to reduce the window of
   # opportunity for the race condition of switching DRBD to primary
@@ -7603,6 +7597,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     constants.IDISK_VG,
     constants.IDISK_METAVG,
     constants.IDISK_PROVIDER,
+    constants.IDEV_NAME,
     ]))
 
   def _RunAllocator(self):
@@ -8306,8 +8301,9 @@ class LUInstanceMigrate(LogicalUnit):
 
     """
     instance = self._migrater.instance
-    nl = [self.cfg.GetMasterNode()] + list(instance.secondary_nodes)
-    return (nl, nl + [instance.primary_node])
+    snodes = list(instance.secondary_nodes)
+    nl = [self.cfg.GetMasterNode(), instance.primary_node] + snodes
+    return (nl, nl)
 
 
 class LUInstanceMove(LogicalUnit):
@@ -9383,6 +9379,11 @@ def _GenerateUniqueNames(lu, exts):
   return results
 
 
+def _DeviceHotplugable(dev):
+
+  return dev.uuid is not None
+
+
 def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
                          iv_name, p_minor, s_minor):
   """Generate a drbd8 device complete with its children.
@@ -9399,12 +9400,14 @@ def _GenerateDRBD8Branch(lu, primary, secondary, size, vgnames, names,
                           size=constants.DRBD_META_SIZE,
                           logical_id=(vgnames[1], names[1]),
                           params={})
+
   drbd_dev = objects.Disk(dev_type=constants.LD_DRBD8, size=size,
                           logical_id=(primary, secondary, port,
                                       p_minor, s_minor,
                                       shared_secret),
                           children=[dev_data, dev_meta],
                           iv_name=iv_name, params={})
+
   return drbd_dev
 
 
@@ -9466,6 +9469,8 @@ def _GenerateDiskTemplate(
                                       "disk/%d" % disk_index,
                                       minors[idx * 2], minors[idx * 2 + 1])
       disk_dev.mode = disk[constants.IDISK_MODE]
+      disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
+      disk_dev.name = disk.get(constants.IDEV_NAME, None)
       disks.append(disk_dev)
   else:
     if secondary_nodes:
@@ -9526,11 +9531,14 @@ def _GenerateDiskTemplate(
       size = disk[constants.IDISK_SIZE]
       feedback_fn("* disk %s, size %s" %
                   (disk_index, utils.FormatUnit(size, "h")))
-      disks.append(objects.Disk(dev_type=dev_type, size=size,
-                                logical_id=logical_id_fn(idx, disk_index, disk),
-                                iv_name="disk/%d" % disk_index,
-                                mode=disk[constants.IDISK_MODE],
-                                params=params))
+      disk_dev = objects.Disk(dev_type=dev_type, size=size,
+                              logical_id=logical_id_fn(idx, disk_index, disk),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk[constants.IDISK_MODE],
+                              params=params)
+      disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
+      disk_dev.name = disk.get(constants.IDEV_NAME, None)
+      disks.append(disk_dev)
 
   return disks
 
@@ -9886,9 +9894,10 @@ def _CreateInstanceAllocRequest(op, disks, nics, beparams, node_whitelist):
                                        node_whitelist=node_whitelist)
 
 
-def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
+def _ComputeNics(lu, op, cluster, default_ip, cfg, ec_id):
   """Computes the nics.
 
+  @param lu: The LU
   @param op: The instance opcode
   @param cluster: Cluster configuration object
   @param default_ip: The default ip to assign
@@ -9968,8 +9977,15 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
 
     check_params = cluster.SimpleFillNIC(nicparams)
     objects.NIC.CheckParameterSyntax(check_params)
-    nics.append(objects.NIC(mac=mac, ip=nic_ip,
-                            network=net, nicparams=nicparams))
+    net_uuid = cfg.LookupNetwork(net)
+    nic_obj = objects.NIC(mac=mac, ip=nic_ip,
+                          network=net_uuid,
+                          nicparams=check_params)
+
+    nic_obj.uuid = cfg.GenerateUniqueID(ec_id)
+    nic_obj.name = nic.get(constants.IDEV_NAME, None)
+
+    nics.append(nic_obj)
 
   return nics
 
@@ -10006,7 +10022,9 @@ def _ComputeDisks(op, default_vg):
                                  op.disk_template), errors.ECODE_INVAL)
 
     data_vg = disk.get(constants.IDISK_VG, default_vg)
+    name = disk.get(constants.IDEV_NAME, None)
     new_disk = {
+      constants.IDEV_NAME: name,
       constants.IDISK_SIZE: size,
       constants.IDISK_MODE: mode,
       constants.IDISK_VG: data_vg,
@@ -10296,7 +10314,7 @@ class LUInstanceCreate(LogicalUnit):
     """
     if self.op.opportunistic_locking:
       # Only consider nodes for which a lock is held
-      node_whitelist = self.owned_locks(locking.LEVEL_NODE)
+      node_whitelist = list(self.owned_locks(locking.LEVEL_NODE))
     else:
       node_whitelist = None
 
@@ -10606,7 +10624,8 @@ class LUInstanceCreate(LogicalUnit):
     hv_type.CheckParameterSyntax(filled_hvp)
     self.hv_full = filled_hvp
     # check that we don't specify global parameters on an instance
-    _CheckGlobalHvParams(self.op.hvparams)
+    _CheckParamsNotGlobal(self.op.hvparams, constants.HVC_GLOBALS, "hypervisor",
+                          "instance", "cluster")
 
     # fill and remember the beparams dict
     self.be_full = _ComputeFullBeParams(self.op, cluster)
@@ -10619,8 +10638,10 @@ class LUInstanceCreate(LogicalUnit):
     if self.op.identify_defaults:
       self._RevertToDefaults(cluster)
 
+    self.dev_idxs = { "disks": 0, "nics": 0 }
+
     # NIC buildup
-    self.nics = _ComputeNics(self.op, cluster, self.check_ip, self.cfg,
+    self.nics = _ComputeNics(self, self.op, cluster, self.check_ip, self.cfg,
                              self.proc.GetECId())
 
     # disk checks/pre-build
@@ -10704,14 +10725,15 @@ class LUInstanceCreate(LogicalUnit):
     # Fill in any IPs from IP pools. This must happen here, because we need to
     # know the nic's primary node, as specified by the iallocator
     for idx, nic in enumerate(self.nics):
-      net = nic.network
-      if net is not None:
-        netparams = self.cfg.GetGroupNetParams(net, self.pnode.name)
+      net_uuid = nic.network
+      if net_uuid is not None:
+        nobj = self.cfg.GetNetwork(net_uuid)
+        netparams = self.cfg.GetGroupNetParams(net_uuid, self.pnode.name)
         if netparams is None:
           raise errors.OpPrereqError("No netparams found for network"
                                      " %s. Propably not connected to"
                                      " node's %s nodegroup" %
-                                     (net, self.pnode.name),
+                                     (nobj.name, self.pnode.name),
                                      errors.ECODE_INVAL)
         self.LogInfo("NIC/%d inherits netparams %s" %
                      (idx, netparams.values()))
@@ -10719,19 +10741,19 @@ class LUInstanceCreate(LogicalUnit):
         if nic.ip is not None:
           if nic.ip.lower() == constants.NIC_IP_POOL:
             try:
-              nic.ip = self.cfg.GenerateIp(net, self.proc.GetECId())
+              nic.ip = self.cfg.GenerateIp(net_uuid, self.proc.GetECId())
             except errors.ReservationError:
               raise errors.OpPrereqError("Unable to get a free IP for NIC %d"
                                          " from the address pool" % idx,
                                          errors.ECODE_STATE)
-            self.LogInfo("Chose IP %s from network %s", nic.ip, net)
+            self.LogInfo("Chose IP %s from network %s", nic.ip, nobj.name)
           else:
             try:
-              self.cfg.ReserveIp(net, nic.ip, self.proc.GetECId())
+              self.cfg.ReserveIp(net_uuid, nic.ip, self.proc.GetECId())
             except errors.ReservationError:
               raise errors.OpPrereqError("IP address %s already in use"
                                          " or does not belong to network %s" %
-                                         (nic.ip, net),
+                                         (nic.ip, nobj.name),
                                          errors.ECODE_NOTUNIQUE)
 
       # net is None, ip None or given
@@ -10956,6 +10978,7 @@ class LUInstanceCreate(LogicalUnit):
                             hvparams=self.op.hvparams,
                             hypervisor=self.op.hypervisor,
                             osparams=self.op.osparams,
+                            dev_idxs=self.dev_idxs,
                             )
 
     if self.op.tags:
@@ -11240,12 +11263,12 @@ class LUInstanceMultiAlloc(NoHooksLU):
 
     if self.op.opportunistic_locking:
       # Only consider nodes for which a lock is held
-      node_whitelist = self.owned_locks(locking.LEVEL_NODE)
+      node_whitelist = list(self.owned_locks(locking.LEVEL_NODE))
     else:
       node_whitelist = None
 
     insts = [_CreateInstanceAllocRequest(op, _ComputeDisks(op, default_vg),
-                                         _ComputeNics(op, cluster, None,
+                                         _ComputeNics(self, op, cluster, None,
                                                       self.cfg, ec_id),
                                          _ComputeFullBeParams(op, cluster),
                                          node_whitelist)
@@ -12832,12 +12855,13 @@ class LUInstanceQueryData(NoHooksLU):
 
       self.needed_locks[locking.LEVEL_NODEGROUP] = []
       self.needed_locks[locking.LEVEL_NODE] = []
+      self.needed_locks[locking.LEVEL_NETWORK] = []
       self.recalculate_locks[locking.LEVEL_NODE] = constants.LOCKS_REPLACE
 
   def DeclareLocks(self, level):
     if self.op.use_locking:
+      owned_instances = self.owned_locks(locking.LEVEL_INSTANCE)
       if level == locking.LEVEL_NODEGROUP:
-        owned_instances = self.owned_locks(locking.LEVEL_INSTANCE)
 
         # Lock all groups used by instances optimistically; this requires going
         # via the node before it's locked, requiring verification later on
@@ -12850,6 +12874,13 @@ class LUInstanceQueryData(NoHooksLU):
       elif level == locking.LEVEL_NODE:
         self._LockInstancesNodes()
 
+      elif level == locking.LEVEL_NETWORK:
+        self.needed_locks[locking.LEVEL_NETWORK] = \
+          frozenset(net_uuid
+                    for instance_name in owned_instances
+                    for net_uuid in
+                       self.cfg.GetInstanceNetworks(instance_name))
+
   def CheckPrereq(self):
     """Check prerequisites.
 
@@ -12859,6 +12890,7 @@ class LUInstanceQueryData(NoHooksLU):
     owned_instances = frozenset(self.owned_locks(locking.LEVEL_INSTANCE))
     owned_groups = frozenset(self.owned_locks(locking.LEVEL_NODEGROUP))
     owned_nodes = frozenset(self.owned_locks(locking.LEVEL_NODE))
+    owned_networks = frozenset(self.owned_locks(locking.LEVEL_NETWORK))
 
     if self.wanted_names is None:
       assert self.op.use_locking, "Locking was not used"
@@ -12870,7 +12902,8 @@ class LUInstanceQueryData(NoHooksLU):
       _CheckInstancesNodeGroups(self.cfg, instances, owned_groups, owned_nodes,
                                 None)
     else:
-      assert not (owned_instances or owned_groups or owned_nodes)
+      assert not (owned_instances or owned_groups or
+                  owned_nodes or owned_networks)
 
     self.wanted_instances = instances.values()
 
@@ -12954,7 +12987,6 @@ class LUInstanceQueryData(NoHooksLU):
                                                  for node in nodes.values()))
 
     group2name_fn = lambda uuid: groups[uuid].name
-
     for instance in self.wanted_instances:
       pnode = nodes[instance.primary_node]
 
@@ -13032,7 +13064,7 @@ def PrepareContainerMods(mods, private_fn):
   else:
     fn = private_fn
 
-  return [(op, idx, params, fn()) for (op, idx, params) in mods]
+  return [(op, ident, params, fn()) for (op, ident, params) in mods]
 
 
 #: Type description for changes as returned by L{ApplyContainerMods}'s
@@ -13042,6 +13074,29 @@ _TApplyContModsCbChanges = \
     ht.TNonEmptyString,
     ht.TAny,
     ])))
+
+
+def GetItemFromContainerByIdentifier(ident, container):
+
+  def int_equal(x, i):
+    try:
+      if int(x) == i:
+        return True
+    except ValueError:
+      pass
+    return False
+
+  # in case the last device is wanted
+  if int_equal(ident, -1):
+    ident = len(container) - 1
+
+  for idx, item in enumerate(container):
+    if ident == item.uuid or int_equal(ident, idx):
+      return (idx, item)
+
+  raise errors.OpPrereqError("Cannot find device based on the"
+                             " identifier %s" % ident,
+                             errors.ECODE_NOENT)
 
 
 def ApplyContainerMods(kind, container, chgdesc, mods,
@@ -13071,45 +13126,38 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
     item and private data object as added by L{PrepareContainerMods}
 
   """
-  for (op, idx, params, private) in mods:
-    if idx == -1:
-      # Append
-      absidx = len(container) - 1
-    elif idx < 0:
-      raise IndexError("Not accepting negative indices other than -1")
-    elif idx > len(container):
-      raise IndexError("Got %s index %s, but there are only %s" %
-                       (kind, idx, len(container)))
-    else:
-      absidx = idx
-
+  for (op, ident, params, private) in mods:
     changes = None
 
     if op == constants.DDM_ADD:
       # Calculate where item will be added
-      if idx == -1:
+      try:
+        addidx = int(ident)
+      except ValueError:
+        raise errors.OpPrereqError("Only possitive integer or -1 is accepted as"
+                                   " identifier for %s" % constants.DDM_ADD,
+                                   errors.ECODE_INVAL)
+      append = False
+      if addidx == -1:
         addidx = len(container)
-      else:
-        addidx = idx
+        append = True
 
       if create_fn is None:
         item = params
       else:
         (item, changes) = create_fn(addidx, params, private)
 
-      if idx == -1:
+      if append:
         container.append(item)
       else:
-        assert idx >= 0
-        assert idx <= len(container)
+        assert addidx >= 0
+        assert addidx <= len(container)
         # list.insert does so before the specified index
-        container.insert(idx, item)
+        container.insert(addidx, item)
+
     else:
       # Retrieve existing item
-      try:
-        item = container[absidx]
-      except IndexError:
-        raise IndexError("Invalid %s index %s" % (kind, idx))
+      (absidx, item) = GetItemFromContainerByIdentifier(ident, container)
 
       if op == constants.DDM_REMOVE:
         assert not params
@@ -13117,13 +13165,16 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
         if remove_fn is not None:
           remove_fn(absidx, item, private)
 
+        #TODO: include a hotplugged msg in changes
         changes = [("%s/%s" % (kind, absidx), "remove")]
 
         assert container[absidx] == item
         del container[absidx]
       elif op == constants.DDM_MODIFY:
         if modify_fn is not None:
+          #TODO: include a hotplugged msg in changes
           changes = modify_fn(absidx, item, params, private)
+
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
 
@@ -13304,7 +13355,8 @@ class LUInstanceSetParams(LogicalUnit):
       raise errors.OpPrereqError("No changes submitted", errors.ECODE_INVAL)
 
     if self.op.hvparams:
-      _CheckGlobalHvParams(self.op.hvparams)
+      _CheckParamsNotGlobal(self.op.hvparams, constants.HVC_GLOBALS,
+                            "hypervisor", "instance", "cluster")
 
     self.op.disks = self._UpgradeDiskNicMods(
       "disk", self.op.disks, opcodes.OpInstanceSetParams.TestDiskModifications)
@@ -13397,7 +13449,7 @@ class LUInstanceSetParams(LogicalUnit):
     nl = [self.cfg.GetMasterNode()] + list(self.instance.all_nodes)
     return (nl, nl)
 
-  def _PrepareNicModification(self, params, private, old_ip, old_net,
+  def _PrepareNicModification(self, params, private, old_ip, old_net_uuid,
                               old_params, cluster, pnode):
 
     update_params_dict = dict([(key, params[key])
@@ -13407,13 +13459,21 @@ class LUInstanceSetParams(LogicalUnit):
     req_link = update_params_dict.get(constants.NIC_LINK, None)
     req_mode = update_params_dict.get(constants.NIC_MODE, None)
 
-    new_net = params.get(constants.INIC_NETWORK, old_net)
-    if new_net is not None:
-      netparams = self.cfg.GetGroupNetParams(new_net, pnode)
-      if netparams is None:
+    new_net_uuid = None
+    new_net_uuid_or_name = params.get(constants.INIC_NETWORK, old_net_uuid)
+    if new_net_uuid_or_name:
+      new_net_uuid = self.cfg.LookupNetwork(new_net_uuid_or_name)
+      new_net_obj = self.cfg.GetNetwork(new_net_uuid)
+
+    if old_net_uuid:
+      old_net_obj = self.cfg.GetNetwork(old_net_uuid)
+
+    if new_net_uuid:
+      netparams = self.cfg.GetGroupNetParams(new_net_uuid, pnode)
+      if not netparams:
         raise errors.OpPrereqError("No netparams found for the network"
-                                   " %s, probably not connected" % new_net,
-                                   errors.ECODE_INVAL)
+                                   " %s, probably not connected" %
+                                   new_net_obj.name, errors.ECODE_INVAL)
       new_params = dict(netparams)
     else:
       new_params = _GetUpdatedParams(old_params, update_params_dict)
@@ -13452,7 +13512,7 @@ class LUInstanceSetParams(LogicalUnit):
       elif mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
         # otherwise generate the MAC address
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net_uuid, self.proc.GetECId())
       else:
         # or validate/reserve the current one
         try:
@@ -13461,62 +13521,61 @@ class LUInstanceSetParams(LogicalUnit):
           raise errors.OpPrereqError("MAC address '%s' already in use"
                                      " in cluster" % mac,
                                      errors.ECODE_NOTUNIQUE)
-    elif new_net != old_net:
+    elif new_net_uuid != old_net_uuid:
 
-      def get_net_prefix(net):
-        if net:
-          uuid = self.cfg.LookupNetwork(net)
-          if uuid:
-            nobj = self.cfg.GetNetwork(uuid)
-            return nobj.mac_prefix
-        return None
+      def get_net_prefix(net_uuid):
+        mac_prefix = None
+        if net_uuid:
+          nobj = self.cfg.GetNetwork(net_uuid)
+          mac_prefix = nobj.mac_prefix
 
-      new_prefix = get_net_prefix(new_net)
-      old_prefix = get_net_prefix(old_net)
+        return mac_prefix
+
+      new_prefix = get_net_prefix(new_net_uuid)
+      old_prefix = get_net_prefix(old_net_uuid)
       if old_prefix != new_prefix:
         params[constants.INIC_MAC] = \
-          self.cfg.GenerateMAC(new_net, self.proc.GetECId())
+          self.cfg.GenerateMAC(new_net_uuid, self.proc.GetECId())
 
-    #if there is a change in nic-network configuration
+    #if there is a change in nic's ip/network configuration
     new_ip = params.get(constants.INIC_IP, old_ip)
-    if (new_ip, new_net) != (old_ip, old_net):
+    if (new_ip, new_net_uuid) != (old_ip, old_net_uuid):
       if new_ip:
-        if new_net:
-          if new_ip.lower() == constants.NIC_IP_POOL:
-            try:
-              new_ip = self.cfg.GenerateIp(new_net, self.proc.GetECId())
-            except errors.ReservationError:
-              raise errors.OpPrereqError("Unable to get a free IP"
-                                         " from the address pool",
-                                         errors.ECODE_STATE)
-            self.LogInfo("Chose IP %s from pool %s", new_ip, new_net)
-            params[constants.INIC_IP] = new_ip
-          elif new_ip != old_ip or new_net != old_net:
-            try:
-              self.LogInfo("Reserving IP %s in pool %s", new_ip, new_net)
-              self.cfg.ReserveIp(new_net, new_ip, self.proc.GetECId())
-            except errors.ReservationError:
-              raise errors.OpPrereqError("IP %s not available in network %s" %
-                                         (new_ip, new_net),
-                                         errors.ECODE_NOTUNIQUE)
-        elif new_ip.lower() == constants.NIC_IP_POOL:
-          raise errors.OpPrereqError("ip=pool, but no network found",
-                                     errors.ECODE_INVAL)
+        if new_ip.lower() == constants.NIC_IP_POOL:
+          if not new_net_uuid:
+            raise errors.OpPrereqError("ip=pool, but no network found",
+                                       errors.ECODE_INVAL)
+          try:
+            new_ip = self.cfg.GenerateIp(new_net_uuid, self.proc.GetECId())
+          except errors.ReservationError:
+            raise errors.OpPrereqError("Unable to get a free IP"
+                                       " from the address pool",
+                                       errors.ECODE_STATE)
+          self.LogInfo("Chose IP %s from network %s", new_ip, new_net_obj.name)
+          params[constants.INIC_IP] = new_ip
+        elif new_ip != old_ip or new_net_uuid != old_net_uuid:
+          try:
+            self.cfg.ReserveIp(new_net_uuid, new_ip, self.proc.GetECId())
+            self.LogInfo("Reserving IP %s in network %s",
+                         new_ip, new_net_obj.name)
+          except errors.ReservationError:
+            raise errors.OpPrereqError("IP %s not available in network %s" %
+                                       (new_ip, new_net_obj.name),
+                                       errors.ECODE_NOTUNIQUE)
 
         # new net is None
-        elif self.op.conflicts_check:
+        elif not new_net_uuid and self.op.conflicts_check:
           _CheckForConflictingIp(self, new_ip, pnode)
 
       if old_ip:
-        if old_net:
-          try:
-            self.cfg.ReleaseIp(old_net, old_ip, self.proc.GetECId())
-          except errors.AddressPoolError:
-            logging.warning("Release IP %s not contained in network %s",
-                            old_ip, old_net)
+        try:
+          self.cfg.ReleaseIp(old_net_uuid, old_ip, self.proc.GetECId())
+        except errors.AddressPoolError:
+          logging.warning("Release IP %s not contained in network %s",
+                          old_ip, old_net_obj.name)
 
     # there are no changes in (net, ip) tuple
-    elif (old_net is not None and
+    elif (old_net_uuid is not None and
           (req_link is not None or req_mode is not None)):
       raise errors.OpPrereqError("Not allowed to change link or mode of"
                                  " a NIC that is connected to a network",
@@ -13871,7 +13930,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in instance.nics]
       ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                         self._CreateNewNic, self._ApplyNicMods, None)
+                         self._CreateNewNic, self._ApplyNicMods,
+                         self._RemoveNic)
       self._new_nics = nics
       ispec[constants.ISPEC_NIC_COUNT] = len(self._new_nics)
     else:
@@ -13905,6 +13965,7 @@ class LUInstanceSetParams(LogicalUnit):
                (group_info, group_info.name,
                 utils.CommaJoin(set(res_max + res_min))))
         raise errors.OpPrereqError(msg, errors.ECODE_INVAL)
+
 
   def _ConvertPlainToDrbd(self, feedback_fn):
     """Converts an instance from plain to drbd.
@@ -14057,6 +14118,16 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Failed to create volume %s (%s) on node '%s': %s",
                         disk.iv_name, disk, node, err)
 
+    if self.op.hotplug:
+      self.LogInfo("Trying to hotplug device.")
+      _, device_info = _AssembleInstanceDisks(self, self.instance,
+                                              [disk], check=False)
+      _, _, dev_path = device_info[0]
+      result = self.rpc.call_hot_add_disk(self.instance.primary_node,
+                                          self.instance, disk, dev_path, idx)
+      result.Raise("Could not hotplug device.")
+      self.LogInfo("Hotplug done.")
+
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
@@ -14067,6 +14138,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     disk.mode = params[constants.IDISK_MODE]
+    disk.name = params[constants.IDEV_MODE]
 
     return [
       ("disk.mode/%d" % idx, disk.mode),
@@ -14076,6 +14148,15 @@ class LUInstanceSetParams(LogicalUnit):
     """Removes a disk.
 
     """
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(root):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_disk(self.instance.primary_node,
+                                          self.instance, root, idx)
+      result.Raise("Could not hotplug device.")
+      self.LogInfo("Hotplug done.")
+      _ShutdownInstanceDisks(self, self.instance, [root])
+
     (anno_disk,) = _AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
       self.cfg.SetDiskID(disk, node)
@@ -14088,36 +14169,53 @@ class LUInstanceSetParams(LogicalUnit):
     if root.dev_type in constants.LDS_DRBD:
       self.cfg.AddTcpUdpPort(root.logical_id[2])
 
-  @staticmethod
-  def _CreateNewNic(idx, params, private):
+  def _CreateNewNic(self, idx, params, private):
     """Creates data structure for a new network interface.
 
     """
     mac = params[constants.INIC_MAC]
     ip = params.get(constants.INIC_IP, None)
     net = params.get(constants.INIC_NETWORK, None)
+    net_uuid = self.cfg.LookupNetwork(net)
     #TODO: not private.filled?? can a nic have no nicparams??
     nicparams = private.filled
 
-    return (objects.NIC(mac=mac, ip=ip, network=net, nicparams=nicparams), [
+    nic_obj = objects.NIC(mac=mac, ip=ip, network=net_uuid, nicparams=nicparams)
+    nic_obj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
+    nic_obj.name = params.get(constants.IDEV_NAME, None)
+
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug:
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic_obj, idx)
+      result.Raise("Could not hotplug device")
+      self.Log("Hotplug done.")
+
+    desc =  [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, private.filled[constants.NIC_MODE],
-       private.filled[constants.NIC_LINK],
-       net)),
-      ])
+       private.filled[constants.NIC_LINK], net)),
+      ]
 
-  @staticmethod
-  def _ApplyNicMods(idx, nic, params, private):
+    return (nic_obj, desc)
+
+  def _ApplyNicMods(self, idx, nic, params, private):
     """Modifies a network interface.
 
     """
     changes = []
 
-    for key in [constants.INIC_MAC, constants.INIC_IP, constants.INIC_NETWORK]:
+    for key in [constants.IDEV_NAME, constants.INIC_MAC, constants.INIC_IP]:
       if key in params:
         changes.append(("nic.%s/%d" % (key, idx), params[key]))
         setattr(nic, key, params[key])
+
+    new_net = params.get(constants.INIC_NETWORK, nic.network)
+    new_net_uuid = self.cfg.LookupNetwork(new_net)
+    if new_net_uuid != nic.network:
+      changes.append(("nic.network/%d" % idx, new_net))
+      nic.network = new_net_uuid
 
     if private.filled:
       nic.nicparams = private.filled
@@ -14125,7 +14223,28 @@ class LUInstanceSetParams(LogicalUnit):
       for (key, val) in nic.nicparams.items():
         changes.append(("nic.%s/%d" % (key, idx), val))
 
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(nic):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      result = self.rpc.call_hot_add_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
+
     return changes
+
+  def _RemoveNic(self, idx, nic, _):
+    #TODO: log warning in case hotplug is not possible
+    if self.op.hotplug and _DeviceHotplugable(nic):
+      self.LogInfo("Trying to hotplug device.")
+      result = self.rpc.call_hot_del_nic(self.instance.primary_node,
+                                         self.instance, nic, idx)
+      result.Raise("Could not hotplug device.")
+      self.Log("Hotplug done.")
+
 
   def Exec(self, feedback_fn):
     """Modifies an instance.
@@ -16219,11 +16338,15 @@ class LUNetworkAdd(LogicalUnit):
       raise errors.OpPrereqError("Network must be given",
                                  errors.ECODE_INVAL)
 
-    uuid = self.cfg.LookupNetwork(self.op.network_name)
-
-    if uuid:
-      raise errors.OpPrereqError(("Network with name '%s' already exists" %
-                                  self.op.network_name), errors.ECODE_EXISTS)
+    try:
+      existing_uuid = self.cfg.LookupNetwork(self.op.network_name)
+    except errors.OpPrereqError:
+      pass
+    else:
+      raise errors.OpPrereqError("Desired network name '%s' already exists as a"
+                                 " network (UUID: %s)" %
+                                 (self.op.network_name, existing_uuid),
+                                 errors.ECODE_EXISTS)
 
     # Check tag validity
     for tag in self.op.tags:
@@ -16240,7 +16363,6 @@ class LUNetworkAdd(LogicalUnit):
       "network6": self.op.network6,
       "gateway6": self.op.gateway6,
       "mac_prefix": self.op.mac_prefix,
-      "network_type": self.op.network_type,
       "tags": self.op.tags,
       }
     return _BuildNetworkHookEnv(**args) # pylint: disable=W0142
@@ -16255,14 +16377,13 @@ class LUNetworkAdd(LogicalUnit):
                            network6=self.op.network6,
                            gateway6=self.op.gateway6,
                            mac_prefix=self.op.mac_prefix,
-                           network_type=self.op.network_type,
-                           uuid=self.network_uuid,
-                           family=constants.IP4_VERSION)
+                           uuid=self.network_uuid)
     # Initialize the associated address pool
     try:
       pool = network.AddressPool.InitializeNetwork(nobj)
-    except errors.AddressPoolError, e:
-      raise errors.OpExecError("Cannot create IP pool for this network: %s" % e)
+    except errors.AddressPoolError, err:
+      raise errors.OpExecError("Cannot create IP address pool for network"
+                               " '%s': %s" % (self.op.network_name, err))
 
     # Check if we need to reserve the nodes and the cluster master IP
     # These may not be allocated to any instances in routed mode, as
@@ -16275,25 +16396,26 @@ class LUNetworkAdd(LogicalUnit):
               pool.Reserve(ip)
               self.LogInfo("Reserved IP address of node '%s' (%s)",
                            node.name, ip)
-          except errors.AddressPoolError:
-            self.LogWarning("Cannot reserve IP address of node '%s' (%s)",
-                            node.name, ip)
+          except errors.AddressPoolError, err:
+            self.LogWarning("Cannot reserve IP address '%s' of node '%s': %s",
+                            ip, node.name, err)
 
       master_ip = self.cfg.GetClusterInfo().master_ip
       try:
         if pool.Contains(master_ip):
           pool.Reserve(master_ip)
           self.LogInfo("Reserved cluster master IP address (%s)", master_ip)
-      except errors.AddressPoolError:
-        self.LogWarning("Cannot reserve cluster master IP address (%s)",
-                        master_ip)
+      except errors.AddressPoolError, err:
+        self.LogWarning("Cannot reserve cluster master IP address (%s): %s",
+                        master_ip, err)
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
         try:
           pool.Reserve(ip, external=True)
-        except errors.AddressPoolError, e:
-          raise errors.OpExecError("Cannot reserve IP %s. %s " % (ip, e))
+        except errors.AddressPoolError, err:
+          raise errors.OpExecError("Cannot reserve IP address '%s': %s" %
+                                   (ip, err))
 
     if self.op.tags:
       for tag in self.op.tags:
@@ -16310,10 +16432,6 @@ class LUNetworkRemove(LogicalUnit):
 
   def ExpandNames(self):
     self.network_uuid = self.cfg.LookupNetwork(self.op.network_name)
-
-    if not self.network_uuid:
-      raise errors.OpPrereqError(("Network '%s' not found" %
-                                  self.op.network_name), errors.ECODE_NOENT)
 
     self.share_locks[locking.LEVEL_NODEGROUP] = 1
     self.needed_locks = {
@@ -16383,9 +16501,6 @@ class LUNetworkSetParams(LogicalUnit):
 
   def ExpandNames(self):
     self.network_uuid = self.cfg.LookupNetwork(self.op.network_name)
-    if self.network_uuid is None:
-      raise errors.OpPrereqError(("Network '%s' not found" %
-                                  self.op.network_name), errors.ECODE_NOENT)
 
     self.needed_locks = {
       locking.LEVEL_NETWORK: [self.network_uuid],
@@ -16397,7 +16512,6 @@ class LUNetworkSetParams(LogicalUnit):
     """
     self.network = self.cfg.GetNetwork(self.network_uuid)
     self.gateway = self.network.gateway
-    self.network_type = self.network.network_type
     self.mac_prefix = self.network.mac_prefix
     self.network6 = self.network.network6
     self.gateway6 = self.network.gateway6
@@ -16414,12 +16528,6 @@ class LUNetworkSetParams(LogicalUnit):
           raise errors.OpPrereqError("Gateway IP address '%s' is already"
                                      " reserved" % self.gateway,
                                      errors.ECODE_STATE)
-
-    if self.op.network_type:
-      if self.op.network_type == constants.VALUE_NONE:
-        self.network_type = None
-      else:
-        self.network_type = self.op.network_type
 
     if self.op.mac_prefix:
       if self.op.mac_prefix == constants.VALUE_NONE:
@@ -16451,7 +16559,6 @@ class LUNetworkSetParams(LogicalUnit):
       "network6": self.network6,
       "gateway6": self.gateway6,
       "mac_prefix": self.mac_prefix,
-      "network_type": self.network_type,
       "tags": self.tags,
       }
     return _BuildNetworkHookEnv(**args) # pylint: disable=W0142
@@ -16511,9 +16618,6 @@ class LUNetworkSetParams(LogicalUnit):
     if self.op.gateway6:
       self.network.gateway6 = self.gateway6
 
-    if self.op.network_type:
-      self.network.network_type = self.network_type
-
     self.pool.Validate()
 
     self.cfg.Update(self.network, feedback_fn)
@@ -16566,8 +16670,6 @@ class _NetworkQuery(_QueryBase):
     network_uuids = self._GetNames(lu, all_networks.keys(),
                                    locking.LEVEL_NETWORK)
 
-    name_to_uuid = dict((n.name, n.uuid) for n in all_networks.values())
-
     do_instances = query.NETQ_INST in self.requested_data
     do_groups = query.NETQ_GROUP in self.requested_data
 
@@ -16592,10 +16694,8 @@ class _NetworkQuery(_QueryBase):
       network_to_instances = dict((uuid, []) for uuid in network_uuids)
       for instance in all_instances.values():
         for nic in instance.nics:
-          if nic.network:
-            net_uuid = name_to_uuid[nic.network]
-            if net_uuid in network_uuids:
-              network_to_instances[net_uuid].append(instance.name)
+          if nic.network in network_uuids:
+            network_to_instances[nic.network].append(instance.name)
             break
 
     if query.NETQ_STATS in self.requested_data:
@@ -16658,14 +16758,7 @@ class LUNetworkConnect(LogicalUnit):
     self.network_link = self.op.network_link
 
     self.network_uuid = self.cfg.LookupNetwork(self.network_name)
-    if self.network_uuid is None:
-      raise errors.OpPrereqError("Network '%s' does not exist" %
-                                 self.network_name, errors.ECODE_NOENT)
-
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
-    if self.group_uuid is None:
-      raise errors.OpPrereqError("Group '%s' does not exist" %
-                                 self.group_name, errors.ECODE_NOENT)
 
     self.needed_locks = {
       locking.LEVEL_INSTANCE: [],
@@ -16704,6 +16797,11 @@ class LUNetworkConnect(LogicalUnit):
 
     assert self.group_uuid in owned_groups
 
+    # Check if locked instances are still correct
+    owned_instances = frozenset(self.owned_locks(locking.LEVEL_INSTANCE))
+    if self.op.conflicts_check:
+      _CheckNodeGroupInstances(self.cfg, self.group_uuid, owned_instances)
+
     self.netparams = {
       constants.NIC_MODE: self.network_mode,
       constants.NIC_LINK: self.network_link,
@@ -16724,7 +16822,7 @@ class LUNetworkConnect(LogicalUnit):
       pool = network.AddressPool(self.cfg.GetNetwork(self.network_uuid))
 
       _NetworkConflictCheck(self, lambda nic: pool.Contains(nic.ip),
-                            "connect to")
+                            "connect to", owned_instances)
 
   def Exec(self, feedback_fn):
     if self.connected:
@@ -16734,7 +16832,7 @@ class LUNetworkConnect(LogicalUnit):
     self.cfg.Update(self.group, feedback_fn)
 
 
-def _NetworkConflictCheck(lu, check_fn, action):
+def _NetworkConflictCheck(lu, check_fn, action, instances):
   """Checks for network interface conflicts with a network.
 
   @type lu: L{LogicalUnit}
@@ -16746,13 +16844,9 @@ def _NetworkConflictCheck(lu, check_fn, action):
   @raise errors.OpPrereqError: If conflicting IP addresses are found.
 
   """
-  # Check if locked instances are still correct
-  owned_instances = frozenset(lu.owned_locks(locking.LEVEL_INSTANCE))
-  _CheckNodeGroupInstances(lu.cfg, lu.group_uuid, owned_instances)
-
   conflicts = []
 
-  for (_, instance) in lu.cfg.GetMultiInstanceInfo(owned_instances):
+  for (_, instance) in lu.cfg.GetMultiInstanceInfo(instances):
     instconflicts = [(idx, nic.ip)
                      for (idx, nic) in enumerate(instance.nics)
                      if check_fn(nic)]
@@ -16794,14 +16888,7 @@ class LUNetworkDisconnect(LogicalUnit):
     self.group_name = self.op.group_name
 
     self.network_uuid = self.cfg.LookupNetwork(self.network_name)
-    if self.network_uuid is None:
-      raise errors.OpPrereqError("Network '%s' does not exist" %
-                                 self.network_name, errors.ECODE_NOENT)
-
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
-    if self.group_uuid is None:
-      raise errors.OpPrereqError("Group '%s' does not exist" %
-                                 self.group_name, errors.ECODE_NOENT)
 
     self.needed_locks = {
       locking.LEVEL_INSTANCE: [],
@@ -16815,9 +16902,8 @@ class LUNetworkDisconnect(LogicalUnit):
 
       # Lock instances optimistically, needs verification once group lock has
       # been acquired
-      if self.op.conflicts_check:
-        self.needed_locks[locking.LEVEL_INSTANCE] = \
-          self.cfg.GetNodeGroupInstances(self.group_uuid)
+      self.needed_locks[locking.LEVEL_INSTANCE] = \
+        self.cfg.GetNodeGroupInstances(self.group_uuid)
 
   def BuildHooksEnv(self):
     ret = {
@@ -16834,6 +16920,10 @@ class LUNetworkDisconnect(LogicalUnit):
 
     assert self.group_uuid in owned_groups
 
+    # Check if locked instances are still correct
+    owned_instances = frozenset(self.owned_locks(locking.LEVEL_INSTANCE))
+    _CheckNodeGroupInstances(self.cfg, self.group_uuid, owned_instances)
+
     self.group = self.cfg.GetNodeGroup(self.group_uuid)
     self.connected = True
     if self.network_uuid not in self.group.networks:
@@ -16842,9 +16932,8 @@ class LUNetworkDisconnect(LogicalUnit):
       self.connected = False
       return
 
-    if self.op.conflicts_check:
-      _NetworkConflictCheck(self, lambda nic: nic.network == self.network_name,
-                            "disconnect from")
+    _NetworkConflictCheck(self, lambda nic: nic.network == self.network_uuid,
+                          "disconnect from", owned_instances)
 
   def Exec(self, feedback_fn):
     if not self.connected:

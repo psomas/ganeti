@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -88,15 +88,15 @@ _LVSLINE_REGEX = re.compile("^ *([^|]+)\|([^|]+)\|([0-9.]+)\|([^|]{6,})\|?$")
 _MASTER_START = "start"
 _MASTER_STOP = "stop"
 
-#: Maximum file permissions for remote command directory and executables
+#: Maximum file permissions for restricted command directory and executables
 _RCMD_MAX_MODE = (stat.S_IRWXU |
                   stat.S_IRGRP | stat.S_IXGRP |
                   stat.S_IROTH | stat.S_IXOTH)
 
-#: Delay before returning an error for remote commands
+#: Delay before returning an error for restricted commands
 _RCMD_INVALID_DELAY = 10
 
-#: How long to wait to acquire lock for remote commands (shorter than
+#: How long to wait to acquire lock for restricted commands (shorter than
 #: L{_RCMD_INVALID_DELAY}) to reduce blockage of noded forks when many
 #: command requests arrive
 _RCMD_LOCK_TIMEOUT = _RCMD_INVALID_DELAY * 0.8
@@ -1217,9 +1217,16 @@ def RunRenameInstance(instance, old_name, debug):
           " log file:\n%s", result.fail_reason, "\n".join(lines), log=False)
 
 
-def _GetBlockDevSymlinkPath(instance_name, idx):
-  return utils.PathJoin(pathutils.DISK_LINKS_DIR, "%s%s%d" %
-                        (instance_name, constants.DISK_SEPARATOR, idx))
+def _GetBlockDevSymlinkPath(instance_name, idx, _dir=None):
+  """Returns symlink path for block device.
+
+  """
+  if _dir is None:
+    _dir = pathutils.DISK_LINKS_DIR
+
+  return utils.PathJoin(_dir,
+                        ("%s%s%s" %
+                         (instance_name, constants.DISK_SEPARATOR, idx)))
 
 
 def _SymlinkBlockDev(instance_name, device_path, idx):
@@ -1573,6 +1580,34 @@ def GetMigrationStatus(instance):
     return hyper.GetMigrationStatus(instance)
   except Exception, err:  # pylint: disable=W0703
     _Fail("Failed to get migration status: %s", err, exc=True)
+
+def HotAddDisk(instance, disk, dev_path, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddDisk(instance, disk, dev_path, seq)
+
+def HotDelDisk(instance, disk, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelDisk(instance, disk, seq)
+
+def HotAddNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotAddNic(instance, nic, seq)
+
+def HotDelNic(instance, nic, seq):
+  """Hot add a nic
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  return hyper.HotDelNic(instance, nic, seq)
 
 
 def BlockdevCreate(disk, size, owner, on_primary, info, excl_stor):
@@ -2491,8 +2526,9 @@ def OSEnvironment(instance, inst_os, debug=0):
       result["NIC_%d_BRIDGE" % idx] = nic.nicparams[constants.NIC_LINK]
     if nic.nicparams[constants.NIC_LINK]:
       result["NIC_%d_LINK" % idx] = nic.nicparams[constants.NIC_LINK]
-    if nic.network:
-      result["NIC_%d_NETWORK" % idx] = nic.network
+    if nic.netinfo:
+      nobj = objects.Network.FromDict(nic.netinfo)
+      result.update(nobj.HooksDict("NIC_%d_" % idx))
     if constants.HV_NIC_TYPE in instance.hvparams:
       result["NIC_%d_FRONTEND_TYPE" % idx] = \
         instance.hvparams[constants.HV_NIC_TYPE]
@@ -3659,7 +3695,7 @@ def PowercycleNode(hypervisor_type):
 
 
 def _VerifyRestrictedCmdName(cmd):
-  """Verifies a remote command name.
+  """Verifies a restricted command name.
 
   @type cmd: string
   @param cmd: Command name
@@ -3681,7 +3717,7 @@ def _VerifyRestrictedCmdName(cmd):
 
 
 def _CommonRestrictedCmdCheck(path, owner):
-  """Common checks for remote command file system directories and files.
+  """Common checks for restricted command file system directories and files.
 
   @type path: string
   @param path: Path to check
@@ -3711,7 +3747,7 @@ def _CommonRestrictedCmdCheck(path, owner):
 
 
 def _VerifyRestrictedCmdDirectory(path, _owner=None):
-  """Verifies remote command directory.
+  """Verifies restricted command directory.
 
   @type path: string
   @param path: Path to check
@@ -3732,10 +3768,10 @@ def _VerifyRestrictedCmdDirectory(path, _owner=None):
 
 
 def _VerifyRestrictedCmd(path, cmd, _owner=None):
-  """Verifies a whole remote command and returns its executable filename.
+  """Verifies a whole restricted command and returns its executable filename.
 
   @type path: string
-  @param path: Directory containing remote commands
+  @param path: Directory containing restricted commands
   @type cmd: string
   @param cmd: Command name
   @rtype: tuple; (boolean, string)
@@ -3761,10 +3797,10 @@ def _PrepareRestrictedCmd(path, cmd,
                           _verify_dir=_VerifyRestrictedCmdDirectory,
                           _verify_name=_VerifyRestrictedCmdName,
                           _verify_cmd=_VerifyRestrictedCmd):
-  """Performs a number of tests on a remote command.
+  """Performs a number of tests on a restricted command.
 
   @type path: string
-  @param path: Directory containing remote commands
+  @param path: Directory containing restricted commands
   @type cmd: string
   @param cmd: Command name
   @return: Same as L{_VerifyRestrictedCmd}
@@ -3791,7 +3827,7 @@ def RunRestrictedCmd(cmd,
                      _prepare_fn=_PrepareRestrictedCmd,
                      _runcmd_fn=utils.RunCmd,
                      _enabled=constants.ENABLE_RESTRICTED_COMMANDS):
-  """Executes a remote command after performing strict tests.
+  """Executes a restricted command after performing strict tests.
 
   @type cmd: string
   @param cmd: Command name
@@ -3800,10 +3836,10 @@ def RunRestrictedCmd(cmd,
   @raise RPCFail: In case of an error
 
   """
-  logging.info("Preparing to run remote command '%s'", cmd)
+  logging.info("Preparing to run restricted command '%s'", cmd)
 
   if not _enabled:
-    _Fail("Remote commands disabled at configure time")
+    _Fail("Restricted commands disabled at configure time")
 
   lock = None
   try:
@@ -3831,7 +3867,7 @@ def RunRestrictedCmd(cmd,
       # Do not include original error message in returned error
       _Fail("Executing command '%s' failed" % cmd)
     elif cmdresult.failed or cmdresult.fail_reason:
-      _Fail("Remote command '%s' failed: %s; output: %s",
+      _Fail("Restricted command '%s' failed: %s; output: %s",
             cmd, cmdresult.fail_reason, cmdresult.output)
     else:
       return cmdresult.output

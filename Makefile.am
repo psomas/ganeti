@@ -106,6 +106,7 @@ DIRS = \
 	qa \
 	test \
 	test/data \
+	test/data/bdev-rbd \
 	test/data/ovfdata \
 	test/data/ovfdata/other \
 	test/py \
@@ -260,8 +261,8 @@ pkgpython_PYTHON = \
 	lib/mcpu.py \
 	lib/netutils.py \
 	lib/objects.py \
-	lib/objectutils.py \
 	lib/opcodes.py \
+	lib/outils.py \
 	lib/ovf.py \
 	lib/pathutils.py \
 	lib/qlang.py \
@@ -379,7 +380,9 @@ docinput = \
 	doc/design-bulk-create.rst \
 	doc/design-chained-jobs.rst \
 	doc/design-cpu-pinning.rst \
+	doc/design-device-uuid-name.rst \
 	doc/design-draft.rst \
+	doc/design-hotplug.rst \
 	doc/design-htools-2.3.rst \
 	doc/design-http-server.rst \
 	doc/design-impexp2.rst \
@@ -394,8 +397,8 @@ docinput = \
 	doc/design-partitioned.rst \
 	doc/design-query-splitting.rst \
 	doc/design-query2.rst \
-	doc/design-remote-commands.rst \
 	doc/design-resource-model.rst \
+	doc/design-restricted-commands.rst \
 	doc/design-shared-storage.rst \
 	doc/design-monitoring-agent.rst \
 	doc/design-virtual-clusters.rst \
@@ -572,6 +575,7 @@ HS_TEST_SRCS = \
 	test/hs/Test/Ganeti/Query/Language.hs \
 	test/hs/Test/Ganeti/Query/Query.hs \
 	test/hs/Test/Ganeti/Rpc.hs \
+	test/hs/Test/Ganeti/Runtime.hs \
 	test/hs/Test/Ganeti/Ssconf.hs \
 	test/hs/Test/Ganeti/THH.hs \
 	test/hs/Test/Ganeti/TestCommon.hs \
@@ -985,6 +989,18 @@ TEST_FILES = \
 	test/data/bdev-drbd-disk.txt \
 	test/data/bdev-drbd-net-ip4.txt \
 	test/data/bdev-drbd-net-ip6.txt \
+	test/data/bdev-rbd/json_output_empty.txt \
+	test/data/bdev-rbd/json_output_extra_matches.txt \
+	test/data/bdev-rbd/json_output_no_matches.txt \
+	test/data/bdev-rbd/json_output_ok.txt \
+	test/data/bdev-rbd/plain_output_new_extra_matches.txt \
+	test/data/bdev-rbd/plain_output_new_no_matches.txt \
+	test/data/bdev-rbd/plain_output_new_ok.txt \
+	test/data/bdev-rbd/plain_output_old_empty.txt \
+	test/data/bdev-rbd/plain_output_old_extra_matches.txt \
+	test/data/bdev-rbd/plain_output_old_no_matches.txt \
+	test/data/bdev-rbd/plain_output_old_ok.txt \
+	test/data/bdev-rbd/output_invalid.txt \
 	test/data/cert1.pem \
 	test/data/cert2.pem \
 	test/data/instance-minor-pairing.txt \
@@ -1080,8 +1096,8 @@ python_tests = \
 	test/py/ganeti.mcpu_unittest.py \
 	test/py/ganeti.netutils_unittest.py \
 	test/py/ganeti.objects_unittest.py \
-	test/py/ganeti.objectutils_unittest.py \
 	test/py/ganeti.opcodes_unittest.py \
+	test/py/ganeti.outils_unittest.py \
 	test/py/ganeti.ovf_unittest.py \
 	test/py/ganeti.qlang_unittest.py \
 	test/py/ganeti.query_unittest.py \
@@ -1381,6 +1397,7 @@ lib/_autoconf.py: Makefile | stamp-directories
 	  echo "OS_SEARCH_PATH = [$(OS_SEARCH_PATH)]"; \
 	  echo "ES_SEARCH_PATH = [$(ES_SEARCH_PATH)]"; \
 	  echo "XEN_BOOTLOADER = '$(XEN_BOOTLOADER)'"; \
+	  echo "XEN_CONFIG_DIR = '$(XEN_CONFIG_DIR)'"; \
 	  echo "XEN_KERNEL = '$(XEN_KERNEL)'"; \
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \
 	  echo "KVM_KERNEL = '$(KVM_KERNEL)'"; \
@@ -1466,35 +1483,38 @@ $(SHELL_ENV_INIT): Makefile stamp-directories
 	  echo 'readonly CONF_DIR="$$SYSCONFDIR/ganeti"'; \
 	} > $@
 
+## Writes sed script to replace placeholders with build-time values. The
+## additional quotes after the first @ sign are necessary to stop configure
+## from replacing those values as well.
 $(REPLACE_VARS_SED): $(SHELL_ENV_INIT) Makefile stamp-directories
 	set -e; \
-	{ echo 's#@PREFIX@#$(prefix)#g'; \
-	  echo 's#@SYSCONFDIR@#$(sysconfdir)#g'; \
-	  echo 's#@LOCALSTATEDIR@#$(localstatedir)#g'; \
-	  echo 's#@BINDIR@#$(bindir)#g'; \
-	  echo 's#@SBINDIR@#$(sbindir)#g'; \
-	  echo 's#@LIBDIR@#$(libdir)#g'; \
-	  echo 's#@GANETI_VERSION@#$(PACKAGE_VERSION)#g'; \
-	  echo 's#@CUSTOM_XEN_BOOTLOADER@#$(XEN_BOOTLOADER)#g'; \
-	  echo 's#@CUSTOM_XEN_KERNEL@#$(XEN_KERNEL)#g'; \
-	  echo 's#@CUSTOM_XEN_INITRD@#$(XEN_INITRD)#g'; \
-	  echo 's#@CUSTOM_IALLOCATOR_SEARCH_PATH@#$(IALLOCATOR_SEARCH_PATH)#g'; \
-	  echo 's#@CUSTOM_EXPORT_DIR@#$(EXPORT_DIR)#g'; \
-	  echo 's#@RPL_FILE_STORAGE_DIR@#$(FILE_STORAGE_DIR)#g'; \
-	  echo 's#@RPL_SSH_INITD_SCRIPT@#$(SSH_INITD_SCRIPT)#g'; \
-	  echo 's#@PKGLIBDIR@#$(pkglibdir)#g'; \
-	  echo 's#@GNTMASTERUSER@#$(MASTERD_USER)#g'; \
-	  echo 's#@GNTRAPIUSER@#$(RAPI_USER)#g'; \
-	  echo 's#@GNTCONFDUSER@#$(CONFD_USER)#g'; \
-	  echo 's#@GNTNODEDUSER@#$(NODED_USER)#g'; \
-	  echo 's#@GNTRAPIGROUP@#$(RAPI_GROUP)#g'; \
-	  echo 's#@GNTADMINGROUP@#$(ADMIN_GROUP)#g'; \
-	  echo 's#@GNTCONFDGROUP@#$(CONFD_GROUP)#g'; \
-	  echo 's#@GNTMASTERDGROUP@#$(MASTERD_GROUP)#g'; \
-	  echo 's#@GNTDAEMONSGROUP@#$(DAEMONS_GROUP)#g'; \
-	  echo 's#@CUSTOM_ENABLE_CONFD@#$(ENABLE_CONFD)#g'; \
-	  echo 's#@MODULES@#$(strip $(lint_python_code))#g'; \
-	  echo 's#@ENABLE_SPLIT_QUERY@#$(ENABLE_SPLIT_QUERY)#g'; \
+	{ echo 's#@''PREFIX@#$(prefix)#g'; \
+	  echo 's#@''SYSCONFDIR@#$(sysconfdir)#g'; \
+	  echo 's#@''LOCALSTATEDIR@#$(localstatedir)#g'; \
+	  echo 's#@''BINDIR@#$(bindir)#g'; \
+	  echo 's#@''SBINDIR@#$(sbindir)#g'; \
+	  echo 's#@''LIBDIR@#$(libdir)#g'; \
+	  echo 's#@''GANETI_VERSION@#$(PACKAGE_VERSION)#g'; \
+	  echo 's#@''CUSTOM_XEN_BOOTLOADER@#$(XEN_BOOTLOADER)#g'; \
+	  echo 's#@''CUSTOM_XEN_KERNEL@#$(XEN_KERNEL)#g'; \
+	  echo 's#@''CUSTOM_XEN_INITRD@#$(XEN_INITRD)#g'; \
+	  echo 's#@''CUSTOM_IALLOCATOR_SEARCH_PATH@#$(IALLOCATOR_SEARCH_PATH)#g'; \
+	  echo 's#@''CUSTOM_EXPORT_DIR@#$(EXPORT_DIR)#g'; \
+	  echo 's#@''RPL_FILE_STORAGE_DIR@#$(FILE_STORAGE_DIR)#g'; \
+	  echo 's#@''RPL_SSH_INITD_SCRIPT@#$(SSH_INITD_SCRIPT)#g'; \
+	  echo 's#@''PKGLIBDIR@#$(pkglibdir)#g'; \
+	  echo 's#@''GNTMASTERUSER@#$(MASTERD_USER)#g'; \
+	  echo 's#@''GNTRAPIUSER@#$(RAPI_USER)#g'; \
+	  echo 's#@''GNTCONFDUSER@#$(CONFD_USER)#g'; \
+	  echo 's#@''GNTNODEDUSER@#$(NODED_USER)#g'; \
+	  echo 's#@''GNTRAPIGROUP@#$(RAPI_GROUP)#g'; \
+	  echo 's#@''GNTADMINGROUP@#$(ADMIN_GROUP)#g'; \
+	  echo 's#@''GNTCONFDGROUP@#$(CONFD_GROUP)#g'; \
+	  echo 's#@''GNTMASTERDGROUP@#$(MASTERD_GROUP)#g'; \
+	  echo 's#@''GNTDAEMONSGROUP@#$(DAEMONS_GROUP)#g'; \
+	  echo 's#@''CUSTOM_ENABLE_CONFD@#$(ENABLE_CONFD)#g'; \
+	  echo 's#@''MODULES@#$(strip $(lint_python_code))#g'; \
+	  echo 's#@''XEN_CONFIG_DIR@#$(XEN_CONFIG_DIR)#g'; \
 	  echo; \
 	  echo '/^@SHELL_ENV_INIT@$$/ {'; \
 	  echo '  r $(SHELL_ENV_INIT)'; \
@@ -1694,6 +1714,7 @@ HLINT_EXCLUDES = src/Ganeti/THH.hs test/hs/hpc-htools.hs
 .PHONY: hlint
 hlint: $(HS_BUILT_SRCS) src/lint-hints.hs
 	@test -n "$(HLINT)" || { echo 'hlint' not found during configure; exit 1; }
+	@rm -f doc/hs-lint.html
 	if tty -s; then C="-c"; else C=""; fi; \
 	$(HLINT) --utf8 --report=doc/hs-lint.html --cross $$C \
 	  --ignore "Use first" \
@@ -1702,6 +1723,9 @@ hlint: $(HS_BUILT_SRCS) src/lint-hints.hs
 	  --ignore "Reduce duplication" \
 	  --hint src/lint-hints \
 	  $(filter-out $(HLINT_EXCLUDES),$(HS_LIBTEST_SRCS) $(HS_PROG_SRCS))
+	@if [ ! -f doc/hs-lint.html ]; then \
+	  echo "All good" > doc/hs-lint.html; \
+	fi
 
 # a dist hook rule for updating the vcs-version file; this is
 # hardcoded due to where it needs to build the file...
@@ -1709,11 +1733,6 @@ dist-hook:
 	$(MAKE) $(AM_MAKEFLAGS) regen-vcs-version
 	rm -f $(top_distdir)/vcs-version
 	cp -p $(srcdir)/vcs-version $(top_distdir)
-if MANPAGES_IN_DOC
-	echo 'Building distribution with man pages included in documentation is' \
-	     'not allowed as they can contain fixed paths' >&2; \
-	exit 1
-endif
 
 # a distcheck hook rule for catching revision control directories
 distcheck-hook:
@@ -1742,6 +1761,10 @@ distcheck-hook:
 	   grep -n -H -E '^\*.*unreleased' $(top_distdir)/NEWS; then \
 	   echo "Found unreleased version in NEWS." >&2; \
 	   exit 1; \
+	fi
+	if test -e $(top_distdir)/doc/man-html; then \
+	  echo "Found documentation including man pages in final archive" >&2; \
+	  exit 1; \
 	fi
 
 # When building a release, stricter checks should be used

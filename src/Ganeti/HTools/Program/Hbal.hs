@@ -4,7 +4,7 @@
 
 {-
 
-Copyright (C) 2009, 2010, 2011, 2012 Google Inc.
+Copyright (C) 2009, 2010, 2011, 2012, 2013 Google Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -54,7 +54,8 @@ import Ganeti.HTools.CLI
 import Ganeti.HTools.ExtLoader
 import Ganeti.HTools.Types
 import Ganeti.HTools.Loader
-import Ganeti.OpCodes (wrapOpCode, setOpComment, OpCode, MetaOpCode)
+import Ganeti.OpCodes (wrapOpCode, setOpComment, setOpPriority,
+                       OpCode, MetaOpCode)
 import Ganeti.Jobs as Jobs
 import Ganeti.Types
 import Ganeti.Utils
@@ -93,15 +94,19 @@ options = do
     , oExTags
     , oExInst
     , oSaveCluster
+    , oPriority
     ]
 
 -- | The list of arguments supported by the program.
 arguments :: [ArgCompletion]
 arguments = []
 
+-- | A simple type alias for clearer signature.
+type Annotator = OpCode -> MetaOpCode
+
 -- | Wraps an 'OpCode' in a 'MetaOpCode' while also adding a comment
 -- about what generated the opcode.
-annotateOpCode :: OpCode -> MetaOpCode
+annotateOpCode :: Annotator
 annotateOpCode =
   setOpComment ("rebalancing via hbal " ++ version) . wrapOpCode
 
@@ -135,8 +140,9 @@ iterateDepth printmove ini_tbl max_rounds disk_moves inst_moves nmlen imlen
        Just fin_tbl ->
          do
            let (Cluster.Table _ _ _ fin_plc) = fin_tbl
-               fin_plc_len = length fin_plc
-               cur_plc@(idx, _, _, move, _) = head fin_plc
+           cur_plc@(idx, _, _, move, _) <-
+             exitIfEmpty "Empty placement list returned for solution?!" fin_plc
+           let fin_plc_len = length fin_plc
                (sol_line, cmds) = Cluster.printSolutionLine ini_nl ini_il
                                   nmlen imlen cur_plc fin_plc_len
                afn = Cluster.involvedNodes ini_il cur_plc
@@ -174,25 +180,24 @@ saveBalanceCommands opts cmd_data = do
       printf "The commands have been written to file '%s'\n" out_path
 
 -- | Wrapper over execJobSet checking for early termination via an IORef.
-execCancelWrapper :: String -> Node.List
+execCancelWrapper :: Annotator -> String -> Node.List
                   -> Instance.List -> IORef Int -> [JobSet] -> IO (Result ())
-execCancelWrapper _      _  _  _    [] = return $ Ok ()
-execCancelWrapper master nl il cref alljss = do
+execCancelWrapper _    _      _  _  _    [] = return $ Ok ()
+execCancelWrapper anno master nl il cref alljss = do
   cancel <- readIORef cref
   if cancel > 0
     then return . Bad $ "Exiting early due to user request, " ++
                         show (length alljss) ++ " jobset(s) remaining."
-    else execJobSet master nl il cref alljss
+    else execJobSet anno master nl il cref alljss
 
 -- | Execute an entire jobset.
-execJobSet :: String -> Node.List
+execJobSet :: Annotator -> String -> Node.List
            -> Instance.List -> IORef Int -> [JobSet] -> IO (Result ())
-execJobSet _      _  _  _    [] = return $ Ok ()
-execJobSet master nl il cref (js:jss) = do
+execJobSet _    _      _  _  _    [] = return $ Ok ()
+execJobSet anno master nl il cref (js:jss) = do
   -- map from jobset (htools list of positions) to [[opcodes]]
   let jobs = map (\(_, idx, move, _) ->
-                      map annotateOpCode $
-                      Cluster.iMoveToJob nl il idx move) js
+                    map anno $ Cluster.iMoveToJob nl il idx move) js
       descr = map (\(_, idx, _, _) -> Container.nameOf il idx) js
       logfn = putStrLn . ("Got job IDs" ++) . commaJoin . map (show . fromJobId)
   putStrLn $ "Executing jobset for instances " ++ commaJoin descr
@@ -201,7 +206,7 @@ execJobSet master nl il cref (js:jss) = do
   case jrs of
     Bad x -> return $ Bad x
     Ok x -> if null failures
-              then execCancelWrapper master nl il cref jss
+              then execCancelWrapper anno master nl il cref jss
               else return . Bad . unlines $ [
                 "Not all jobs completed successfully: " ++ show failures,
                 "Aborting."]
@@ -218,9 +223,12 @@ maybeExecJobs :: Options
 maybeExecJobs opts ord_plc fin_nl il cmd_jobs =
   if optExecJobs opts && not (null ord_plc)
     then (case optLuxi opts of
-            Nothing -> return $
-                       Bad "Execution of commands possible only on LUXI"
-            Just master -> execWithCancel master fin_nl il cmd_jobs)
+            Nothing ->
+              return $ Bad "Execution of commands possible only on LUXI"
+            Just master ->
+              let annotator = maybe id setOpPriority (optPriority opts) .
+                              annotateOpCode
+              in execWithCancel annotator master fin_nl il cmd_jobs)
     else return $ Ok ()
 
 -- | Signal handler for graceful termination.
@@ -240,13 +248,13 @@ handleSigTerm cref = do
 
 -- | Prepares to run a set of jobsets with handling of signals and early
 -- termination.
-execWithCancel :: String -> Node.List -> Instance.List -> [JobSet]
+execWithCancel :: Annotator -> String -> Node.List -> Instance.List -> [JobSet]
                -> IO (Result ())
-execWithCancel master fin_nl il cmd_jobs = do
+execWithCancel anno master fin_nl il cmd_jobs = do
   cref <- newIORef 0
   mapM_ (\(hnd, sig) -> installHandler sig (Catch (hnd cref)) Nothing)
     [(handleSigTerm, softwareTermination), (handleSigInt, keyboardSignal)]
-  execCancelWrapper master fin_nl il cref cmd_jobs
+  execCancelWrapper anno master fin_nl il cref cmd_jobs
 
 -- | Select the target node group.
 selectGroup :: Options -> Group.List -> Node.List -> Instance.List
@@ -261,8 +269,8 @@ selectGroup opts gl nlf ilf = do
 
   case optGroup opts of
     Nothing -> do
-      let (gidx, cdata) = head ngroups
-          grp = Container.find gidx gl
+      (gidx, cdata) <- exitIfEmpty "No groups found by splitCluster?!" ngroups
+      let grp = Container.find gidx gl
       return (Group.name grp, cdata)
     Just g -> case Container.findByName gl g of
       Nothing -> do

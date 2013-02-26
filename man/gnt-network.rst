@@ -14,8 +14,10 @@ Synopsis
 DESCRIPTION
 -----------
 
-The **gnt-network** command is used for network definition
-administration in the Ganeti system.
+The **gnt-network** command is used for network definition and
+administration in the Ganeti system. Each instance NIC can be connected
+to a network via the ``network`` NIC parameter. See **gnt-instance**\(8)
+for more details.
 
 COMMANDS
 --------
@@ -30,7 +32,6 @@ ADD
 | [--network6=*NETWORK6*]
 | [--gateway6=*GATEWAY6*]
 | [--mac-prefix=*MACPREFIX*]
-| [--network-type=*NETWORKTYPE*]
 | [--submit]
 | {*network*}
 
@@ -44,11 +45,15 @@ notation.
 The ``--gateway`` option allows you to specify the default gateway for
 this network.
 
-The ``--network-type`` can be none, private or public.
-
 IPv6 semantics can be assigned to the network via the ``--network6`` and
 ``--gateway6`` options. IP pool is meaningless for IPV6 so those two
 values can be used for EUI64 generation from a NIC's MAC address.
+
+Note that a when connecting a network to a node group (see below) you
+can specify also the NIC mode and link that will be used by instances on
+that group to physically connect to this network. This allows the system
+to work even if the parameters (eg. the VLAN number) change between
+groups.
 
 See **ganeti**\(7) for a description of ``--submit`` and other common
 options.
@@ -63,7 +68,6 @@ MODIFY
 | [--network6=*NETWORK6*]
 | [--gateway6=*GATEWAY6*]
 | [--mac-prefix=*MACPREFIX*]
-| [--network-type=*NETWORKTYPE*]
 | [--submit]
 | {*network*}
 

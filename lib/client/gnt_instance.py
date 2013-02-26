@@ -1177,10 +1177,13 @@ def ShowInstanceConfig(opts, args):
     FormatParameterDict(buf, instance["be_instance"], be_actual, level=2)
     # TODO(ganeti 2.7) rework the NICs as well
     buf.write("    - NICs:\n")
-    for idx, (ip, mac, mode, link, network, _) in enumerate(instance["nics"]):
+    for idx, (ip, mac, mode, link, _, netinfo) in enumerate(instance["nics"]):
+      network_name = None
+      if netinfo:
+        network_name = netinfo["name"]
       buf.write("      - nic/%d: MAC: %s, IP: %s,"
                 " mode: %s, link: %s, network: %s\n" %
-                (idx, mac, ip, mode, link, network))
+                (idx, mac, ip, mode, link, network_name))
     buf.write("  Disk template: %s\n" % instance["disk_template"])
     buf.write("  Disks:\n")
 
@@ -1208,51 +1211,37 @@ def _ConvertNicDiskModifications(mods):
   """
   result = []
 
-  for (idx, params) in mods:
-    if idx == constants.DDM_ADD:
-      # Add item as last item (legacy interface)
-      action = constants.DDM_ADD
-      idxno = -1
-    elif idx == constants.DDM_REMOVE:
-      # Remove last item (legacy interface)
-      action = constants.DDM_REMOVE
-      idxno = -1
-    else:
-      # Modifications and adding/removing at arbitrary indices
-      try:
-        idxno = int(idx)
-      except (TypeError, ValueError):
-        raise errors.OpPrereqError("Non-numeric index '%s'" % idx,
+  for (ident, params) in mods:
+    # Modifications and adding/removing at arbitrary indices
+
+    add = params.pop(constants.DDM_ADD, _MISSING)
+    remove = params.pop(constants.DDM_REMOVE, _MISSING)
+    modify = params.pop(constants.DDM_MODIFY, _MISSING)
+
+    if modify is _MISSING:
+      if not (add is _MISSING or remove is _MISSING):
+        raise errors.OpPrereqError("Cannot add and remove at the same time",
                                    errors.ECODE_INVAL)
-
-      add = params.pop(constants.DDM_ADD, _MISSING)
-      remove = params.pop(constants.DDM_REMOVE, _MISSING)
-      modify = params.pop(constants.DDM_MODIFY, _MISSING)
-
-      if modify is _MISSING:
-        if not (add is _MISSING or remove is _MISSING):
-          raise errors.OpPrereqError("Cannot add and remove at the same time",
-                                     errors.ECODE_INVAL)
-        elif add is not _MISSING:
-          action = constants.DDM_ADD
-        elif remove is not _MISSING:
-          action = constants.DDM_REMOVE
-        else:
-          action = constants.DDM_MODIFY
-
-      elif add is _MISSING and remove is _MISSING:
-        action = constants.DDM_MODIFY
+      elif add is not _MISSING:
+        action = constants.DDM_ADD
+      elif remove is not _MISSING:
+        action = constants.DDM_REMOVE
       else:
-        raise errors.OpPrereqError("Cannot modify and add/remove at the"
-                                   " same time", errors.ECODE_INVAL)
+        action = constants.DDM_MODIFY
 
-      assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
+    elif add is _MISSING and remove is _MISSING:
+      action = constants.DDM_MODIFY
+    else:
+      raise errors.OpPrereqError("Cannot modify and add/remove at the"
+                                 " same time", errors.ECODE_INVAL)
+
+    assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
 
     if action == constants.DDM_REMOVE and params:
       raise errors.OpPrereqError("Not accepting parameters on removal",
                                  errors.ECODE_INVAL)
 
-    result.append((action, idxno, params))
+    result.append((action, ident, params))
 
   return result
 
@@ -1326,6 +1315,7 @@ def SetInstanceParams(opts, args):
   op = opcodes.OpInstanceSetParams(instance_name=args[0],
                                    nics=nics,
                                    disks=disks,
+                                   hotplug=opts.hotplug,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
                                    hvparams=opts.hvparams,
@@ -1347,10 +1337,11 @@ def SetInstanceParams(opts, args):
     ToStdout("Modified instance %s", args[0])
     for param, data in result:
       ToStdout(" - %-5s -> %s", param, data)
-    ToStdout("Please don't forget that most parameters take effect"
-             " only at the next (re)start of the instance initiated by"
-             " ganeti; restarting from within the instance will"
-             " not be enough.")
+    if not opts.hotplug:
+      ToStdout("Please don't forget that most parameters take effect"
+               " only at the next (re)start of the instance initiated by"
+               " ganeti; restarting from within the instance will"
+               " not be enough.")
   return 0
 
 
@@ -1528,7 +1519,7 @@ commands = {
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
      ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
-     NOCONFLICTSCHECK_OPT],
+     NOCONFLICTSCHECK_OPT, HOTPLUG_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

@@ -52,7 +52,7 @@ args = None
 #: Target major version we will upgrade to
 TARGET_MAJOR = 2
 #: Target minor version we will upgrade to
-TARGET_MINOR = 6
+TARGET_MINOR = 7
 
 
 class Error(Exception):
@@ -109,6 +109,39 @@ def UpgradeGroups(config_data):
     networks = group.get("networks", None)
     if not networks:
       group["networks"] = {}
+
+
+def UpgradeInstances(config_data):
+  network2uuid = dict((n["name"], n["uuid"])
+                      for n in config_data["networks"].values())
+  for inst in config_data["instances"].values():
+    for nic in inst["nics"]:
+      name = nic.get("network", None)
+      if name:
+        uuid = network2uuid.get(name, None)
+        if uuid:
+          print("NIC with network name %s found."
+                " Substituting with uuid %s." % (name, uuid))
+          nic["network"] = uuid
+      try:
+        del nic["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
+
+    for disk in inst["disks"]:
+      try:
+        del disk["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
+
+    for attr in ("dev_idxs", "hotplug_info", "hotplugs", "pci_reservations"):
+      try:
+        del inst[attr]
+        print("Deleting deprecated %s" % attr)
+      except KeyError:
+        pass
 
 
 def main():
@@ -204,8 +237,8 @@ def main():
     raise Error("Inconsistent configuration: found config_version in"
                 " configuration file")
 
-  # Upgrade from 2.0/2.1/2.2/2.3 to 2.4
-  if config_major == 2 and config_minor in (0, 1, 2, 3, 4, 5):
+  # Upgrade from 2.{0..6} to 2.7
+  if config_major == 2 and config_minor in (0, 1, 2, 3, 4, 5, 6):
     if config_revision != 0:
       logging.warning("Config revision is %s, not 0", config_revision)
 
@@ -294,6 +327,7 @@ def main():
 
   UpgradeNetworks(config_data)
   UpgradeGroups(config_data)
+  UpgradeInstances(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

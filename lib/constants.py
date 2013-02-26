@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -166,12 +166,16 @@ DEFAULT_RAPI_PORT = DAEMONS_PORTS[RAPI][1]
 FIRST_DRBD_PORT = 11000
 LAST_DRBD_PORT = 14999
 
-DAEMONS_LOGFILES = {
-  NODED: pathutils.GetLogFilename("node-daemon"),
-  CONFD: pathutils.GetLogFilename("conf-daemon"),
-  RAPI: pathutils.GetLogFilename("rapi-daemon"),
-  MASTERD: pathutils.GetLogFilename("master-daemon"),
+DAEMONS_LOGBASE = {
+  NODED: "node-daemon",
+  CONFD: "conf-daemon",
+  RAPI: "rapi-daemon",
+  MASTERD: "master-daemon",
   }
+
+DAEMONS_LOGFILES = \
+    dict((daemon, pathutils.GetLogFilename(DAEMONS_LOGBASE[daemon]))
+         for daemon in DAEMONS_LOGBASE)
 
 DEV_CONSOLE = "/dev/console"
 
@@ -1209,22 +1213,14 @@ NIC_VALID_MODES = compat.UniqueFrozenset([
 RESERVE_ACTION = "reserve"
 RELEASE_ACTION = "release"
 
-# An extra description of the network.
-# Can be used by hooks/kvm-vif-bridge to apply different rules
-NETWORK_TYPE_PRIVATE = "private"
-NETWORK_TYPE_PUBLIC = "public"
-
-NETWORK_VALID_TYPES = compat.UniqueFrozenset([
-  NETWORK_TYPE_PRIVATE,
-  NETWORK_TYPE_PUBLIC,
-  ])
-
 NICS_PARAMETER_TYPES = {
   NIC_MODE: VTYPE_STRING,
   NIC_LINK: VTYPE_STRING,
   }
 
 NICS_PARAMETERS = frozenset(NICS_PARAMETER_TYPES.keys())
+
+IDEV_NAME = "name"
 
 # IDISK_* constants are used in opcodes, to create/change disks
 IDISK_SIZE = "size"
@@ -1234,6 +1230,7 @@ IDISK_VG = "vg"
 IDISK_METAVG = "metavg"
 IDISK_PROVIDER = "provider"
 IDISK_PARAMS_TYPES = {
+  IDEV_NAME: VTYPE_MAYBE_STRING,
   IDISK_SIZE: VTYPE_SIZE,
   IDISK_MODE: VTYPE_STRING,
   IDISK_ADOPT: VTYPE_STRING,
@@ -1250,6 +1247,7 @@ INIC_MODE = "mode"
 INIC_LINK = "link"
 INIC_NETWORK = "network"
 INIC_PARAMS_TYPES = {
+  IDEV_NAME: VTYPE_MAYBE_STRING,
   INIC_IP: VTYPE_MAYBE_STRING,
   INIC_LINK: VTYPE_STRING,
   INIC_MAC: VTYPE_STRING,
@@ -1451,9 +1449,6 @@ CV_ECLUSTERDANGLINGNODES = \
 CV_ECLUSTERDANGLINGINST = \
   (CV_TNODE, "ECLUSTERDANGLINGINST",
    "Some instances have a non-existing primary node")
-CV_EGROUPMIXEDESFLAG = \
-  (CV_TGROUP, "EGROUPMIXEDESFLAG",
-   "exclusive_storage flag is not uniform within the group")
 CV_EGROUPDIFFERENTPVSIZE = \
   (CV_TGROUP, "EGROUPDIFFERENTPVSIZE", "PVs in the group have different sizes")
 CV_EINSTANCEBADNODE = \
@@ -1900,7 +1895,7 @@ HVC_DEFAULTS = {
     HV_BOOTLOADER_ARGS: "",
     HV_KERNEL_PATH: XEN_KERNEL,
     HV_INITRD_PATH: "",
-    HV_ROOT_PATH: "/dev/sda1",
+    HV_ROOT_PATH: "/dev/xvda1",
     HV_KERNEL_ARGS: "ro",
     HV_MIGRATION_PORT: 8002,
     HV_MIGRATION_MODE: HT_MIGRATION_LIVE,
@@ -2018,6 +2013,10 @@ NDC_DEFAULTS = {
   ND_SPINDLE_COUNT: 1,
   ND_EXCLUSIVE_STORAGE: False,
   }
+
+NDC_GLOBALS = compat.UniqueFrozenset([
+  ND_EXCLUSIVE_STORAGE,
+  ])
 
 DISK_LD_DEFAULTS = {
   LD_DRBD8: {
@@ -2194,14 +2193,16 @@ CONFD_ERROR_ARGUMENT = 3
 # TODO: make this a default and allow the value to be more configurable
 CONFD_MAX_CLOCK_SKEW = 2 * NODE_MAX_CLOCK_SKEW
 
-# When we haven't reloaded the config for more than this amount of seconds, we
-# force a test to see if inotify is betraying us.
-CONFD_CONFIG_RELOAD_TIMEOUT = 60
+# When we haven't reloaded the config for more than this amount of
+# seconds, we force a test to see if inotify is betraying us. Using a
+# prime number to ensure we get less chance of 'same wakeup' with
+# other processes.
+CONFD_CONFIG_RELOAD_TIMEOUT = 17
 
-# If we receive more than one update in this amount of seconds, we move to
-# polling every RATELIMIT seconds, rather than relying on inotify, to be able
-# to serve more requests.
-CONFD_CONFIG_RELOAD_RATELIMIT = 2
+# If we receive more than one update in this amount of microseconds,
+# we move to polling every RATELIMIT seconds, rather than relying on
+# inotify, to be able to serve more requests.
+CONFD_CONFIG_RELOAD_RATELIMIT = 250000
 
 # Magic number prepended to all confd queries.
 # This allows us to distinguish different types of confd protocols and handle

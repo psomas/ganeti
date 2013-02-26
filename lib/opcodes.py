@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ from ganeti import constants
 from ganeti import errors
 from ganeti import ht
 from ganeti import objects
-from ganeti import objectutils
+from ganeti import outils
 
 
 # Common opcode attributes
@@ -361,8 +361,6 @@ def _CheckStorageType(storage_type):
 _PStorageType = ("storage_type", ht.NoDefault, _CheckStorageType,
                  "Storage type")
 
-_CheckNetworkType = ht.TElemOf(constants.NETWORK_VALID_TYPES)
-
 
 @ht.WithDesc("IPv4 network")
 def _CheckCIDRNetNotation(value):
@@ -419,7 +417,7 @@ _TIpNetwork6 = ht.TAnd(ht.TString, _CheckCIDR6NetNotation)
 _TMaybeAddr4List = ht.TMaybe(ht.TListOf(_TIpAddress4))
 
 
-class _AutoOpParamSlots(objectutils.AutoSlots):
+class _AutoOpParamSlots(outils.AutoSlots):
   """Meta class for opcode definitions.
 
   """
@@ -445,7 +443,7 @@ class _AutoOpParamSlots(objectutils.AutoSlots):
 
     attrs["OP_ID"] = _NameToId(name)
 
-    return objectutils.AutoSlots.__new__(mcs, name, bases, attrs)
+    return outils.AutoSlots.__new__(mcs, name, bases, attrs)
 
   @classmethod
   def _GetSlots(mcs, attrs):
@@ -459,7 +457,7 @@ class _AutoOpParamSlots(objectutils.AutoSlots):
     return [pname for (pname, _, _, _) in params]
 
 
-class BaseOpCode(objectutils.ValidatedSlots):
+class BaseOpCode(outils.ValidatedSlots):
   """A simple serializable object.
 
   This object serves as a parent class for OpCode without any custom
@@ -1314,6 +1312,7 @@ class OpInstanceCreate(OpCode):
     ("src_path", None, ht.TMaybeString, "Source directory for import"),
     ("start", True, ht.TBool, "Whether to start instance after creation"),
     ("tags", ht.EmptyList, ht.TListOf(ht.TNonEmptyString), "Instance tags"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
     ]
   OP_RESULT = ht.Comment("instance nodes")(ht.TListOf(ht.TNonEmptyString))
 
@@ -1620,24 +1619,16 @@ def _TestInstSetParamsModList(fn):
   """Generates a check for modification lists.
 
   """
-  # Old format
-  # TODO: Remove in version 2.8 including support in LUInstanceSetParams
-  old_mod_item_fn = \
-    ht.TAnd(ht.TIsLength(2), ht.TItems([
-      ht.TOr(ht.TElemOf(constants.DDMS_VALUES), ht.TNonNegativeInt),
-      fn,
-      ]))
-
   # New format, supporting adding/removing disks/NICs at arbitrary indices
   mod_item_fn = \
     ht.TAnd(ht.TIsLength(3), ht.TItems([
       ht.TElemOf(constants.DDMS_VALUES_WITH_MODIFY),
-      ht.Comment("Disk index, can be negative, e.g. -1 for last disk")(ht.TInt),
+      ht.Comment("Disk ident, can be negative, e.g. -1 for last disk")
+                (ht.TString),
       fn,
       ]))
 
-  return ht.TOr(ht.Comment("Recommended")(ht.TListOf(mod_item_fn)),
-                ht.Comment("Deprecated")(ht.TListOf(old_mod_item_fn)))
+  return ht.Comment("Recommended")(ht.TListOf(mod_item_fn))
 
 
 class OpInstanceSetParams(OpCode):
@@ -1680,6 +1671,7 @@ class OpInstanceSetParams(OpCode):
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ("hotplug", None, ht.TMaybeBool, "Whether to hotplug devices"),
     ]
   OP_RESULT = _TSetParamsResult
 
@@ -2065,7 +2057,6 @@ class OpNetworkAdd(OpCode):
   OP_DSC_FIELD = "network_name"
   OP_PARAMS = [
     _PNetworkName,
-    ("network_type", None, ht.TMaybe(_CheckNetworkType), "Network type"),
     ("network", ht.NoDefault, _TIpNetwork4, "IPv4 subnet"),
     ("gateway", None, ht.TMaybe(_TIpAddress4), "IPv4 gateway"),
     ("network6", None, ht.TMaybe(_TIpNetwork6), "IPv6 subnet"),
@@ -2099,8 +2090,6 @@ class OpNetworkSetParams(OpCode):
   OP_DSC_FIELD = "network_name"
   OP_PARAMS = [
     _PNetworkName,
-    ("network_type", None, ht.TMaybeValueNone(_CheckNetworkType),
-     "Network type"),
     ("gateway", None, ht.TMaybeValueNone(_TIpAddress4), "IPv4 gateway"),
     ("network6", None, ht.TMaybeValueNone(_TIpNetwork6), "IPv6 subnet"),
     ("gateway6", None, ht.TMaybeValueNone(_TIpAddress6), "IPv6 gateway"),
@@ -2143,7 +2132,6 @@ class OpNetworkDisconnect(OpCode):
   OP_PARAMS = [
     _PGroupName,
     _PNetworkName,
-    ("conflicts_check", True, ht.TBool, "Whether to check for conflicting IPs"),
     ]
   OP_RESULT = ht.TNone
 

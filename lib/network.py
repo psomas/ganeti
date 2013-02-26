@@ -26,6 +26,8 @@
 import ipaddr
 
 from bitarray import bitarray
+from base64 import b64encode
+from base64 import b64decode
 
 from ganeti import errors
 
@@ -64,14 +66,16 @@ class AddressPool(object):
       self.gateway6 = ipaddr.IPv6Address(self.net.gateway6)
 
     if self.net.reservations:
-      self.reservations = bitarray(self.net.reservations)
+      self.reservations = bitarray()
+      self.reservations.frombytes(b64decode(self.net.reservations))
     else:
       self.reservations = bitarray(self.network.numhosts)
       # pylint: disable=E1103
       self.reservations.setall(False)
 
     if self.net.ext_reservations:
-      self.ext_reservations = bitarray(self.net.ext_reservations)
+      self.ext_reservations = bitarray()
+      self.ext_reservations.frombytes(b64decode(self.net.ext_reservations))
     else:
       self.ext_reservations = bitarray(self.network.numhosts)
       # pylint: disable=E1103
@@ -101,8 +105,8 @@ class AddressPool(object):
 
     """
     # pylint: disable=E1103
-    self.net.ext_reservations = self.ext_reservations.to01()
-    self.net.reservations = self.reservations.to01()
+    self.net.ext_reservations = b64encode(self.ext_reservations.tobytes())
+    self.net.reservations = b64encode(self.reservations.tobytes())
 
   def _Mark(self, address, value=True, external=False):
     idx = self._GetAddrIndex(address)
@@ -123,14 +127,12 @@ class AddressPool(object):
     return (self.reservations | self.ext_reservations)
 
   def Validate(self):
-    assert self.net.family == 4
     assert len(self.reservations) == self._GetSize()
     assert len(self.ext_reservations) == self._GetSize()
     all_res = self.reservations & self.ext_reservations
     assert not all_res.any()
 
     if self.gateway is not None:
-      assert self.net.family == self.gateway.version
       assert self.gateway in self.network
 
     if self.network6 and self.gateway6:

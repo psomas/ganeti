@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -94,6 +94,7 @@ __all__ = [
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
+  "HOTPLUG_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -117,7 +118,6 @@ __all__ = [
   "NET_OPT",
   "NETWORK_OPT",
   "NETWORK6_OPT",
-  "NETWORK_TYPE_OPT",
   "NEW_CLUSTER_CERT_OPT",
   "NEW_CLUSTER_DOMAIN_SECRET_OPT",
   "NEW_CONFD_HMAC_KEY_OPT",
@@ -1527,10 +1527,6 @@ REMOVE_RESERVED_IPS_OPT = cli_option("--remove-reserved-ips",
                                      help="Comma-delimited list of"
                                      " reserved IPs to remove")
 
-NETWORK_TYPE_OPT = cli_option("--network-type",
-                              action="store", default=None, dest="network_type",
-                              help="Network type: private, public, None")
-
 NETWORK6_OPT = cli_option("--network6",
                           action="store", default=None, dest="network6",
                           help="IP network in CIDR notation")
@@ -1544,6 +1540,10 @@ NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
                                   default=True,
                                   action="store_false",
                                   help="Don't check for conflicting IPs")
+
+HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
+                         action="store_true", default=False,
+                         help="Try to hotplug device")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT]
@@ -2302,8 +2302,12 @@ def FormatError(err):
   elif isinstance(err, errors.ParameterError):
     obuf.write("Failure: unknown/wrong parameter name '%s'" % msg)
   elif isinstance(err, luxi.NoMasterError):
-    obuf.write("Cannot communicate with the master daemon.\nIs it running"
-               " and listening for connections?")
+    if err.args[0] == pathutils.MASTER_SOCKET:
+      daemon = "master"
+    else:
+      daemon = "config"
+    obuf.write("Cannot communicate with the %s daemon.\nIs it running"
+               " and listening for connections?" % daemon)
   elif isinstance(err, luxi.TimeoutError):
     obuf.write("Timeout while talking to the master daemon. Jobs might have"
                " been submitted and will continue to run even if the call"

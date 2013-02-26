@@ -7,7 +7,7 @@
 
 {-
 
-Copyright (C) 2012 Google Inc.
+Copyright (C) 2012, 2013 Google Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -111,8 +111,6 @@ $(genArbitrary ''ExportMode)
 $(genArbitrary ''IAllocatorTestDir)
 
 $(genArbitrary ''IAllocatorMode)
-
-$(genArbitrary ''NetworkType)
 
 $(genArbitrary ''NICMode)
 
@@ -287,17 +285,6 @@ case_IAllocatorMode_pyequiv = do
       all_hs_codes = sort $ map Types.iAllocatorModeToRaw [minBound..maxBound]
   assertEqual "for IAllocatorMode equivalence" all_py_codes all_hs_codes
 
--- | Test 'NetworkType' serialisation.
-prop_NetworkType_serialisation :: NetworkType -> Property
-prop_NetworkType_serialisation = testSerialisation
-
--- | Tests equivalence with Python, based on Constants.hs code.
-case_NetworkType_pyequiv :: Assertion
-case_NetworkType_pyequiv = do
-  let all_py_codes = sort C.networkValidTypes
-      all_hs_codes = sort $ map Types.networkTypeToRaw [minBound..maxBound]
-  assertEqual "for NetworkType equivalence" all_py_codes all_hs_codes
-
 -- | Test 'NICMode' serialisation.
 prop_NICMode_serialisation :: NICMode -> Property
 prop_NICMode_serialisation = testSerialisation
@@ -383,6 +370,11 @@ prop_JobDependency_serialisation = testSerialisation
 prop_OpSubmitPriority_serialisation :: OpSubmitPriority -> Property
 prop_OpSubmitPriority_serialisation = testSerialisation
 
+-- | Tests string formatting for 'OpSubmitPriority'.
+prop_OpSubmitPriority_string :: OpSubmitPriority -> Property
+prop_OpSubmitPriority_string prio =
+  parseSubmitPriority (fmtSubmitPriority prio) ==? Just prio
+
 -- | Test 'ELogType' serialisation.
 prop_ELogType_serialisation :: ELogType -> Property
 prop_ELogType_serialisation = testSerialisation
@@ -417,8 +409,6 @@ testSuite "Types"
   , 'prop_IAllocatorTestDir_serialisation
   , 'prop_IAllocatorMode_serialisation
   , 'case_IAllocatorMode_pyequiv
-  , 'prop_NetworkType_serialisation
-  , 'case_NetworkType_pyequiv
   , 'prop_NICMode_serialisation
   , 'prop_OpStatus_serialization
   , 'prop_JobStatus_serialization
@@ -431,5 +421,6 @@ testSuite "Types"
   , 'case_JobId_BadTypes
   , 'prop_JobDependency_serialisation
   , 'prop_OpSubmitPriority_serialisation
+  , 'prop_OpSubmitPriority_string
   , 'prop_ELogType_serialisation
   ]

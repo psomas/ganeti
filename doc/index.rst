@@ -51,9 +51,11 @@ Contents:
    design-opportunistic-locking.rst
    design-ovf-support.rst
    design-query2.rst
-   design-remote-commands.rst
+   design-restricted-commands.rst
    design-shared-storage.rst
    design-virtual-clusters.rst
+   design-network.rst
+   design-linuxha.rst
 
 Also see the :ref:`search`.
 

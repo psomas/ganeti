@@ -551,8 +551,8 @@ def _GetVgInfo(name, excl_stor):
     vg_free = int(round(vginfo[0][0], 0))
     vg_size = int(round(vginfo[0][1], 0))
   else:
-    vg_free = None
-    vg_size = None
+    vg_free = 0
+    vg_size = 0
 
   return {
     "name": name,

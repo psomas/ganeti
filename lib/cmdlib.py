@@ -9461,6 +9461,7 @@ def _GenerateDiskTemplate(
                                       "disk/%d" % disk_index,
                                       minors[idx * 2], minors[idx * 2 + 1])
       disk_dev.mode = disk[constants.IDISK_MODE]
+      disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
       disks.append(disk_dev)
   else:
     if secondary_nodes:
@@ -9521,11 +9522,13 @@ def _GenerateDiskTemplate(
       size = disk[constants.IDISK_SIZE]
       feedback_fn("* disk %s, size %s" %
                   (disk_index, utils.FormatUnit(size, "h")))
-      disks.append(objects.Disk(dev_type=dev_type, size=size,
-                                logical_id=logical_id_fn(idx, disk_index, disk),
-                                iv_name="disk/%d" % disk_index,
-                                mode=disk[constants.IDISK_MODE],
-                                params=params))
+      disk_dev = objects.Disk(dev_type=dev_type, size=size,
+                              logical_id=logical_id_fn(idx, disk_index, disk),
+                              iv_name="disk/%d" % disk_index,
+                              mode=disk[constants.IDISK_MODE],
+                              params=params)
+      disk_dev.uuid = lu.cfg.GenerateUniqueID(lu.proc.GetECId())
+      disks.append(disk_dev)
 
   return disks
 
@@ -9964,8 +9967,13 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
     check_params = cluster.SimpleFillNIC(nicparams)
     objects.NIC.CheckParameterSyntax(check_params)
     net_uuid = cfg.LookupNetwork(net)
-    nics.append(objects.NIC(mac=mac, ip=nic_ip,
-                            network=net_uuid, nicparams=nicparams))
+    nic_obj = objects.NIC(mac=mac, ip=nic_ip,
+                          network=net_uuid,
+                          nicparams=nicparams)
+
+    nic_obj.uuid = cfg.GenerateUniqueID(ec_id)
+
+    nics.append(nic_obj)
 
   return nics
 
@@ -13039,7 +13047,7 @@ def PrepareContainerMods(mods, private_fn):
   else:
     fn = private_fn
 
-  return [(op, idx, params, fn()) for (op, idx, params) in mods]
+  return [(op, ident, params, fn()) for (op, ident, params) in mods]
 
 
 #: Type description for changes as returned by L{ApplyContainerMods}'s
@@ -13049,6 +13057,29 @@ _TApplyContModsCbChanges = \
     ht.TNonEmptyString,
     ht.TAny,
     ])))
+
+
+def GetItemFromContainerByIdentifier(ident, container):
+
+  def int_equal(x, i):
+    try:
+      if int(x) == i:
+        return True
+    except ValueError:
+      pass
+    return False
+
+  # in case the last device is wanted
+  if int_equal(ident, -1):
+    ident = len(container) - 1
+
+  for idx, item in enumerate(container):
+    if ident == item.uuid or int_equal(ident, idx):
+      return (idx, item)
+
+  raise errors.OpPrereqError("Cannot find device based on the"
+                             " identifier %s" % ident,
+                             errors.ECODE_NOENT)
 
 
 def ApplyContainerMods(kind, container, chgdesc, mods,
@@ -13078,45 +13109,38 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
     item and private data object as added by L{PrepareContainerMods}
 
   """
-  for (op, idx, params, private) in mods:
-    if idx == -1:
-      # Append
-      absidx = len(container) - 1
-    elif idx < 0:
-      raise IndexError("Not accepting negative indices other than -1")
-    elif idx > len(container):
-      raise IndexError("Got %s index %s, but there are only %s" %
-                       (kind, idx, len(container)))
-    else:
-      absidx = idx
-
+  for (op, ident, params, private) in mods:
     changes = None
 
     if op == constants.DDM_ADD:
       # Calculate where item will be added
-      if idx == -1:
+      try:
+        addidx = int(ident)
+      except ValueError:
+        raise errors.OpPrereqError("Only possitive integer or -1 is accepted as"
+                                   " identifier for %s" % constants.DDM_ADD,
+                                   errors.ECODE_INVAL)
+      append = False
+      if addidx == -1:
         addidx = len(container)
-      else:
-        addidx = idx
+        append = True
 
       if create_fn is None:
         item = params
       else:
         (item, changes) = create_fn(addidx, params, private)
 
-      if idx == -1:
+      if append:
         container.append(item)
       else:
-        assert idx >= 0
-        assert idx <= len(container)
+        assert addidx >= 0
+        assert addidx <= len(container)
         # list.insert does so before the specified index
-        container.insert(idx, item)
+        container.insert(addidx, item)
+
     else:
       # Retrieve existing item
-      try:
-        item = container[absidx]
-      except IndexError:
-        raise IndexError("Invalid %s index %s" % (kind, idx))
+      (absidx, item) = GetItemFromContainerByIdentifier(ident, container)
 
       if op == constants.DDM_REMOVE:
         assert not params
@@ -14113,9 +14137,11 @@ class LUInstanceSetParams(LogicalUnit):
     net_uuid = self.cfg.LookupNetwork(net)
     #TODO: not private.filled?? can a nic have no nicparams??
     nicparams = private.filled
-    nobj = objects.NIC(mac=mac, ip=ip, network=net_uuid, nicparams=nicparams)
 
-    return (nobj, [
+    nic_obj = objects.NIC(mac=mac, ip=ip, network=net_uuid, nicparams=nicparams)
+    nic_obj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
+
+    return (nic_obj, [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, private.filled[constants.NIC_MODE],

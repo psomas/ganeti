@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -38,13 +38,14 @@ pass to and from external parties.
 import ConfigParser
 import re
 import copy
+import logging
 import time
 from cStringIO import StringIO
 
 from ganeti import errors
 from ganeti import constants
 from ganeti import netutils
-from ganeti import objectutils
+from ganeti import outils
 from ganeti import utils
 
 from socket import AF_INET
@@ -192,7 +193,7 @@ def MakeEmptyIPolicy():
     ])
 
 
-class ConfigObject(objectutils.ValidatedSlots):
+class ConfigObject(outils.ValidatedSlots):
   """A generic config object.
 
   It has the following properties:
@@ -499,6 +500,8 @@ class ConfigData(ConfigObject):
         self.cluster.drbd_usermode_helper = constants.DEFAULT_DRBD_HELPER
     if self.networks is None:
       self.networks = {}
+    for network in self.networks.values():
+      network.UpgradeConfig()
 
 
 class NIC(ConfigObject):
@@ -1332,6 +1335,12 @@ class Node(TaggableObject):
 
     if self.ndparams is None:
       self.ndparams = {}
+    # And remove any global parameter
+    for key in constants.NDC_GLOBALS:
+      if key in self.ndparams:
+        logging.warning("Ignoring %s node parameter for node %s",
+                        key, self.name)
+        del self.ndparams[key]
 
     if self.powered is None:
       self.powered = True
@@ -2025,17 +2034,53 @@ class Network(TaggableObject):
   __slots__ = [
     "name",
     "serial_no",
-    "network_type",
     "mac_prefix",
-    "family",
     "network",
     "network6",
     "gateway",
     "gateway6",
-    "size",
     "reservations",
     "ext_reservations",
     ] + _TIMESTAMPS + _UUID
+
+  def HooksDict(self, prefix=""):
+    """Export a dictionary used by hooks with a network's information.
+
+    @type prefix: String
+    @param prefix: Prefix to prepend to the dict entries
+
+    """
+    result = {
+      "%sNETWORK_NAME" % prefix: self.name,
+      "%sNETWORK_UUID" % prefix: self.uuid,
+      "%sNETWORK_TAGS" % prefix: " ".join(self.GetTags()),
+    }
+    if self.network:
+      result["%sNETWORK_SUBNET" % prefix] = self.network
+    if self.gateway:
+      result["%sNETWORK_GATEWAY" % prefix] = self.gateway
+    if self.network6:
+      result["%sNETWORK_SUBNET6" % prefix] = self.network6
+    if self.gateway6:
+      result["%sNETWORK_GATEWAY6" % prefix] = self.gateway6
+    if self.mac_prefix:
+      result["%sNETWORK_MAC_PREFIX" % prefix] = self.mac_prefix
+
+    return result
+
+  @classmethod
+  def FromDict(cls, val):
+    """Custom function for networks.
+
+    Remove deprecated network_type and family.
+
+    """
+    if "network_type" in val:
+      del val["network_type"]
+    if "family" in val:
+      del val["family"]
+    obj = super(Network, cls).FromDict(val)
+    return obj
 
 
 class SerializableConfigParser(ConfigParser.SafeConfigParser):

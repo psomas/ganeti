@@ -4,7 +4,7 @@
 
 {-
 
-Copyright (C) 2012 Google Inc.
+Copyright (C) 2012, 2013 Google Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ module Ganeti.Query.Node
 
 import Control.Applicative
 import Data.List
+import Data.Maybe
 import qualified Data.Map as Map
 import qualified Text.JSON as J
 
@@ -109,7 +110,7 @@ nodeLiveFieldBuilder (fname, ftitle, ftype, _, fdoc) =
   , FieldRuntime $ nodeLiveRpcCall fname
   , QffNormal)
 
--- | The docstring for the node role. Note that we use 'reverse in
+-- | The docstring for the node role. Note that we use 'reverse' in
 -- order to keep the same order as Python.
 nodeRoleDoc :: String
 nodeRoleDoc =
@@ -221,7 +222,7 @@ maybeCollectLiveData:: Bool -> ConfigData -> [Node] -> IO [(Node, NodeRuntime)]
 maybeCollectLiveData False _ nodes =
   return $ zip nodes (repeat $ Left (RpcResultError "Live data disabled"))
 maybeCollectLiveData True cfg nodes = do
-  let vgs = [clusterVolumeGroupName $ configCluster cfg]
+  let vgs = [fromMaybe [] (clusterVolumeGroupName $ configCluster cfg)]
       hvs = [getDefaultHypervisor cfg]
       step n (bn, gn, em) =
         let ndp' = getNodeNdParams cfg n

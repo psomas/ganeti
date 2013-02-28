@@ -46,8 +46,13 @@ module Ganeti.Utils
   , rStripSpace
   , newUUID
   , getCurrentTime
+  , getCurrentTimeUSec
   , clockTimeToString
   , chompPrefix
+  , wrap
+  , trim
+  , defaultHead
+  , exitIfEmpty
   ) where
 
 import Data.Char (toUpper, isAlphaNum, isDigit, isSpace)
@@ -291,12 +296,21 @@ newUUID = do
   contents <- readFile C.randomUuidFile
   return $! rStripSpace $ take 128 contents
 
--- | Returns the current time as an Integer representing the number of
--- seconds from the Unix epoch.
+-- | Returns the current time as an 'Integer' representing the number
+-- of seconds from the Unix epoch.
 getCurrentTime :: IO Integer
 getCurrentTime = do
   TOD ctime _ <- getClockTime
   return ctime
+
+-- | Returns the current time as an 'Integer' representing the number
+-- of microseconds from the Unix epoch (hence the need for 'Integer').
+getCurrentTimeUSec :: IO Integer
+getCurrentTimeUSec = do
+  TOD ctime pico <- getClockTime
+  -- pico: 10^-12, micro: 10^-6, so we have to shift seconds left and
+  -- picoseconds right
+  return $ ctime * 1000000 + pico `div` 1000000
 
 -- | Convert a ClockTime into a (seconds-only) timestamp.
 clockTimeToString :: ClockTime -> String
@@ -326,3 +340,45 @@ chompPrefix pfx str =
   if pfx `isPrefixOf` str || str == init pfx
     then Just $ drop (length pfx) str
     else Nothing
+
+-- | Breaks a string in lines with length \<= maxWidth.
+--
+-- NOTE: The split is OK if:
+--
+-- * It doesn't break a word, i.e. the next line begins with space
+--   (@isSpace . head $ rest@) or the current line ends with space
+--   (@null revExtra@);
+--
+-- * It breaks a very big word that doesn't fit anyway (@null revLine@).
+wrap :: Int      -- ^ maxWidth
+     -> String   -- ^ string that needs wrapping
+     -> [String] -- ^ string \"broken\" in lines
+wrap maxWidth = filter (not . null) . map trim . wrap0
+  where wrap0 :: String -> [String]
+        wrap0 text
+          | length text <= maxWidth = [text]
+          | isSplitOK               = line : wrap0 rest
+          | otherwise               = line' : wrap0 rest'
+          where (line, rest) = splitAt maxWidth text
+                (revExtra, revLine) = break isSpace . reverse $ line
+                (line', rest') = (reverse revLine, reverse revExtra ++ rest)
+                isSplitOK =
+                  null revLine || null revExtra || startsWithSpace rest
+                startsWithSpace (x:_) = isSpace x
+                startsWithSpace _     = False
+
+-- | Removes surrounding whitespace. Should only be used in small
+-- strings.
+trim :: String -> String
+trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+
+-- | A safer head version, with a default value.
+defaultHead :: a -> [a] -> a
+defaultHead def []    = def
+defaultHead _   (x:_) = x
+
+-- | A 'head' version in the I/O monad, for validating parameters
+-- without which we cannot continue.
+exitIfEmpty :: String -> [a] -> IO a
+exitIfEmpty _ (x:_) = return x
+exitIfEmpty s []    = exitErr s

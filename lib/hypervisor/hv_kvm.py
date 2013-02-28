@@ -1,7 +1,7 @@
 #
 #
 
-# Copyright (C) 2008, 2009, 2010, 2011, 2012 Google Inc.
+# Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -139,37 +139,13 @@ def _OpenTap(vnet_hdr=True):
 
   try:
     res = fcntl.ioctl(tapfd, TUNSETIFF, ifr)
-  except EnvironmentError:
-    raise errors.HypervisorError("Failed to allocate a new TAP device")
+  except EnvironmentError, err:
+    raise errors.HypervisorError("Failed to allocate a new TAP device: %s" %
+                                 err)
 
   # Get the interface name from the ioctl
   ifname = struct.unpack("16sh", res)[0].strip("\x00")
   return (ifname, tapfd)
-
-
-def _BuildNetworkEnv(name, network, gateway, network6, gateway6,
-                     network_type, mac_prefix, tags, env):
-  """Build environment variables concerning a Network.
-
-  """
-  if name:
-    env["NETWORK_NAME"] = name
-  if network:
-    env["NETWORK_SUBNET"] = network
-  if gateway:
-    env["NETWORK_GATEWAY"] = gateway
-  if network6:
-    env["NETWORK_SUBNET6"] = network6
-  if gateway6:
-    env["NETWORK_GATEWAY6"] = gateway6
-  if mac_prefix:
-    env["NETWORK_MAC_PREFIX"] = mac_prefix
-  if network_type:
-    env["NETWORK_TYPE"] = network_type
-  if tags:
-    env["NETWORK_TAGS"] = " ".join(tags)
-
-  return env
 
 
 class QmpMessage:
@@ -543,6 +519,9 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     constants.HV_KVM_MACHINE_VERSION: hv_base.NO_CHECK,
     }
 
+  _VIRTIO = "virtio"
+  _VIRTIO_NET_PCI = "virtio-net-pci"
+
   _MIGRATION_STATUS_RE = re.compile("Migration\s+status:\s+(\w+)",
                                     re.M | re.I)
   _MIGRATION_PROGRESS_RE = \
@@ -560,6 +539,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _CONT_CMD = "cont"
 
   _DEFAULT_MACHINE_VERSION_RE = re.compile(r"^(\S+).*\(default\)", re.M)
+  _CHECK_MACHINE_VERSION_RE = \
+    staticmethod(lambda x: re.compile(r"^(%s)[ ]+.*PC" % x, re.M))
 
   _QMP_RE = re.compile(r"^-qmp\s", re.M)
   _SPICE_RE = re.compile(r"^-spice\s", re.M)
@@ -567,6 +548,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   _ENABLE_KVM_RE = re.compile(r"^-enable-kvm\s", re.M)
   _DISABLE_KVM_RE = re.compile(r"^-disable-kvm\s", re.M)
   _NETDEV_RE = re.compile(r"^-netdev\s", re.M)
+  _NEW_VIRTIO_RE = re.compile(r"^name \"%s\"" % _VIRTIO_NET_PCI, re.M)
   # match  -drive.*boot=on|off on different lines, but in between accept only
   # dashes not preceeded by a new line (which would mean another option
   # different than -drive is starting)
@@ -578,6 +560,19 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   ANCILLARY_FILES_OPT = [
     _KVM_NETWORK_SCRIPT,
     ]
+
+  # Supported kvm options to get output from
+  _KVMOPT_HELP = "help"
+  _KVMOPT_MLIST = "mlist"
+  _KVMOPT_DEVICELIST = "devicelist"
+
+  # Command to execute to get the output from kvm, and whether to
+  # accept the output even on failure.
+  _KVMOPTS_CMDS = {
+    _KVMOPT_HELP: (["--help"], False),
+    _KVMOPT_MLIST: (["-M", "?"], False),
+    _KVMOPT_DEVICELIST: (["-device", "?"], True),
+  }
 
   def __init__(self):
     hv_base.BaseHypervisor.__init__(self)
@@ -836,9 +831,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     if nic.network:
       n = objects.Network.FromDict(nic.netinfo)
-      _BuildNetworkEnv(nic.network, n.network, n.gateway,
-                       n.network6, n.gateway6, n.network_type,
-                       n.mac_prefix, n.tags, env)
+      env.update(n.HooksDict())
 
     if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
       env["BRIDGE"] = nic.nicparams[constants.NIC_LINK]
@@ -1456,9 +1449,9 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     temp_files = []
 
     kvm_cmd, kvm_nics, up_hvp = kvm_runtime
+    # the first element of kvm_cmd is always the path to the kvm binary
+    kvm_path = kvm_cmd[0]
     up_hvp = objects.FillDict(conf_hvp, up_hvp)
-
-    _, v_major, v_min, _ = self._ParseKVMVersion(kvmhelp)
 
     # We know it's safe to run as a different user upon migration, so we'll use
     # the latest conf, from conf_hvp.
@@ -1488,12 +1481,16 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       tap_extra = ""
       nic_type = up_hvp[constants.HV_NIC_TYPE]
       if nic_type == constants.HT_NIC_PARAVIRTUAL:
-        # From version 0.12.0, kvm uses a new sintax for network configuration.
-        if (v_major, v_min) >= (0, 12):
-          nic_model = "virtio-net-pci"
-          vnet_hdr = True
-        else:
-          nic_model = "virtio"
+        nic_model = self._VIRTIO
+        try:
+          devlist = self._GetKVMOutput(kvm_path, self._KVMOPT_DEVICELIST)
+          if self._NEW_VIRTIO_RE.search(devlist):
+            nic_model = self._VIRTIO_NET_PCI
+            vnet_hdr = True
+        except errors.HypervisorError, _:
+          # Older versions of kvm don't support DEVICE_LIST, but they don't
+          # have new virtio syntax either.
+          pass
 
         if up_hvp[constants.HV_VHOST_NET]:
           # check for vhost_net support
@@ -1505,11 +1502,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       else:
         nic_model = nic_type
 
+      kvm_supports_netdev = self._NETDEV_RE.search(kvmhelp)
+
       for nic_seq, nic in enumerate(kvm_nics):
-        tapname, tapfd = _OpenTap(vnet_hdr)
+        tapname, tapfd = _OpenTap(vnet_hdr=vnet_hdr)
         tapfds.append(tapfd)
         taps.append(tapname)
-        if self._NETDEV_RE.search(kvmhelp):
+        if kvm_supports_netdev:
           nic_val = "%s,mac=%s,netdev=netdev%s" % (nic_model, nic.mac, nic_seq)
           tap_val = "type=tap,id=netdev%s,fd=%d%s" % (nic_seq, tapfd, tap_extra)
           kvm_cmd.extend(["-netdev", tap_val, "-device", nic_val])
@@ -1640,7 +1639,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     self._CheckDown(instance.name)
     kvmpath = instance.hvparams[constants.HV_KVM_PATH]
-    kvmhelp = self._GetKVMHelpOutput(kvmpath)
+    kvmhelp = self._GetKVMOutput(kvmpath, self._KVMOPT_HELP)
     kvm_runtime = self._GenerateKVMRuntime(instance, block_devices,
                                            startup_paused, kvmhelp)
     self._SaveKVMRuntime(instance, kvm_runtime)
@@ -1688,16 +1687,25 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     return (v_all, v_maj, v_min, v_rev)
 
   @classmethod
-  def _GetKVMHelpOutput(cls, kvm_path):
-    """Return the KVM help output.
+  def _GetKVMOutput(cls, kvm_path, option):
+    """Return the output of a kvm invocation
 
-    @return: output of kvm --help
+    @type kvm_path: string
+    @param kvm_path: path to the kvm executable
+    @type option: a key of _KVMOPTS_CMDS
+    @param option: kvm option to fetch the output from
+    @return: output a supported kvm invocation
     @raise errors.HypervisorError: when the KVM help output cannot be retrieved
 
     """
-    result = utils.RunCmd([kvm_path, "--help"])
-    if result.failed:
-      raise errors.HypervisorError("Unable to get KVM help output")
+    assert option in cls._KVMOPTS_CMDS, "Invalid output option"
+
+    optlist, can_fail = cls._KVMOPTS_CMDS[option]
+
+    result = utils.RunCmd([kvm_path] + optlist)
+    if result.failed and not can_fail:
+      raise errors.HypervisorError("Unable to get KVM %s output" %
+                                    " ".join(cls._KVMOPTS_CMDS[option]))
     return result.output
 
   @classmethod
@@ -1708,7 +1716,19 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     @raise errors.HypervisorError: when the KVM version cannot be retrieved
 
     """
-    return cls._ParseKVMVersion(cls._GetKVMHelpOutput(kvm_path))
+    return cls._ParseKVMVersion(cls._GetKVMOutput(kvm_path, cls._KVMOPT_HELP))
+
+  @classmethod
+  def _GetDefaultMachineVersion(cls, kvm_path):
+    """Return the default hardware revision (e.g. pc-1.1)
+
+    """
+    output = cls._GetKVMOutput(kvm_path, cls._KVMOPT_MLIST)
+    match = cls._DEFAULT_MACHINE_VERSION_RE.search(output)
+    if match:
+      return match.group(1)
+    else:
+      return "pc"
 
   def StopInstance(self, instance, force=False, retry=False, name=None):
     """Stop an instance.
@@ -1727,20 +1747,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         utils.KillProcess(pid)
       else:
         self._CallMonitorCommand(name, "system_powerdown")
-
-  @classmethod
-  def _GetDefaultMachineVersion(cls, kvm_path):
-    """Return the default hardware revision (e.g. pc-1.1)
-
-    """
-    result = utils.RunCmd([kvm_path, "-M", "?"])
-    if result.failed:
-      raise errors.HypervisorError("Unable to get default hardware revision")
-    match = cls._DEFAULT_MACHINE_VERSION_RE.search(result.output)
-    if match:
-      return match.group(1)
-    else:
-      return "pc"
 
   def CleanupInstance(self, instance_name):
     """Cleanup after a stopped instance
@@ -1771,7 +1777,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     # ...and finally we can save it again, and execute it...
     self._SaveKVMRuntime(instance, kvm_runtime)
     kvmpath = instance.hvparams[constants.HV_KVM_PATH]
-    kvmhelp = self._GetKVMHelpOutput(kvmpath)
+    kvmhelp = self._GetKVMOutput(kvmpath, self._KVMOPT_HELP)
     self._ExecuteKVMRuntime(instance, kvm_runtime, kvmhelp)
 
   def MigrationInfo(self, instance):
@@ -1799,7 +1805,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     kvm_runtime = self._LoadKVMRuntime(instance, serialized_runtime=info)
     incoming_address = (target, instance.hvparams[constants.HV_MIGRATION_PORT])
     kvmpath = instance.hvparams[constants.HV_KVM_PATH]
-    kvmhelp = self._GetKVMHelpOutput(kvmpath)
+    kvmhelp = self._GetKVMOutput(kvmpath, self._KVMOPT_HELP)
     self._ExecuteKVMRuntime(instance, kvm_runtime, kvmhelp,
                             incoming=incoming_address)
 
@@ -1996,16 +2002,22 @@ class KVMHypervisor(hv_base.BaseHypervisor):
   def Verify(self):
     """Verify the hypervisor.
 
-    Check that the binary exists.
+    Check that the required binaries exist.
+
+    @return: Problem description if something is wrong, C{None} otherwise
 
     """
-    # FIXME: this is the global kvm version, but the actual version can be
-    # customized as an hv parameter. we should use the nodegroup's default kvm
-    # path parameter here.
+    msgs = []
+    # FIXME: this is the global kvm binary, but the actual path can be
+    # customized as an hv parameter; we should use the nodegroup's
+    # default kvm path parameter here.
     if not os.path.exists(constants.KVM_PATH):
-      return "The kvm binary ('%s') does not exist." % constants.KVM_PATH
+      msgs.append("The KVM binary ('%s') does not exist" % constants.KVM_PATH)
     if not os.path.exists(constants.SOCAT_PATH):
-      return "The socat binary ('%s') does not exist." % constants.SOCAT_PATH
+      msgs.append("The socat binary ('%s') does not exist" %
+                  constants.SOCAT_PATH)
+
+    return self._FormatVerifyResults(msgs)
 
   @classmethod
   def CheckParameterSyntax(cls, hvparams):
@@ -2091,6 +2103,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     super(KVMHypervisor, cls).ValidateParameters(hvparams)
 
+    kvm_path = hvparams[constants.HV_KVM_PATH]
+
     security_model = hvparams[constants.HV_SECURITY_MODEL]
     if security_model == constants.HT_SM_USER:
       username = hvparams[constants.HV_SECURITY_DOMAIN]
@@ -2109,7 +2123,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
                                      " given time.")
 
       # check that KVM supports SPICE
-      kvmhelp = cls._GetKVMHelpOutput(hvparams[constants.HV_KVM_PATH])
+      kvmhelp = cls._GetKVMOutput(kvm_path, cls._KVMOPT_HELP)
       if not cls._SPICE_RE.search(kvmhelp):
         raise errors.HypervisorError("spice is configured, but it is not"
                                      " supported according to kvm --help")
@@ -2121,6 +2135,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         raise errors.HypervisorError("spice: the %s parameter must be either"
                                      " a valid IP address or interface name" %
                                      constants.HV_KVM_SPICE_BIND)
+
+    machine_version = hvparams[constants.HV_KVM_MACHINE_VERSION]
+    if machine_version:
+      output = cls._GetKVMOutput(kvm_path, cls._KVMOPT_MLIST)
+      if not cls._CHECK_MACHINE_VERSION_RE(machine_version).search(output):
+        raise errors.HypervisorError("Unsupported machine version: %s" %
+                                     machine_version)
 
   @classmethod
   def PowercycleNode(cls):

@@ -7,7 +7,7 @@ goes into the /Main/ module for the individual binaries.
 
 {-
 
-Copyright (C) 2009, 2010, 2011, 2012 Google Inc.
+Copyright (C) 2009, 2010, 2011, 2012, 2013 Google Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -655,7 +655,7 @@ collapseFailures flst =
     map (\k -> (k, foldl' (\a e -> if e == k then a + 1 else a) 0 flst))
             [minBound..maxBound]
 
--- | Compares two Maybe AllocElement and chooses the besst score.
+-- | Compares two Maybe AllocElement and chooses the best score.
 bestAllocElement :: Maybe Node.AllocElement
                  -> Maybe Node.AllocElement
                  -> Maybe Node.AllocElement
@@ -829,14 +829,13 @@ findBestAllocGroup mggl mgnl mgil allowed_gdxs inst cnt =
       all_msgs = concatMap (solutionDescription mggl) sols
       goodSols = filterMGResults mggl sols
       sortedSols = sortMGResults mggl goodSols
-  in if null sortedSols
-       then Bad $ if null groups'
-                    then "no groups for evacuation: allowed groups was" ++
-                         show allowed_gdxs ++ ", all groups: " ++
-                         show (map fst groups)
-                    else intercalate ", " all_msgs
-       else let (final_group, final_sol) = head sortedSols
-            in return (final_group, final_sol, all_msgs)
+  in case sortedSols of
+       [] -> Bad $ if null groups'
+                     then "no groups for evacuation: allowed groups was" ++
+                          show allowed_gdxs ++ ", all groups: " ++
+                          show (map fst groups)
+                     else intercalate ", " all_msgs
+       (final_group, final_sol):_ -> return (final_group, final_sol, all_msgs)
 
 -- | Try to allocate an instance on a multi-group cluster.
 tryMGAlloc :: Group.List           -- ^ The group list

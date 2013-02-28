@@ -33,14 +33,46 @@ from ganeti.hypervisor import hv_base
 from ganeti import netutils
 from ganeti import objects
 from ganeti import pathutils
-from ganeti import vcluster
 from ganeti import ssconf
 
 
-XEND_CONFIG_FILE = vcluster.AddNodePrefix("/etc/xen/xend-config.sxp")
-XL_CONFIG_FILE = vcluster.AddNodePrefix("/etc/xen/xl.conf")
-VIF_BRIDGE_SCRIPT = vcluster.AddNodePrefix("/etc/xen/scripts/vif-bridge")
+XEND_CONFIG_FILE = utils.PathJoin(pathutils.XEN_CONFIG_DIR, "xend-config.sxp")
+XL_CONFIG_FILE = utils.PathJoin(pathutils.XEN_CONFIG_DIR, "xen/xl.conf")
+VIF_BRIDGE_SCRIPT = utils.PathJoin(pathutils.XEN_CONFIG_DIR,
+                                   "scripts/vif-bridge")
 _DOM0_NAME = "Domain-0"
+
+
+def _CreateConfigCpus(cpu_mask):
+  """Create a CPU config string for Xen's config file.
+
+  """
+  # Convert the string CPU mask to a list of list of int's
+  cpu_list = utils.ParseMultiCpuMask(cpu_mask)
+
+  if len(cpu_list) == 1:
+    all_cpu_mapping = cpu_list[0]
+    if all_cpu_mapping == constants.CPU_PINNING_OFF:
+      # If CPU pinning has 1 entry that's "all", then remove the
+      # parameter from the config file
+      return None
+    else:
+      # If CPU pinning has one non-all entry, mapping all vCPUS (the entire
+      # VM) to one physical CPU, using format 'cpu = "C"'
+      return "cpu = \"%s\"" % ",".join(map(str, all_cpu_mapping))
+  else:
+
+    def _GetCPUMap(vcpu):
+      if vcpu[0] == constants.CPU_PINNING_ALL_VAL:
+        cpu_map = constants.CPU_PINNING_ALL_XEN
+      else:
+        cpu_map = ",".join(map(str, vcpu))
+      return "\"%s\"" % cpu_map
+
+    # build the result string in format 'cpus = [ "c", "c", "c" ]',
+    # where each c is a physical CPU number, a range, a list, or any
+    # combination
+    return "cpus = [ %s ]" % ", ".join(map(_GetCPUMap, cpu_list))
 
 
 class XenHypervisor(hv_base.BaseHypervisor):
@@ -73,7 +105,7 @@ class XenHypervisor(hv_base.BaseHypervisor):
     @rtype: str
 
     """
-    return "/etc/xen/%s" % instance_name
+    return utils.PathJoin(pathutils.XEN_CONFIG_DIR, instance_name)
 
   @classmethod
   def _WriteConfigFile(cls, instance, startup_memory, block_devices):
@@ -90,7 +122,9 @@ class XenHypervisor(hv_base.BaseHypervisor):
 
     """
     # just in case it exists
-    utils.RemoveFile("/etc/xen/auto/%s" % instance_name)
+    utils.RemoveFile(utils.PathJoin(pathutils.XEN_CONFIG_DIR, "auto",
+                                    instance_name))
+
     cfg_file = XenHypervisor._ConfigFileName(instance_name)
     try:
       utils.WriteFile(cfg_file, data=data)
@@ -103,11 +137,13 @@ class XenHypervisor(hv_base.BaseHypervisor):
     """Returns the contents of the instance config file.
 
     """
+    filename = XenHypervisor._ConfigFileName(instance_name)
+
     try:
-      file_content = utils.ReadFile(
-                       XenHypervisor._ConfigFileName(instance_name))
+      file_content = utils.ReadFile(filename)
     except EnvironmentError, err:
       raise errors.HypervisorError("Failed to load Xen config file: %s" % err)
+
     return file_content
 
   @staticmethod
@@ -116,39 +152,6 @@ class XenHypervisor(hv_base.BaseHypervisor):
 
     """
     utils.RemoveFile(XenHypervisor._ConfigFileName(instance_name))
-
-  @classmethod
-  def _CreateConfigCpus(cls, cpu_mask):
-    """Create a CPU config string that's compatible with Xen's
-    configuration file.
-
-    """
-    # Convert the string CPU mask to a list of list of int's
-    cpu_list = utils.ParseMultiCpuMask(cpu_mask)
-
-    if len(cpu_list) == 1:
-      all_cpu_mapping = cpu_list[0]
-      if all_cpu_mapping == constants.CPU_PINNING_OFF:
-        # If CPU pinning has 1 entry that's "all", then remove the
-        # parameter from the config file
-        return None
-      else:
-        # If CPU pinning has one non-all entry, mapping all vCPUS (the entire
-        # VM) to one physical CPU, using format 'cpu = "C"'
-        return "cpu = \"%s\"" % ",".join(map(str, all_cpu_mapping))
-    else:
-
-      def _GetCPUMap(vcpu):
-        if vcpu[0] == constants.CPU_PINNING_ALL_VAL:
-          cpu_map = constants.CPU_PINNING_ALL_XEN
-        else:
-          cpu_map = ",".join(map(str, vcpu))
-        return "\"%s\"" % cpu_map
-
-      # build the result string in format 'cpus = [ "c", "c", "c" ]',
-      # where each c is a physical CPU number, a range, a list, or any
-      # combination
-      return "cpus = [ %s ]" % ", ".join(map(_GetCPUMap, cpu_list))
 
   @staticmethod
   def _RunXmList(xmlist_errors):
@@ -269,7 +272,7 @@ class XenHypervisor(hv_base.BaseHypervisor):
     """
     if name is None:
       name = instance.name
-    self._RemoveConfigFile(name)
+
     if force:
       command = [constants.XEN_CMD, "destroy", name]
     else:
@@ -279,6 +282,9 @@ class XenHypervisor(hv_base.BaseHypervisor):
     if result.failed:
       raise errors.HypervisorError("Failed to stop instance %s: %s, %s" %
                                    (name, result.fail_reason, result.output))
+
+    # Remove configuration file if stopping/starting instance was successful
+    self._RemoveConfigFile(name)
 
   def RebootInstance(self, instance):
     """Reboot an instance.
@@ -432,10 +438,14 @@ class XenHypervisor(hv_base.BaseHypervisor):
 
     For Xen, this verifies that the xend process is running.
 
+    @return: Problem description if something is wrong, C{None} otherwise
+
     """
     result = utils.RunCmd([constants.XEN_CMD, "info"])
     if result.failed:
       return "'xm info' failed: %s, %s" % (result.fail_reason, result.output)
+
+    return None
 
   @staticmethod
   def _GetConfigFileDiskData(block_devices, blockdev_prefix):
@@ -674,7 +684,7 @@ class XenPvmHypervisor(XenHypervisor):
     config.write("memory = %d\n" % startup_memory)
     config.write("maxmem = %d\n" % instance.beparams[constants.BE_MAXMEM])
     config.write("vcpus = %d\n" % instance.beparams[constants.BE_VCPUS])
-    cpu_pinning = cls._CreateConfigCpus(hvp[constants.HV_CPU_MASK])
+    cpu_pinning = _CreateConfigCpus(hvp[constants.HV_CPU_MASK])
     if cpu_pinning:
       config.write("%s\n" % cpu_pinning)
     cpu_cap = hvp[constants.HV_CPU_CAP]
@@ -777,7 +787,7 @@ class XenHvmHypervisor(XenHypervisor):
     config.write("memory = %d\n" % startup_memory)
     config.write("maxmem = %d\n" % instance.beparams[constants.BE_MAXMEM])
     config.write("vcpus = %d\n" % instance.beparams[constants.BE_VCPUS])
-    cpu_pinning = cls._CreateConfigCpus(hvp[constants.HV_CPU_MASK])
+    cpu_pinning = _CreateConfigCpus(hvp[constants.HV_CPU_MASK])
     if cpu_pinning:
       config.write("%s\n" % cpu_pinning)
     cpu_cap = hvp[constants.HV_CPU_CAP]

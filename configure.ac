@@ -1,8 +1,8 @@
 # Configure script for Ganeti
 m4_define([gnt_version_major], [2])
-m4_define([gnt_version_minor], [6])
-m4_define([gnt_version_revision], [2])
-m4_define([gnt_version_suffix], [])
+m4_define([gnt_version_minor], [7])
+m4_define([gnt_version_revision], [0])
+m4_define([gnt_version_suffix], [~beta1])
 m4_define([gnt_version_full],
           m4_format([%d.%d.%d%s],
                     gnt_version_major, gnt_version_minor,
@@ -48,6 +48,15 @@ AC_ARG_WITH([ssh-config-dir],
   [ssh_config_dir="$withval"],
   [ssh_config_dir="/etc/ssh"])
 AC_SUBST(SSH_CONFIG_DIR, $ssh_config_dir)
+
+# --with-xen-config-dir=...
+AC_ARG_WITH([xen-config-dir],
+  [AS_HELP_STRING([--with-xen-config-dir=DIR],
+                  m4_normalize([Xen configuration directory
+                                (default: /etc/xen)]))],
+  [xen_config_dir="$withval"],
+  [xen_config_dir=/etc/xen])
+AC_SUBST(XEN_CONFIG_DIR, $xen_config_dir)
 
 # --with-os-search-path=...
 # do a bit of black sed magic to for quoting of the strings in the list

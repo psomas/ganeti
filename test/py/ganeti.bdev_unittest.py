@@ -106,7 +106,7 @@ class TestDRBD8Runner(testutils.GanetiTestCase):
 
   def testParser80(self):
     """Test drbdsetup show parser for disk and network version 8.0"""
-    data = self._ReadTestData("bdev-drbd-8.0.txt")
+    data = testutils.ReadTestData("bdev-drbd-8.0.txt")
     result = bdev.DRBD8._GetDevInfo(data)
     self.failUnless(self._has_disk(result, "/dev/xenvg/test.data",
                                    "/dev/xenvg/test.meta"),
@@ -117,7 +117,7 @@ class TestDRBD8Runner(testutils.GanetiTestCase):
 
   def testParser83(self):
     """Test drbdsetup show parser for disk and network version 8.3"""
-    data = self._ReadTestData("bdev-drbd-8.3.txt")
+    data = testutils.ReadTestData("bdev-drbd-8.3.txt")
     result = bdev.DRBD8._GetDevInfo(data)
     self.failUnless(self._has_disk(result, "/dev/xenvg/test.data",
                                    "/dev/xenvg/test.meta"),
@@ -128,7 +128,7 @@ class TestDRBD8Runner(testutils.GanetiTestCase):
 
   def testParserNetIP4(self):
     """Test drbdsetup show parser for IPv4 network"""
-    data = self._ReadTestData("bdev-drbd-net-ip4.txt")
+    data = testutils.ReadTestData("bdev-drbd-net-ip4.txt")
     result = bdev.DRBD8._GetDevInfo(data)
     self.failUnless(("local_dev" not in result and
                      "meta_dev" not in result and
@@ -140,7 +140,7 @@ class TestDRBD8Runner(testutils.GanetiTestCase):
 
   def testParserNetIP6(self):
     """Test drbdsetup show parser for IPv6 network"""
-    data = self._ReadTestData("bdev-drbd-net-ip6.txt")
+    data = testutils.ReadTestData("bdev-drbd-net-ip6.txt")
     result = bdev.DRBD8._GetDevInfo(data)
     self.failUnless(("local_dev" not in result and
                      "meta_dev" not in result and
@@ -152,7 +152,7 @@ class TestDRBD8Runner(testutils.GanetiTestCase):
 
   def testParserDisk(self):
     """Test drbdsetup show parser for disk"""
-    data = self._ReadTestData("bdev-drbd-disk.txt")
+    data = testutils.ReadTestData("bdev-drbd-disk.txt")
     result = bdev.DRBD8._GetDevInfo(data)
     self.failUnless(self._has_disk(result, "/dev/xenvg/test.data",
                                    "/dev/xenvg/test.meta"),
@@ -237,12 +237,12 @@ class TestDRBD8Status(testutils.GanetiTestCase):
   def setUp(self):
     """Read in txt data"""
     testutils.GanetiTestCase.setUp(self)
-    proc_data = self._TestDataFilename("proc_drbd8.txt")
-    proc80e_data = self._TestDataFilename("proc_drbd80-emptyline.txt")
-    proc83_data = self._TestDataFilename("proc_drbd83.txt")
-    proc83_sync_data = self._TestDataFilename("proc_drbd83_sync.txt")
+    proc_data = testutils.TestDataFilename("proc_drbd8.txt")
+    proc80e_data = testutils.TestDataFilename("proc_drbd80-emptyline.txt")
+    proc83_data = testutils.TestDataFilename("proc_drbd83.txt")
+    proc83_sync_data = testutils.TestDataFilename("proc_drbd83_sync.txt")
     proc83_sync_krnl_data = \
-      self._TestDataFilename("proc_drbd83_sync_krnl2.6.39.txt")
+      testutils.TestDataFilename("proc_drbd83_sync_krnl2.6.39.txt")
     self.proc_data = bdev.DRBD8._GetProcData(filename=proc_data)
     self.proc80e_data = bdev.DRBD8._GetProcData(filename=proc80e_data)
     self.proc83_data = bdev.DRBD8._GetProcData(filename=proc83_data)
@@ -265,7 +265,7 @@ class TestDRBD8Status(testutils.GanetiTestCase):
 
   def testHelper(self):
     """Test reading usermode_helper in /sys."""
-    sys_drbd_helper = self._TestDataFilename("sys_drbd_usermode_helper.txt")
+    sys_drbd_helper = testutils.TestDataFilename("sys_drbd_usermode_helper.txt")
     drbd_helper = bdev.DRBD8.GetUsermodeHelper(filename=sys_drbd_helper)
     self.failUnlessEqual(drbd_helper, "/bin/true")
 
@@ -346,35 +346,72 @@ class TestDRBD8Status(testutils.GanetiTestCase):
 
 
 class TestRADOSBlockDevice(testutils.GanetiTestCase):
-  def test_ParseRbdShowmappedOutput(self):
-    volume_name = "abc9778-8e8ace5b.rbd.disk0"
-    output_ok = \
-      ("0\trbd\te69f28e5-9817.rbd.disk0\t-\t/dev/rbd0\n"
-       "1\t/dev/rbd0\tabc9778-8e8ace5b.rbd.disk0\t-\t/dev/rbd16\n"
-       "line\twith\tfewer\tfields\n"
-       "")
-    output_empty = ""
-    output_no_matches = \
-      ("0\trbd\te69f28e5-9817.rbd.disk0\t-\t/dev/rbd0\n"
-       "1\trbd\tabcdef01-9817.rbd.disk0\t-\t/dev/rbd10\n"
-       "2\trbd\tcdef0123-9817.rbd.disk0\t-\t/dev/rbd12\n"
-       "something\twith\tfewer\tfields"
-       "")
-    output_extra_matches = \
-      ("0\t/dev/rbd0\tabc9778-8e8ace5b.rbd.disk0\t-\t/dev/rbd11\n"
-       "1\trbd\te69f28e5-9817.rbd.disk0\t-\t/dev/rbd0\n"
-       "2\t/dev/rbd0\tabc9778-8e8ace5b.rbd.disk0\t-\t/dev/rbd16\n"
-       "something\twith\tfewer\tfields"
-       "")
+  def setUp(self):
+    """Set up input data"""
+    testutils.GanetiTestCase.setUp(self)
 
-    parse_function = bdev.RADOSBlockDevice._ParseRbdShowmappedOutput
-    self.assertEqual(parse_function(output_ok, volume_name), "/dev/rbd16")
-    self.assertRaises(errors.BlockDeviceError, parse_function,
-                      output_empty, volume_name)
-    self.assertEqual(parse_function(output_no_matches, volume_name), None)
-    self.assertRaises(errors.BlockDeviceError, parse_function,
-                      output_extra_matches, volume_name)
+    self.plain_output_old_ok = \
+      testutils.ReadTestData("bdev-rbd/plain_output_old_ok.txt")
+    self.plain_output_old_no_matches = \
+      testutils.ReadTestData("bdev-rbd/plain_output_old_no_matches.txt")
+    self.plain_output_old_extra_matches = \
+      testutils.ReadTestData("bdev-rbd/plain_output_old_extra_matches.txt")
+    self.plain_output_old_empty = \
+      testutils.ReadTestData("bdev-rbd/plain_output_old_empty.txt")
+    self.plain_output_new_ok = \
+      testutils.ReadTestData("bdev-rbd/plain_output_new_ok.txt")
+    self.plain_output_new_no_matches = \
+      testutils.ReadTestData("bdev-rbd/plain_output_new_no_matches.txt")
+    self.plain_output_new_extra_matches = \
+      testutils.ReadTestData("bdev-rbd/plain_output_new_extra_matches.txt")
+    # This file is completely empty, and as such it's not shipped.
+    self.plain_output_new_empty = ""
+    self.json_output_ok = testutils.ReadTestData("bdev-rbd/json_output_ok.txt")
+    self.json_output_no_matches = \
+      testutils.ReadTestData("bdev-rbd/json_output_no_matches.txt")
+    self.json_output_extra_matches = \
+      testutils.ReadTestData("bdev-rbd/json_output_extra_matches.txt")
+    self.json_output_empty = \
+      testutils.ReadTestData("bdev-rbd/json_output_empty.txt")
+    self.output_invalid = testutils.ReadTestData("bdev-rbd/output_invalid.txt")
 
+    self.volume_name = "d7ab910a-4933-4ffe-88d0-faf2ce31390a.rbd.disk0"
+
+  def test_ParseRbdShowmappedJson(self):
+    parse_function = bdev.RADOSBlockDevice._ParseRbdShowmappedJson
+
+    self.assertEqual(parse_function(self.json_output_ok, self.volume_name),
+                     "/dev/rbd3")
+    self.assertEqual(parse_function(self.json_output_empty, self.volume_name),
+                     None)
+    self.assertEqual(parse_function(self.json_output_no_matches,
+                     self.volume_name), None)
+    self.assertRaises(errors.BlockDeviceError, parse_function,
+                      self.json_output_extra_matches, self.volume_name)
+    self.assertRaises(errors.BlockDeviceError, parse_function,
+                      self.output_invalid, self.volume_name)
+
+  def test_ParseRbdShowmappedPlain(self):
+    parse_function = bdev.RADOSBlockDevice._ParseRbdShowmappedPlain
+
+    self.assertEqual(parse_function(self.plain_output_new_ok,
+                     self.volume_name), "/dev/rbd3")
+    self.assertEqual(parse_function(self.plain_output_old_ok,
+                     self.volume_name), "/dev/rbd3")
+    self.assertEqual(parse_function(self.plain_output_new_empty,
+                     self.volume_name), None)
+    self.assertEqual(parse_function(self.plain_output_old_empty,
+                     self.volume_name), None)
+    self.assertEqual(parse_function(self.plain_output_new_no_matches,
+                     self.volume_name), None)
+    self.assertEqual(parse_function(self.plain_output_old_no_matches,
+                     self.volume_name), None)
+    self.assertRaises(errors.BlockDeviceError, parse_function,
+                      self.plain_output_new_extra_matches, self.volume_name)
+    self.assertRaises(errors.BlockDeviceError, parse_function,
+                      self.plain_output_old_extra_matches, self.volume_name)
+    self.assertRaises(errors.BlockDeviceError, parse_function,
+                      self.output_invalid, self.volume_name)
 
 class TestComputeWrongFileStoragePathsInternal(unittest.TestCase):
   def testPaths(self):

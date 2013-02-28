@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 
-# Copyright (C) 2010 Google Inc.
+# Copyright (C) 2010, 2013 Google Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -423,7 +423,8 @@ class TestRunRestrictedCmd(unittest.TestCase):
                                _sleep_fn=sleep_fn, _prepare_fn=prepare_fn,
                                _enabled=True)
     except backend.RPCFail, err:
-      self.assertTrue(str(err).startswith("Remote command 'test3079' failed:"))
+      self.assertTrue(str(err).startswith("Restricted command 'test3079'"
+                                          " failed:"))
       self.assertTrue("stderr406328567" in str(err),
                       msg="Error did not include output")
     else:
@@ -477,7 +478,8 @@ class TestRunRestrictedCmd(unittest.TestCase):
                                _runcmd_fn=NotImplemented,
                                _enabled=False)
     except backend.RPCFail, err:
-      self.assertEqual(str(err), "Remote commands disabled at configure time")
+      self.assertEqual(str(err),
+                       "Restricted commands disabled at configure time")
     else:
       self.fail("Did not raise exception")
 
@@ -515,6 +517,24 @@ class TestSetWatcherPause(unittest.TestCase):
       backend.SetWatcherPause(i, _filename=self.filename)
       self.assertEqual(utils.ReadFile(self.filename), "%s\n" % i)
       self.assertEqual(os.stat(self.filename).st_mode & 0777, 0644)
+
+
+class TestGetBlockDevSymlinkPath(unittest.TestCase):
+  def setUp(self):
+    self.tmpdir = tempfile.mkdtemp()
+
+  def tearDown(self):
+    shutil.rmtree(self.tmpdir)
+
+  def _Test(self, name, idx):
+    self.assertEqual(backend._GetBlockDevSymlinkPath(name, idx,
+                                                     _dir=self.tmpdir),
+                     ("%s/%s%s%s" % (self.tmpdir, name,
+                                     constants.DISK_SEPARATOR, idx)))
+
+  def test(self):
+    for idx in range(100):
+      self._Test("inst1.example.com", idx)
 
 
 if __name__ == "__main__":

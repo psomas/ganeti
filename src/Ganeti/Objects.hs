@@ -173,11 +173,7 @@ roleDescription NRMaster    = "master"
 $(buildObject "Network" "network" $
   [ simpleField "name"             [t| NonEmptyString |]
   , optionalField $
-    simpleField "network_type"     [t| NetworkType |]
-  , optionalField $
     simpleField "mac_prefix"       [t| String |]
-  , optionalField $
-    simpleField "family"           [t| Int |]
   , simpleField "network"          [t| NonEmptyString |]
   , optionalField $
     simpleField "network6"         [t| String |]
@@ -185,8 +181,6 @@ $(buildObject "Network" "network" $
     simpleField "gateway"          [t| String |]
   , optionalField $
     simpleField "gateway6"         [t| String |]
-  , optionalField $
-    simpleField "size"             [t| J.JSValue |]
   , optionalField $
     simpleField "reservations"     [t| String |]
   , optionalField $
@@ -212,7 +206,7 @@ $(buildObject "PartialNic" "nic"
   [ simpleField "mac" [t| String |]
   , optionalField $ simpleField "ip" [t| String |]
   , simpleField "nicparams" [t| PartialNicParams |]
-  , optionalField $ simpleField "network" [t| Network |]
+  , optionalField $ simpleField "network" [t| String |]
   ])
 
 -- * Disk definitions
@@ -580,7 +574,8 @@ $(buildObject "Cluster" "cluster" $
   , simpleField "highest_used_port"       [t| Int              |]
   , simpleField "tcpudp_port_pool"        [t| [Int]            |]
   , simpleField "mac_prefix"              [t| String           |]
-  , simpleField "volume_group_name"       [t| String           |]
+  , optionalField $
+    simpleField "volume_group_name"       [t| String           |]
   , simpleField "reserved_lvs"            [t| [String]         |]
   , optionalField $
     simpleField "drbd_usermode_helper"    [t| String           |]

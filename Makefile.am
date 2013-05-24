@@ -17,6 +17,10 @@ comma := ,
 # Use bash in order to be able to use pipefail
 SHELL=/bin/bash
 
+# During distcheck, don't try to access anything in the real Xen config
+# directory (/etc/xen).
+DISTCHECK_CONFIGURE_FLAGS="--with-xen-config-dir=/tmp"
+
 ACLOCAL_AMFLAGS = -I autotools
 BUILD_BASH_COMPLETION = $(top_srcdir)/autotools/build-bash-completion
 RUN_IN_TEMPDIR = $(top_srcdir)/autotools/run-in-tempdir
@@ -153,6 +157,8 @@ CLEANFILES = \
 	$(man_MANS) \
 	$(manhtml) \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	stamp-srclinks \
 	$(nodist_pkgpython_PYTHON) \
 	$(HS_ALL_PROGS) $(HS_BUILT_SRCS) \
@@ -526,7 +532,12 @@ qa_scripts = \
 bin_SCRIPTS =
 if WANT_HTOOLS
 bin_SCRIPTS += $(filter-out htools/hail,$(HS_PROGS))
+endif
 install-exec-hook:
+	@mkdir_p@ "$(DESTDIR)$(XEN_CONFIG_DIR)/scripts"
+	$(LN_S) -f "$(DESTDIR)${myexeclibdir}/vif-ganeti" \
+		"$(DESTDIR)$(XEN_CONFIG_DIR)/scripts/vif-ganeti"
+if WANT_HTOOLS
 	@mkdir_p@ $(DESTDIR)$(iallocatorsdir)
 # FIXME: this is a hardcoded logic, instead of auto-resolving
 	$(LN_S) -f ../../../bin/htools \
@@ -624,6 +635,8 @@ nodist_pkglib_python_scripts = \
 myexeclib_SCRIPTS = \
 	daemons/daemon-util \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	$(pkglib_python_scripts)
 
 nodist_myexeclib_SCRIPTS = \
@@ -659,6 +672,8 @@ EXTRA_DIST = \
 	$(docpng) \
 	$(docrst) \
 	doc/conf.py \
+	tools/vif-ganeti.in \
+	tools/net-common.in \
 	doc/html \
 	$(BUILT_EXAMPLES:%=%.in) \
 	doc/examples/ganeti.default \
@@ -979,6 +994,14 @@ test/daemon-util_unittest.bash: daemons/daemon-util
 test/ganeti-cleaner_unittest.bash: daemons/ganeti-cleaner
 
 tools/kvm-ifup: tools/kvm-ifup.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/vif-ganeti: tools/vif-ganeti.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/net-common: tools/net-common.in $(REPLACE_VARS_SED)
 	sed -f $(REPLACE_VARS_SED) < $< > $@
 	chmod +x $@
 

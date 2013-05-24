@@ -92,6 +92,8 @@
 # tools
 /tools/kvm-ifup
 /tools/ensure-dirs
+/tools/vif-ganeti
+/tools/net-common
 
 # scripts
 /scripts/gnt-backup

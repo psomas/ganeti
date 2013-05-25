@@ -1169,7 +1169,7 @@ def _SafeShutdownInstanceDisks(lu, instance, disks=None):
 
 
 def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
-                           ignore_size=False):
+                          ignore_size=False, check=True):
   """Prepare the block devices for an instance.
 
   This sets up the block devices on all nodes.
@@ -1195,7 +1195,8 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   device_info = []
   disks_ok = True
   iname = instance.name
-  disks = ExpandCheckDisks(instance, disks)
+  if check:
+    disks = ExpandCheckDisks(instance, disks)
 
   # With the two passes mechanism we try to reduce the window of
   # opportunity for the race condition of switching DRBD to primary

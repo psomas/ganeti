@@ -2928,7 +2928,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in instance.nics]
       _ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                          self._CreateNewNic, self._ApplyNicMods, None)
+                          self._CreateNewNic, self._ApplyNicMods,
+                          self._RemoveNic)
       # Verify that NIC names are unique and valid
       utils.ValidateDeviceNames("NIC", nics)
       self._new_nics = nics
@@ -3103,6 +3104,17 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Could not remove metadata for disk %d on node %s,"
                         " continuing anyway: %s", idx, pnode, msg)
 
+  def _HotplugDevice(self, action, dev_type, device, extra, seq):
+    self.LogInfo("Trying to hotplug device...")
+    result = self.rpc.call_hotplug_device(self.instance.primary_node,
+                                          self.instance, action, dev_type,
+                                          device, extra, seq)
+    if result.fail_msg:
+      self.LogWarning("Could not hotplug device: %s" % result.fail_msg)
+      self.LogInfo("Continuing execution..")
+    else:
+      self.LogInfo("Hotplug done.")
+
   def _CreateNewDisk(self, idx, params, _):
     """Creates a new disk.
 
@@ -3130,6 +3142,14 @@ class LUInstanceSetParams(LogicalUnit):
                          disks=[(idx, disk, 0)],
                          cleanup=new_disks)
 
+    if self.op.hotplug:
+      _, device_info = AssembleInstanceDisks(self, self.instance,
+                                             [disk], check=False)
+      _, _, dev_path = device_info[0]
+      self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                          constants.HOTPLUG_TARGET_DISK,
+                          disk, dev_path, idx)
+
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
@@ -3155,6 +3175,12 @@ class LUInstanceSetParams(LogicalUnit):
     """Removes a disk.
 
     """
+    if self.op.hotplug:
+      self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                          constants.HOTPLUG_TARGET_DISK,
+                          root, None, idx)
+      ShutdownInstanceDisks(self, self.instance, [root])
+
     (anno_disk,) = AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
       self.cfg.SetDiskID(disk, node)
@@ -3182,13 +3208,19 @@ class LUInstanceSetParams(LogicalUnit):
                        nicparams=nicparams)
     nobj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
 
-    return (nobj, [
+    if self.op.hotplug:
+      self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                          constants.HOTPLUG_TARGET_NIC,
+                          nobj, None, idx)
+
+    desc = [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, private.filled[constants.NIC_MODE],
-       private.filled[constants.NIC_LINK],
-       net)),
-      ])
+       private.filled[constants.NIC_LINK], net)),
+      ]
+
+    return (nobj, desc)
 
   def _ApplyNicMods(self, idx, nic, params, private):
     """Modifies a network interface.
@@ -3213,7 +3245,18 @@ class LUInstanceSetParams(LogicalUnit):
       for (key, val) in nic.nicparams.items():
         changes.append(("nic.%s/%d" % (key, idx), val))
 
+    if self.op.hotplug:
+      self._HotplugDevice(constants.HOTPLUG_ACTION_MODIFY,
+                          constants.HOTPLUG_TARGET_NIC,
+                          nic, None, idx)
+
     return changes
+
+  def _RemoveNic(self, idx, nic, _):
+    if self.op.hotplug:
+      self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                          constants.HOTPLUG_TARGET_NIC,
+                          nic, None, idx)
 
   def Exec(self, feedback_fn):
     """Modifies an instance.

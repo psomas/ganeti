@@ -537,7 +537,7 @@ bin_SCRIPTS += $(filter-out htools/hail,$(HS_PROGS))
 endif
 install-exec-hook:
 	@mkdir_p@ "$(DESTDIR)$(XEN_CONFIG_DIR)/scripts"
-	$(LN_S) -f "$(DESTDIR)$(myexeclibdir)/vif-ganeti" \
+	$(LN_S) -f "../../..$(pkglibdir)/vif-ganeti" \
 		"$(DESTDIR)$(XEN_CONFIG_DIR)/scripts/vif-ganeti"
 if WANT_HTOOLS
 	@mkdir_p@ $(DESTDIR)$(iallocatorsdir)

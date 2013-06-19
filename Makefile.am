@@ -35,6 +35,7 @@ DOCPP = $(top_srcdir)/autotools/docpp
 REPLACE_VARS_SED = autotools/replace_vars.sed
 CONVERT_CONSTANTS = $(top_srcdir)/autotools/convert-constants
 BUILD_RPC = $(top_srcdir)/autotools/build-rpc
+SHELL_ENV_INIT = autotools/shell-env-init
 
 # Note: these are automake-specific variables, and must be named after
 # the directory + 'dir' suffix
@@ -148,6 +149,7 @@ CLEANFILES = \
 	$(PYTHON_BOOTSTRAP) \
 	epydoc.conf \
 	autotools/replace_vars.sed \
+	$(SHELL_ENV_INIT) \
 	daemons/daemon-util \
 	daemons/ganeti-cleaner \
 	devel/upload \
@@ -535,7 +537,7 @@ bin_SCRIPTS += $(filter-out htools/hail,$(HS_PROGS))
 endif
 install-exec-hook:
 	@mkdir_p@ "$(DESTDIR)$(XEN_CONFIG_DIR)/scripts"
-	$(LN_S) -f "$(DESTDIR)${myexeclibdir}/vif-ganeti" \
+	$(LN_S) -f "$(DESTDIR)$(myexeclibdir)/vif-ganeti" \
 		"$(DESTDIR)$(XEN_CONFIG_DIR)/scripts/vif-ganeti"
 if WANT_HTOOLS
 	@mkdir_p@ $(DESTDIR)$(iallocatorsdir)
@@ -1146,6 +1148,7 @@ lib/_autoconf.py: Makefile | lib/.dir
 	  echo "OS_SEARCH_PATH = [$(OS_SEARCH_PATH)]"; \
 	  echo "ES_SEARCH_PATH = [$(ES_SEARCH_PATH)]"; \
 	  echo "XEN_BOOTLOADER = '$(XEN_BOOTLOADER)'"; \
+	  echo "XEN_CONFIG_DIR = '$(XEN_CONFIG_DIR)'"; \
 	  echo "XEN_KERNEL = '$(XEN_KERNEL)'"; \
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \
 	  echo "KVM_KERNEL = '$(KVM_KERNEL)'"; \
@@ -1213,7 +1216,20 @@ lib/_vcsversion.py: Makefile vcs-version | lib/.dir
 lib/_generated_rpc.py: lib/rpc_defs.py $(BUILD_RPC)
 	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_RPC) lib/rpc_defs.py > $@
 
-$(REPLACE_VARS_SED): Makefile
+$(SHELL_ENV_INIT): Makefile
+	set -e; \
+	{ echo '# Allow overriding for tests'; \
+	 echo 'readonly LOCALSTATEDIR=$${LOCALSTATEDIR:-$${GANETI_ROOTDIR:-}$(localstatedir)}'; \
+	 echo 'readonly SYSCONFDIR=$${SYSCONFDIR:-$${GANETI_ROOTDIR:-}$(sysconfdir)}'; \
+	 echo; \
+	 echo 'readonly PKGLIBDIR=$(pkglibdir)'; \
+	 echo 'readonly LOG_DIR="$$LOCALSTATEDIR/log/ganeti"'; \
+	 echo 'readonly RUN_DIR="$$LOCALSTATEDIR/run/ganeti"'; \
+	 echo 'readonly DATA_DIR="$$LOCALSTATEDIR/lib/ganeti"'; \
+	 echo 'readonly CONF_DIR="$$SYSCONFDIR/ganeti"'; \
+	} > $@
+
+$(REPLACE_VARS_SED): $(SHELL_ENV_INIT) Makefile
 	set -e; \
 	{ echo 's#@PREFIX@#$(prefix)#g'; \
 	  echo 's#@SYSCONFDIR@#$(sysconfdir)#g'; \
@@ -1239,6 +1255,12 @@ $(REPLACE_VARS_SED): Makefile
 	  echo 's#@GNTMASTERDGROUP@#$(MASTERD_GROUP)#g'; \
 	  echo 's#@GNTDAEMONSGROUP@#$(DAEMONS_GROUP)#g'; \
 	  echo 's#@CUSTOM_ENABLE_CONFD@#$(ENABLE_CONFD)#g'; \
+	  echo 's#@''XEN_CONFIG_DIR@#$(XEN_CONFIG_DIR)#g'; \
+	  echo; \
+	  echo '/^@SHELL_ENV_INIT@$$/ {'; \
+	  echo '  r $(SHELL_ENV_INIT)'; \
+	  echo '  d'; \
+	  echo '}'; \
 	} > $@
 
 # Using deferred evaluation

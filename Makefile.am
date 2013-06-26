@@ -196,6 +196,8 @@ CLEANFILES = \
 	$(man_MANS) \
 	$(manhtml) \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	tools/users-setup \
 	tools/vcluster-setup \
 	stamp-directories \
@@ -939,6 +941,8 @@ nodist_pkglib_python_scripts = \
 myexeclib_SCRIPTS = \
 	daemons/daemon-util \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	$(pkglib_python_scripts) \
 	$(HS_MYEXECLIB_PROGS)
 
@@ -974,6 +978,8 @@ EXTRA_DIST = \
 	devel/upload \
 	devel/webserver \
 	tools/kvm-ifup.in \
+	tools/vif-ganeti.in \
+	tools/net-common.in \
 	tools/vcluster-setup.in \
 	$(docinput) \
 	doc/html \
@@ -1381,6 +1387,14 @@ test/py/ganeti-cleaner_unittest.bash: daemons/ganeti-cleaner
 test/py/bash_completion.bash: doc/examples/bash_completion-debug
 
 tools/kvm-ifup: tools/kvm-ifup.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/vif-ganeti: tools/vif-ganeti.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/net-common: tools/net-common.in $(REPLACE_VARS_SED)
 	sed -f $(REPLACE_VARS_SED) < $< > $@
 	chmod +x $@
 

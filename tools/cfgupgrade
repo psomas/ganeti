@@ -170,6 +170,11 @@ def UpgradeInstances(config_data):
           print("NIC with network name %s found."
                 " Substituting with uuid %s." % (name, uuid))
           nic["network"] = uuid
+      try:
+        del nic["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
 
     if "disks" not in iobj:
       raise Error("Instance '%s' doesn't have a disks entry?!" % instance)
@@ -182,6 +187,18 @@ def UpgradeInstances(config_data):
                         " from '%s' to '%s'",
                         instance, idx, current, expected)
         dobj["iv_name"] = expected
+      try:
+        del dobj["idx"]
+        print("Deleting deprecated idx")
+      except KeyError:
+        pass
+
+    for attr in ("dev_idxs", "hotplug_info", "hotplugs", "pci_reservations"):
+      try:
+        del iobj[attr]
+        print("Deleting deprecated %s" % attr)
+      except KeyError:
+        pass
 
 
 def UpgradeRapiUsers():

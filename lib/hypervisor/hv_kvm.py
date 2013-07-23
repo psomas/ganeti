@@ -497,6 +497,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       hv_base.ParamInSet(True, constants.REBOOT_BEHAVIORS),
     constants.HV_CPU_MASK: hv_base.OPT_MULTI_CPU_MASK_CHECK,
     constants.HV_KVM_MACHINE_VERSION: hv_base.NO_CHECK,
+    constants.HV_VNET_HDR: hv_base.NO_CHECK,
     }
 
   _MIGRATION_STATUS_RE = re.compile("Migration\s+status:\s+(\w+)",
@@ -1489,7 +1490,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         # From version 0.12.0, kvm uses a new sintax for network configuration.
         if (v_major, v_min) >= (0, 12):
           nic_model = "virtio-net-pci"
-          vnet_hdr = True
+          vnet_hdr = up_hvp[constants.HV_VNET_HDR]
         else:
           nic_model = "virtio"
 

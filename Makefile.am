@@ -17,6 +17,10 @@ comma := ,
 # Use bash in order to be able to use pipefail
 SHELL=/bin/bash
 
+# During distcheck, don't try to access anything in the real Xen config
+# directory (/etc/xen).
+DISTCHECK_CONFIGURE_FLAGS="--with-xen-config-dir=/tmp"
+
 ACLOCAL_AMFLAGS = -I autotools
 BUILD_BASH_COMPLETION = $(top_srcdir)/autotools/build-bash-completion
 RUN_IN_TEMPDIR = $(top_srcdir)/autotools/run-in-tempdir
@@ -31,6 +35,7 @@ DOCPP = $(top_srcdir)/autotools/docpp
 REPLACE_VARS_SED = autotools/replace_vars.sed
 CONVERT_CONSTANTS = $(top_srcdir)/autotools/convert-constants
 BUILD_RPC = $(top_srcdir)/autotools/build-rpc
+SHELL_ENV_INIT = autotools/shell-env-init
 
 # Note: these are automake-specific variables, and must be named after
 # the directory + 'dir' suffix
@@ -144,6 +149,7 @@ CLEANFILES = \
 	$(PYTHON_BOOTSTRAP) \
 	epydoc.conf \
 	autotools/replace_vars.sed \
+	$(SHELL_ENV_INIT) \
 	daemons/daemon-util \
 	daemons/ganeti-cleaner \
 	devel/upload \
@@ -153,6 +159,8 @@ CLEANFILES = \
 	$(man_MANS) \
 	$(manhtml) \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	stamp-srclinks \
 	$(nodist_pkgpython_PYTHON) \
 	$(HS_ALL_PROGS) $(HS_BUILT_SRCS) \
@@ -526,7 +534,12 @@ qa_scripts = \
 bin_SCRIPTS =
 if WANT_HTOOLS
 bin_SCRIPTS += $(filter-out htools/hail,$(HS_PROGS))
+endif
 install-exec-hook:
+	@mkdir_p@ "$(DESTDIR)$(XEN_CONFIG_DIR)/scripts"
+	$(LN_S) -f "../../..$(pkglibdir)/vif-ganeti" \
+		"$(DESTDIR)$(XEN_CONFIG_DIR)/scripts/vif-ganeti"
+if WANT_HTOOLS
 	@mkdir_p@ $(DESTDIR)$(iallocatorsdir)
 # FIXME: this is a hardcoded logic, instead of auto-resolving
 	$(LN_S) -f ../../../bin/htools \
@@ -624,6 +637,8 @@ nodist_pkglib_python_scripts = \
 myexeclib_SCRIPTS = \
 	daemons/daemon-util \
 	tools/kvm-ifup \
+	tools/vif-ganeti \
+	tools/net-common \
 	$(pkglib_python_scripts)
 
 nodist_myexeclib_SCRIPTS = \
@@ -659,6 +674,8 @@ EXTRA_DIST = \
 	$(docpng) \
 	$(docrst) \
 	doc/conf.py \
+	tools/vif-ganeti.in \
+	tools/net-common.in \
 	doc/html \
 	$(BUILT_EXAMPLES:%=%.in) \
 	doc/examples/ganeti.default \
@@ -982,6 +999,14 @@ tools/kvm-ifup: tools/kvm-ifup.in $(REPLACE_VARS_SED)
 	sed -f $(REPLACE_VARS_SED) < $< > $@
 	chmod +x $@
 
+tools/vif-ganeti: tools/vif-ganeti.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/net-common: tools/net-common.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
 devel/upload: devel/upload.in $(REPLACE_VARS_SED)
 	sed -f $(REPLACE_VARS_SED) < $< > $@
 	chmod u+x $@
@@ -1123,6 +1148,7 @@ lib/_autoconf.py: Makefile | lib/.dir
 	  echo "OS_SEARCH_PATH = [$(OS_SEARCH_PATH)]"; \
 	  echo "ES_SEARCH_PATH = [$(ES_SEARCH_PATH)]"; \
 	  echo "XEN_BOOTLOADER = '$(XEN_BOOTLOADER)'"; \
+	  echo "XEN_CONFIG_DIR = '$(XEN_CONFIG_DIR)'"; \
 	  echo "XEN_KERNEL = '$(XEN_KERNEL)'"; \
 	  echo "XEN_INITRD = '$(XEN_INITRD)'"; \
 	  echo "KVM_KERNEL = '$(KVM_KERNEL)'"; \
@@ -1190,7 +1216,20 @@ lib/_vcsversion.py: Makefile vcs-version | lib/.dir
 lib/_generated_rpc.py: lib/rpc_defs.py $(BUILD_RPC)
 	PYTHONPATH=. $(RUN_IN_TEMPDIR) $(CURDIR)/$(BUILD_RPC) lib/rpc_defs.py > $@
 
-$(REPLACE_VARS_SED): Makefile
+$(SHELL_ENV_INIT): Makefile
+	set -e; \
+	{ echo '# Allow overriding for tests'; \
+	 echo 'readonly LOCALSTATEDIR=$${LOCALSTATEDIR:-$${GANETI_ROOTDIR:-}$(localstatedir)}'; \
+	 echo 'readonly SYSCONFDIR=$${SYSCONFDIR:-$${GANETI_ROOTDIR:-}$(sysconfdir)}'; \
+	 echo; \
+	 echo 'readonly PKGLIBDIR=$(pkglibdir)'; \
+	 echo 'readonly LOG_DIR="$$LOCALSTATEDIR/log/ganeti"'; \
+	 echo 'readonly RUN_DIR="$$LOCALSTATEDIR/run/ganeti"'; \
+	 echo 'readonly DATA_DIR="$$LOCALSTATEDIR/lib/ganeti"'; \
+	 echo 'readonly CONF_DIR="$$SYSCONFDIR/ganeti"'; \
+	} > $@
+
+$(REPLACE_VARS_SED): $(SHELL_ENV_INIT) Makefile
 	set -e; \
 	{ echo 's#@PREFIX@#$(prefix)#g'; \
 	  echo 's#@SYSCONFDIR@#$(sysconfdir)#g'; \
@@ -1216,6 +1255,12 @@ $(REPLACE_VARS_SED): Makefile
 	  echo 's#@GNTMASTERDGROUP@#$(MASTERD_GROUP)#g'; \
 	  echo 's#@GNTDAEMONSGROUP@#$(DAEMONS_GROUP)#g'; \
 	  echo 's#@CUSTOM_ENABLE_CONFD@#$(ENABLE_CONFD)#g'; \
+	  echo 's#@''XEN_CONFIG_DIR@#$(XEN_CONFIG_DIR)#g'; \
+	  echo; \
+	  echo '/^@SHELL_ENV_INIT@$$/ {'; \
+	  echo '  r $(SHELL_ENV_INIT)'; \
+	  echo '  d'; \
+	  echo '}'; \
 	} > $@
 
 # Using deferred evaluation

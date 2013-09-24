@@ -1720,6 +1720,7 @@ class OpInstanceSetParams(OpCode):
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ("hotplug", False, ht.TBool, "Whether to hotplug device")
     ]
   OP_RESULT = _TSetParamsResult
 

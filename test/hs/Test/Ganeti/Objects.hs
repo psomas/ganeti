@@ -62,6 +62,7 @@ import Ganeti.Network
 import Ganeti.Objects as Objects
 import Ganeti.JSON
 import Ganeti.Types
+import Ganeti.Utils (bitStringToB64String)
 
 -- * Arbitrary instances
 
@@ -243,15 +244,17 @@ instance Arbitrary Network where
 genValidNetwork :: Gen Objects.Network
 genValidNetwork = do
   -- generate netmask for the IPv4 network
-  netmask <- fromIntegral <$> choose (24::Int, 30)
+  netmask <- fromIntegral <$> choose (24::Int, 29)
   name <- genName >>= mkNonEmpty
   mac_prefix <- genMaybe genName
   net <- arbitrary
   net6 <- genMaybe genIp6Net
   gateway <- genMaybe arbitrary
   gateway6 <- genMaybe genIp6Addr
-  res <- liftM Just (genBitString $ netmask2NumHosts netmask)
-  ext_res <- liftM Just (genBitString $ netmask2NumHosts netmask)
+  res <- liftM (Just . bitStringToB64String)
+         (genBitString $ netmask2NumHosts netmask)
+  ext_res <- liftM (Just . bitStringToB64String)
+             (genBitString $ netmask2NumHosts netmask)
   uuid <- arbitrary
   ctime <- arbitrary
   mtime <- arbitrary

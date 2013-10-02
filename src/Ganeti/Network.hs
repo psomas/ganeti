@@ -50,6 +50,7 @@ module Ganeti.Network
 import qualified Data.Vector.Unboxed as V
 
 import Ganeti.Objects
+import Ganeti.Utils (b64StringToBitString)
 
 -- | An address pool, holding a network plus internal and external
 -- reservations.
@@ -84,7 +85,7 @@ sameLength _ _ = False
 -- | Converts a maybe bit string to a bit vector. Returns an empty bit vector on
 -- nothing.
 maybeStr2BitVec :: Maybe String -> V.Vector Bool
-maybeStr2BitVec (Just s) = bitStringToBitVector s
+maybeStr2BitVec (Just s) = bitStringToBitVector $ b64StringToBitString s
 maybeStr2BitVec Nothing = V.fromList ([]::[Bool])
 
 -- | Converts a string to a bit vector. The character '0' is interpreted

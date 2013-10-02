@@ -31,6 +31,8 @@ from ganeti import objects
 from ganeti.network import AddressPool
 
 import mocks
+import base64
+import bitarray
 
 
 def _StubGetEntResolver():
@@ -290,9 +292,11 @@ class ConfigMock(config.ConfigWriter):
         gateway = "198.51.100.1"
     if network[-3:] == "/24" and gateway == network[:-4] + "1":
       if reservations is None:
-        reservations = "0" * 256
+        b = bitarray.bitarray("0" * 256)
+        reservations = base64.b64encode(b.tobytes()) # pylint: disable=E1101
       if ext_reservations:
-        ext_reservations = "11" + ("0" * 253) + "1"
+        b = bitarray.bitarray("11" + "0" * 256 + "1")
+        ext_reservations = base64.b64encode(b.tobytes()) # pylint: disable=E1101
     elif reservations is None or ext_reservations is None:
       raise AssertionError("You have to specify 'reservations' and"
                            " 'ext_reservations'!")

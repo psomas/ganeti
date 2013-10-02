@@ -34,6 +34,8 @@ import optparse
 import logging
 import time
 from cStringIO import StringIO
+from bitarray import bitarray
+from base64 import b64encode, b64decode
 
 from ganeti import constants
 from ganeti import serializer
@@ -126,10 +128,29 @@ def UpgradeIPolicy(ipolicy, default_ipolicy, isgroup):
   _FillIPolicySpecs(default_ipolicy, ipolicy)
 
 
+# pylint: disable=E1101
 def UpgradeNetworks(config_data):
-  networks = config_data.get("networks", None)
+  networks = config_data.get("networks", {})
   if not networks:
     config_data["networks"] = {}
+  for nobj in networks.values():
+    for key in ("reservations", "ext_reservations"):
+      r = nobj[key]
+      if options.tob64:
+        try:
+          b = bitarray(r)
+          nobj[key] = b64encode(b.tobytes())
+        except ValueError:
+          print("No 01 network found! Probably already in base64.")
+      if options.to01:
+        try:
+          b = bitarray(r)
+          print("01 network found! Do nothing.")
+        except ValueError:
+          b = bitarray()
+          b.frombytes(b64decode(r))
+          nobj[key] = b.to01()
+      print("%s: %s -> %s" % (nobj["name"], r, nobj[key]))
 
 
 def UpgradeCluster(config_data):
@@ -395,6 +416,12 @@ def main():
   parser.add_option("--downgrade",
                     help="Downgrade to the previous stable version",
                     action="store_true", dest="downgrade", default=False)
+  parser.add_option("--tob64",
+                    help="Change to base64 encoded networks",
+                    action="store_true", dest="tob64", default=False)
+  parser.add_option("--to01",
+                    help="Change to non encoded networks (01 bitarrays)",
+                    action="store_true", dest="to01", default=False)
   (options, args) = parser.parse_args()
 
   # We need to keep filenames locally because they might be renamed between

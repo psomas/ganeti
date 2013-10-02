@@ -55,6 +55,7 @@ import Ganeti.Query.Language
 import Ganeti.Query.Common
 import Ganeti.Query.Types
 import Ganeti.Types
+import Ganeti.Utils (b64StringToBitString)
 
 -- | There is no actual runtime.
 data Runtime = Runtime
@@ -183,7 +184,7 @@ getReservations (Ip4Network net _) =
 getExtReservationsString :: Network -> ResultEntry
 getExtReservationsString net =
   let addrs = getReservations (networkNetwork net)
-              (fromMaybe "" $ networkExtReservations net)
+              (b64StringToBitString . fromMaybe "" $ networkExtReservations net)
   in rsNormal . intercalate ", " $ map show addrs
 
 -- | Dummy function for collecting live data (which networks don't have).

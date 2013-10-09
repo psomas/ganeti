@@ -95,6 +95,10 @@ Incompatible/important changes
 New features
 ~~~~~~~~~~~~
 
+- Hotplug support. Introduce new option --hotplug to gnt-instance modify
+  so that disk and NIC modifications take effect without the need of actual
+  reboot. This feature is currently supported only for KVM hypervisor with
+  version greater than 1.0.
 - The :doc:`Remote API <rapi>` daemon now supports a command line flag
   to always require authentication, ``--require-authentication``. It can
   be specified in ``$sysconfdir/default/ganeti``.

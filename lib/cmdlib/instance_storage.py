@@ -1139,8 +1139,12 @@ def ShutdownInstanceDisks(lu, instance, disks=None, ignore_primary=False):
   ignored.
 
   """
-  lu.cfg.MarkInstanceDisksInactive(instance.name)
   all_result = True
+
+  if disks is None:
+    # only mark instance disks as inactive if all disks are affected
+    lu.cfg.MarkInstanceDisksInactive(instance.name)
+
   disks = ExpandCheckDisks(instance, disks)
 
   for disk in disks:
@@ -1169,7 +1173,7 @@ def _SafeShutdownInstanceDisks(lu, instance, disks=None):
 
 
 def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
-                           ignore_size=False):
+                          ignore_size=False):
   """Prepare the block devices for an instance.
 
   This sets up the block devices on all nodes.
@@ -1195,6 +1199,11 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   device_info = []
   disks_ok = True
   iname = instance.name
+
+  if disks is None:
+    # only mark instance disks as active if all disks are affected
+    lu.cfg.MarkInstanceDisksActive(iname)
+
   disks = ExpandCheckDisks(instance, disks)
 
   # With the two passes mechanism we try to reduce the window of
@@ -1205,10 +1214,6 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   # connection has been made and drbd transitions from WFConnection
   # into any other network-connected state (Connected, SyncTarget,
   # SyncSource, etc.)
-
-  # mark instance disks as active before doing actual work, so watcher does
-  # not try to shut them down erroneously
-  lu.cfg.MarkInstanceDisksActive(iname)
 
   # 1st pass, assemble on all nodes in secondary mode
   for idx, inst_disk in enumerate(disks):
@@ -1251,7 +1256,7 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
                       inst_disk.iv_name, node, msg)
         disks_ok = False
       else:
-        dev_path = result.payload
+        dev_path, _ = result.payload
 
     device_info.append((instance.primary_node, inst_disk.iv_name, dev_path))
 

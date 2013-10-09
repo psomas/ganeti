@@ -71,7 +71,8 @@ ACCEPT_OFFLINE_NODE = object()
  ED_BLOCKDEV_RENAME,
  ED_DISKS_DICT_DP,
  ED_SINGLE_DISK_DICT_DP,
- ED_NIC_DICT) = range(1, 15)
+ ED_NIC_DICT,
+ ED_DEVICE_DICT) = range(1, 16)
 
 
 def _Prepare(calls):
@@ -286,6 +287,14 @@ _INSTANCE_CALLS = [
     ("reinstall", None, None),
     ("debug", None, None),
     ], None, None, "Starts an instance"),
+  ("hotplug_device", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("action", None, "Hotplug Action"),
+    ("dev_type", None, "Device type"),
+    ("device", ED_DEVICE_DICT, "Device dict"),
+    ("extra", None, "Extra info for device (dev_path for disk)"),
+    ("seq", None, "Device seq"),
+    ], None, None, "Hoplug a device to a running instance"),
   ]
 
 _IMPEXP_CALLS = [

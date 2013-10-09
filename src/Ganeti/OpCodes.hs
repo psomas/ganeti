@@ -397,6 +397,7 @@ $(genOpCode "OpCode"
      , pWaitForSync
      , pOffline
      , pIpConflictsCheck
+     , pHotplug
      ])
   , ("OpInstanceGrowDisk",
      [ pInstanceName

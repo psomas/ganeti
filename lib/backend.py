@@ -1916,18 +1916,18 @@ def BlockdevAssemble(disk, owner, as_primary, idx):
 
   """
   try:
-    result = _RecursiveAssembleBD(disk, owner, as_primary)
-    if isinstance(result, bdev.BlockDev):
-      # pylint: disable=E1103
-      result = result.dev_path
+    device = _RecursiveAssembleBD(disk, owner, as_primary)
+    if isinstance(device, bdev.BlockDev):
+      dev_path = device.dev_path
+      link_name = None
       if as_primary:
-        _SymlinkBlockDev(owner, result, idx)
+        link_name = _SymlinkBlockDev(owner, dev_path, idx)
   except errors.BlockDeviceError, err:
     _Fail("Error while assembling disk: %s", err, exc=True)
   except OSError, err:
     _Fail("Error while symlinking disk: %s", err, exc=True)
 
-  return result
+  return dev_path, link_name
 
 
 def BlockdevShutdown(disk):

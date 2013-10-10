@@ -1252,7 +1252,7 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
                       inst_disk.iv_name, node, msg)
         disks_ok = False
       else:
-        dev_path = result.payload
+        dev_path, _ = result.payload
 
     device_info.append((instance.primary_node, inst_disk.iv_name, dev_path))
 

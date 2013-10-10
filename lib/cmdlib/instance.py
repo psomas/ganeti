@@ -1766,7 +1766,7 @@ class LUInstanceMove(LogicalUnit):
                         idx, result.fail_msg)
         errs.append(result.fail_msg)
         break
-      dev_path = result.payload
+      dev_path, _ = result.payload
       result = self.rpc.call_blockdev_export(source_node, (disk, instance),
                                              target_node, dev_path,
                                              cluster_name)
@@ -3108,7 +3108,8 @@ class LUInstanceSetParams(LogicalUnit):
     self.LogInfo("Trying to hotplug device...")
     result = self.rpc.call_hotplug_device(self.instance.primary_node,
                                           self.instance, action, dev_type,
-                                          device, extra, seq)
+                                          (device, self.instance),
+                                          extra, seq)
     if result.fail_msg:
       self.LogWarning("Could not hotplug device: %s" % result.fail_msg)
       self.LogInfo("Continuing execution..")
@@ -3143,12 +3144,21 @@ class LUInstanceSetParams(LogicalUnit):
                          cleanup=new_disks)
 
     if self.op.hotplug:
-      _, device_info = AssembleInstanceDisks(self, self.instance,
-                                             [disk], check=False)
-      _, _, dev_path = device_info[0]
-      self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
-                          constants.HOTPLUG_TARGET_DISK,
-                          disk, dev_path, idx)
+      # _, device_info = AssembleInstanceDisks(self, self.instance,
+      #                                       [disk], check=False)
+      self.cfg.SetDiskID(disk, self.instance.primary_node)
+      result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
+                                               (disk, self.instance),
+                                               self.instance.name, True, idx)
+      if result.fail_msg:
+        self.LogWarning("Can't assemble newly created disk %d: %s",
+                        idx, result.fail_msg)
+      else:
+        # _, _, dev_path = device_info[0]
+        _, link_name = result.payload
+        self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                            constants.HOTPLUG_TARGET_DISK,
+                            disk, link_name, idx)
 
     return (disk, [
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),

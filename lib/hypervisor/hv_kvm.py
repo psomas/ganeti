@@ -2056,14 +2056,16 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     # TODO: factor out code related to unix sockets.
     #       squash common parts between monitor and qmp
-    monsock = MonitorSocket(self._InstanceMonitor(instance.name))
-    monsock.connect()
     kvm_devid = _GenerateDeviceKVMId(constants.HOTPLUG_TARGET_NIC, nic)
     command = "getfd %s\n" % kvm_devid
     fds = [fd]
     logging.info("%s", fds)
-    fdsend.sendfds(monsock.sock, command, fds=fds)
-    monsock.close()
+    try:
+      monsock = MonitorSocket(self._InstanceMonitor(instance.name))
+      monsock.connect()
+      fdsend.sendfds(monsock.sock, command, fds=fds)
+    finally:
+      monsock.close()
 
   @classmethod
   def _ParseKVMVersion(cls, text):

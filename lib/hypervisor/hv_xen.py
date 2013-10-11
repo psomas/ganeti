@@ -918,12 +918,6 @@ class XenHypervisor(hv_base.BaseHypervisor):
     finally:
       utils.RunCmd([constants.XEN_CMD, "debug", "R"])
 
-  def HotplugSupported(self, instance, action, dev_type):
-    """Whether hotplug is supported.
-
-    """
-    raise errors.HypervisorError("Hotplug not supported by the xen hypervisor")
-
 
 class XenPvmHypervisor(XenHypervisor):
   """Xen PVM hypervisor interface"""

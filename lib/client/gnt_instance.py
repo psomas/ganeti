@@ -1314,7 +1314,7 @@ def SetInstanceParams(opts, args):
 
   nics = _ConvertNicDiskModifications(opts.nics)
   for action, _, __ in nics:
-    if action == constants.DDM_MODIFY and opts.hotplug:
+    if action == constants.DDM_MODIFY and opts.hotplug and not opts.force:
       usertext = ("You are about to hot-modify a NIC. This will be done"
                   " by removing the exisiting and then adding a new one."
                   " Network connection might be lost. Continue?")
@@ -1363,11 +1363,10 @@ def SetInstanceParams(opts, args):
     ToStdout("Modified instance %s", args[0])
     for param, data in result:
       ToStdout(" - %-5s -> %s", param, data)
-    if not opts.hotplug:
-      ToStdout("Please don't forget that most parameters take effect"
-               " only at the next (re)start of the instance initiated by"
-               " ganeti; restarting from within the instance will"
-               " not be enough.")
+    ToStdout("Please don't forget that most parameters take effect"
+             " only at the next (re)start of the instance initiated by"
+             " ganeti; restarting from within the instance will"
+             " not be enough.")
   return 0
 
 

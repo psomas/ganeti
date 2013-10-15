@@ -19,9 +19,11 @@ override_dh_auto_configure:
 	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
 	  --with-extstorage-search-path=/srv/ganeti/extstorage,/usr/local/lib/ganeti/extstorage,/usr/lib/ganeti/extstorage,/usr/share/ganeti/extstorage \
 	  --docdir=/usr/share/doc/ganeti \
-	  --enable-htools-rapi --enable-restricted-commands \
-	  --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
-	  --with-group-prefix=$(GNT_USERGROUP_PREFIX)
+	  --enable-htools-rapi
+
+#   --enable-restricted-commands \
+#	  --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
+#	  --with-group-prefix=$(GNT_USERGROUP_PREFIX)
 
 override_dh_auto_clean:
 	[ ! -f Makefile ] || $(MAKE) distclean

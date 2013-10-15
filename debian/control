@@ -14,7 +14,7 @@ Build-Depends: debhelper (>= 9),
  python-simplejson, python-pyparsing, python-openssl, python-bitarray,
  python-support (>= 0.6), python-pyinotify, python-pycurl,
  python-paramiko, python-ipaddr, python-sphinx (>= 1.0.7+dfsg), graphviz,
- qemu-utils, socat, iproute2, bash-completion, python-fdsend
+ qemu-utils, socat, iproute, bash-completion, python-fdsend
 Standards-Version: 3.9.4
 X-Python-Version: >= 2.6
 Homepage: http://code.google.com/p/ganeti/
@@ -26,7 +26,7 @@ Architecture: all
 Breaks: ganeti2 (<< 2.7.0-2), ganeti-htools (<< 0.3)
 Replaces: ganeti2 (<< 2.7.0-2)
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
- openssh-client, openssh-server, bridge-utils, iproute2, iputils-arping,
+ openssh-client, openssh-server, bridge-utils, iproute, iputils-arping,
  openssl, python-simplejson, python-pyparsing, python-openssl,
  python-pyinotify, python-pycurl, python-paramiko, python-bitarray,
  python-ipaddr, socat, fping, ganeti-haskell (>= ${source:Version}),

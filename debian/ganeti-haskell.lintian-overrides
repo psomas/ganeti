@@ -1,0 +1,9 @@
+ganeti-haskell binary: hardening-no-relro usr/lib/ganeti/mon-collector
+ganeti-haskell binary: hardening-no-relro usr/sbin/ganeti-confd
+ganeti-haskell binary: hardening-no-relro usr/sbin/ganeti-luxid
+ganeti-haskell binary: hardening-no-relro usr/sbin/ganeti-mond
+ganeti-haskell binary: hardening-no-fortify-functions usr/lib/ganeti/mon-collector
+ganeti-haskell binary: hardening-no-fortify-functions usr/sbin/ganeti-confd
+ganeti-haskell binary: hardening-no-fortify-functions usr/sbin/ganeti-luxid
+ganeti-haskell binary: hardening-no-fortify-functions usr/sbin/ganeti-mond
+ganeti-haskell binary: hyphen-used-as-minus-sign

@@ -1,0 +1,8 @@
+usr/lib/ganeti/mon-collector
+usr/share/man/man7/mon-collector.7
+usr/sbin/ganeti-confd
+usr/share/man/man8/ganeti-confd.8
+usr/sbin/ganeti-luxid
+usr/share/man/man8/ganeti-luxid.8
+usr/sbin/ganeti-mond
+usr/share/man/man8/ganeti-mond.8

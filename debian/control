@@ -14,29 +14,30 @@ Build-Depends: debhelper (>= 9),
  python-simplejson, python-pyparsing, python-openssl, python-bitarray,
  python-support (>= 0.6), python-pyinotify, python-pycurl,
  python-paramiko, python-ipaddr, python-sphinx (>= 1.0.7+dfsg), graphviz,
- qemu-utils, socat, iproute2 | iproute, bash-completion
+ qemu-utils, socat, iproute2 | iproute, bash-completion, python-fdsend
 Standards-Version: 3.9.4
 X-Python-Version: >= 2.6
 Homepage: http://code.google.com/p/ganeti/
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-ganeti/ganeti.git
 Vcs-Git: git://anonscm.debian.org/pkg-ganeti/ganeti.git
 
-Package: ganeti
+Package: snf-ganeti
 Architecture: all
 Breaks: ganeti2 (<< 2.7.0-2), ganeti-htools (<< ${source:Version}),
  ganeti-htools (>= ${source:Version}.1~)
-Replaces: ganeti2 (<< 2.7.0-2)
+Replaces: ganeti2 (<< 2.7.0-2), ganeti
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssh-client, openssh-server, bridge-utils, iproute2 | iproute,
  iputils-arping, openssl, python-simplejson, python-pyparsing, python-openssl,
  python-pyinotify, python-pycurl, python-paramiko, python-bitarray,
  python-ipaddr, socat, fping, ganeti-haskell (>= ${source:Version}),
- ganeti-haskell (<< ${source:Version}.1~), adduser
+ ganeti-haskell (<< ${source:Version}.1~), adduser, python-fdsend
 Recommends: drbd8-utils (>= 8.0.7), qemu-system-x86 | qemu-kvm |
  xen-linux-system-amd64 | xen-linux-system-686-pae,
- ganeti-instance-debootstrap, ndisc6, ganeti-htools
-Suggests: ganeti-doc
-Provides: ${python:Provides}
+ ndisc6, ganeti-htools
+Suggests: ganeti-doc, ganeti-instance-debootstrap
+Provides: ${python:Provides}, ganeti
+Conflicts: ganeti
 Description: Cluster-based virtualization management software
  Ganeti is a virtual server cluster management software tool built on top
  of the Xen virtual machine monitor and other Open Source software. After
@@ -61,7 +62,7 @@ Description: transitional dummy package
 Package: ganeti-haskell
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Replaces: ganeti2 (<< 2.7.0-2)
+Replaces: ganeti2 (<< 2.7.0-2), snf-ganeti
 Breaks: ganeti2 (<< 2.7.0-2)
 Description: Cluster-based virtualization management software - Haskell components
  Ganeti is a virtual server cluster management software tool built on top

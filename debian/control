@@ -14,14 +14,14 @@ Build-Depends: debhelper (>= 9),
  python-simplejson, python-pyparsing, python-openssl, python-bitarray,
  python-support (>= 0.6), python-pyinotify, python-pycurl,
  python-paramiko, python-ipaddr, python-sphinx (>= 1.0.7+dfsg), graphviz,
- qemu-utils, socat, iproute2, bash-completion
+ qemu-utils, socat, iproute2, bash-completion, python-fdsend
 Standards-Version: 3.9.4
 X-Python-Version: >= 2.6
 Homepage: http://code.google.com/p/ganeti/
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-ganeti/ganeti.git
 Vcs-Git: git://anonscm.debian.org/pkg-ganeti/ganeti.git
 
-Package: ganeti
+Package: snf-ganeti
 Architecture: all
 Breaks: ganeti2 (<< 2.7.0-2), ganeti-htools (<< 0.3)
 Replaces: ganeti2 (<< 2.7.0-2)
@@ -30,7 +30,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, lvm2,
  openssl, python-simplejson, python-pyparsing, python-openssl,
  python-pyinotify, python-pycurl, python-paramiko, python-bitarray,
  python-ipaddr, socat, fping, ganeti-haskell (>= ${source:Version}),
- ganeti-haskell (<< ${source:Version}.1~), adduser
+ ganeti-haskell (<< ${source:Version}.1~), adduser, python-fdsend
 Recommends: drbd8-utils (>= 8.0.7), qemu-system-x86 |
  xen-linux-system-amd64 | xen-linux-system-686-pae,
  ganeti-instance-debootstrap, ndisc6

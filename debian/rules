@@ -39,21 +39,22 @@ override_dh_auto_configure:
 	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
 	  --with-extstorage-search-path=/srv/ganeti/extstorage,/usr/local/lib/ganeti/extstorage,/usr/lib/ganeti/extstorage,/usr/share/ganeti/extstorage \
 	  --docdir=/usr/share/doc/ganeti \
-	  --enable-restricted-commands \
-	  --disable-symlinks \
-	  --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
-	  --with-group-prefix=$(GNT_USERGROUP_PREFIX)
+	  --disable-symlinks
+
+	  # --enable-restricted-commands \
+	  # --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
+	  # --with-group-prefix=$(GNT_USERGROUP_PREFIX)
 
 override_dh_auto_clean:
 	[ ! -f Makefile ] || $(MAKE) distclean
 	# this is not removed by make distclean :(
 	rm -f ganeti
 
-	rm -f debian/ganeti.init
-	rm -f debian/ganeti.cron.d
-	rm -f debian/ganeti.default
-	rm -f debian/ganeti.postinst
-	rm -f debian/ganeti.postrm
+	rm -f debian/snf-ganeti.ganeti.init
+	rm -f debian/snf-ganeti.ganeti.cron.d
+	rm -f debian/snf-ganeti.ganeti.default
+	rm -f debian/snf-ganeti.postinst
+	rm -f debian/snf-ganeti.postrm
 	if [ -d doc/html.orig ]; then \
 		rm -rf doc/html; \
 		mv doc/html.orig doc/html; \
@@ -70,17 +71,18 @@ override_dh_auto_build:
 	# Generate postinst and postrm scripts
 	$(CURDIR)/debian/genscript.py postinst "$(CURDIR)" | \
 		sed -f "$(CURDIR)/autotools/replace_vars.sed" \
-		    -e "s#@VER@#$(VER)#g" >"$(CURDIR)/debian/ganeti.postinst"
-	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/ganeti.postrm"
+		    -e "s#@VER@#$(VER)#g" >"$(CURDIR)/debian/snf-ganeti.postinst"
+	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/snf-ganeti.postrm"
 
 override_dh_install-indep:
 	dh_install --fail-missing -pganeti-$(VER) -Xsbin/ganeti-confd -Xganeti/mon-collector \
 		-Xganeti/default -Xbin/h -Xman1/h -Xsbin/ganeti-mond -Xsbin/ganeti-luxid -Xhail
 	dh_install --fail-missing -i -Nganeti-$(VER) -Xganeti/$(VER)
 
-	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/ganeti.init
-	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/ganeti.cron.d
-	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/ganeti.default
+	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/snf-ganeti.ganeti.init
+	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/snf-ganeti.ganeti.cron.d
+	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/snf-ganeti.ganeti.default
+	cp $(CURDIR)/doc/examples/ganeti.logrotate $(CURDIR)/debian/snf-ganeti.ganeti.logrotate
 
 	# Dummy Python module for the RAPI client
 	# Add missing bits to ganeti and python-ganeti-rapi.
@@ -96,7 +98,7 @@ override_dh_python2:
 	dh_python2 -pganeti-$(VER) usr/share/ganeti/$(VER)
 
 override_dh_installinit:
-	dh_installinit --error-handler=true --no-restart-on-upgrade -i -- defaults 20 80
+	dh_installinit --name=ganeti --error-handler=true --no-restart-on-upgrade -i -- defaults 20 80
 
 override_dh_compress:
 	dh_compress
@@ -112,7 +114,7 @@ override_dh_compress:
 	# files. The symlinks are shipped in the ganeti package, and because
 	# they are indirect links through /etc, they would not be detected by
 	# dh_compress anyway.
-	for file in $$(find $(CURDIR)/debian/ganeti/usr/share/man \
+	for file in $$(find $(CURDIR)/debian/snf-ganeti/usr/share/man \
 			    $(CURDIR)/debian/ganeti-htools/usr/share/man \
 			    -type l); do \
 		target=$$(readlink "$$file"); \
@@ -129,6 +131,12 @@ override_dh_link:
 
 	# Now let dh_link fix all symlinks
 	dh_link
+
+override_dh_installcron:
+	dh_installcron --name=ganeti
+
+override_dh_installlogrotate:
+	dh_installlogrotate --name=ganeti
 
 # Disable dh_sphinxdoc for binary-arch, as it will raise an error
 override_dh_sphinxdoc-arch:

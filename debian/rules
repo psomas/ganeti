@@ -9,6 +9,7 @@ GNT_USERGROUP_PREFIX="gnt-"
 	dh $@ --with python2,sphinxdoc,bash_completion
 
 override_dh_auto_configure:
+	./autogen.sh
 	./configure \
 	  --prefix=/usr \
 	  --localstatedir=/var \

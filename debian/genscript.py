@@ -51,7 +51,7 @@ elif sys.argv[1] == "postrm":
     out += "\n"
 
 
-with open(os.path.join(debian_root, "ganeti.%s.in" % sys.argv[1])) as script:
+with open(os.path.join(debian_root, "snf-ganeti.%s.in" % sys.argv[1])) as script:
     done = False
     for line in script:
         if line.strip() == "#GANETI_USERS#" and not done:

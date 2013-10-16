@@ -353,8 +353,9 @@ class NodeRequestHandler(http.server.HttpServerHandler):
     remove by calling the generic block device remove call.
 
     """
-    cfbd = objects.Disk.FromDict(params[0])
-    return backend.BlockdevSnapshot(cfbd)
+    (disk, snapshot_name) = params
+    cfbd = objects.Disk.FromDict(disk)
+    return backend.BlockdevSnapshot(cfbd, snapshot_name)
 
   @staticmethod
   def perspective_blockdev_grow(params):

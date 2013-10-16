@@ -1425,6 +1425,22 @@ class OpInstanceReinstall(OpCode):
   OP_RESULT = ht.TNone
 
 
+class OpInstanceSnapshot(OpCode):
+  """Snapshot an instance."""
+  OP_DSC_FIELD = "instance_name"
+  OP_PARAMS = [
+    _PInstanceName,
+    ("disks", ht.EmptyList,
+     ht.TListOf(ht.TItems([ht.TOr(ht.TInt, ht.TString),
+                           ht.TDictOf(ht.TElemOf([
+                                      constants.IDISK_SNAPSHOT_NAME]),
+                                      ht.TNonEmptyString)
+                          ])),
+    "Disks to snapshot"),
+    ]
+  OP_RESULT = ht.TNone
+
+
 class OpInstanceRemove(OpCode):
   """Remove an instance."""
   OP_DSC_FIELD = "instance_name"

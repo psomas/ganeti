@@ -1267,6 +1267,22 @@ options.
 Most of the changes take effect at the next restart. If the instance is
 running, there is no effect on the instance.
 
+
+SNAPSHOT
+^^^^^^^^
+
+| **snapshot**
+| {\--disk=*ID*:snapshot_name=*VAL*
+| [\--submit]
+| {*instance*}
+
+This only works for instances with ext disk template. It eventualla runs
+the snapshot script of the corresponding extstorage provider.
+The ``--disk 0:snapshot_name=snap1`` will take snapshot of the first disk
+by exporting snapshot name (via VOL_SNAPSHOT_NAME) and disk related info
+to the script environment. *ID* can be a disk index, name or UUID.
+
+
 REINSTALL
 ^^^^^^^^^
 

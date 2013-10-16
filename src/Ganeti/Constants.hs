@@ -1317,6 +1317,9 @@ esActionSetinfo = "setinfo"
 esActionVerify :: String
 esActionVerify = "verify"
 
+esActionSnapshot :: String
+esActionSnapshot = "snapshot"
+
 esScriptCreate :: String
 esScriptCreate = esActionCreate
 
@@ -1338,6 +1341,9 @@ esScriptSetinfo = esActionSetinfo
 esScriptVerify :: String
 esScriptVerify = esActionVerify
 
+esScriptSnapshot :: String
+esScriptSnapshot = esActionSnapshot
+
 esScripts :: FrozenSet String
 esScripts =
   ConstantUtils.mkSet [esScriptAttach,
@@ -1346,7 +1352,8 @@ esScripts =
                        esScriptGrow,
                        esScriptRemove,
                        esScriptSetinfo,
-                       esScriptVerify]
+                       esScriptVerify,
+                       esScriptSnapshot]
 
 esParametersFile :: String
 esParametersFile = "parameters.list"
@@ -2308,6 +2315,9 @@ idiskVg = "vg"
 idiskProvider :: String
 idiskProvider = "provider"
 
+idiskSnapshotName :: String
+idiskSnapshotName = "snapshot_name"
+
 idiskParamsTypes :: Map String VType
 idiskParamsTypes =
   Map.fromList [(idiskSize, VTypeSize),
@@ -2317,7 +2327,8 @@ idiskParamsTypes =
                 (idiskVg, VTypeString),
                 (idiskMetavg, VTypeString),
                 (idiskProvider, VTypeString),
-                (idiskName, VTypeMaybeString)]
+                (idiskName, VTypeMaybeString),
+                (idiskSnapshotName, VTypeString)]
 
 idiskParams :: FrozenSet String
 idiskParams = ConstantUtils.mkSet (Map.keys idiskParamsTypes)

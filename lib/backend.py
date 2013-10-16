@@ -2700,7 +2700,7 @@ def BlockdevGrow(disk, amount, dryrun, backingstore):
     _Fail("Failed to grow block device: %s", err, exc=True)
 
 
-def BlockdevSnapshot(disk):
+def BlockdevSnapshot(disk, snapshot_name=None):
   """Create a snapshot copy of a block device.
 
   This function is called recursively, and the snapshot is actually created
@@ -2717,12 +2717,18 @@ def BlockdevSnapshot(disk):
       _Fail("DRBD device '%s' without backing storage cannot be snapshotted",
             disk.unique_id)
     return BlockdevSnapshot(disk.children[0])
-  elif disk.dev_type == constants.LD_LV:
+  elif disk.dev_type == constants.LD_LV and not snapshot_name:
     r_dev = _RecursiveFindBD(disk)
     if r_dev is not None:
       # FIXME: choose a saner value for the snapshot size
       # let's stay on the safe side and ask for the full size, for now
       return r_dev.Snapshot(disk.size)
+    else:
+      _Fail("Cannot find block device %s", disk)
+  elif disk.dev_type == constants.DT_EXT:
+    r_dev = _RecursiveFindBD(disk)
+    if r_dev is not None:
+      r_dev.Snapshot(snapshot_name)
     else:
       _Fail("Cannot find block device %s", disk)
   else:

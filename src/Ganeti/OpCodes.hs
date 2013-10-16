@@ -316,6 +316,10 @@ $(genOpCode "OpCode"
      , pInstOs
      , pTempOsParams
      ])
+  , ("OpInstanceSnapshot",
+     [ pInstanceName
+     , pInstSnaps
+     ])
   , ("OpInstanceRemove",
      [ pInstanceName
      , pShutdownTimeout
@@ -577,6 +581,7 @@ opSummaryVal OpNodeMigrate { opNodeName = s } = Just (fromNonEmpty s)
 opSummaryVal OpNodeEvacuate { opNodeName = s } = Just (fromNonEmpty s)
 opSummaryVal OpInstanceCreate { opInstanceName = s } = Just s
 opSummaryVal OpInstanceReinstall { opInstanceName = s } = Just s
+opSummaryVal OpInstanceSnapshot { opInstanceName = s } = Just s
 opSummaryVal OpInstanceRemove { opInstanceName = s } = Just s
 -- FIXME: instance rename should show both names; currently it shows none
 -- opSummaryVal OpInstanceRename { opInstanceName = s } = Just s

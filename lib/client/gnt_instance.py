@@ -403,6 +403,36 @@ def ReinstallInstance(opts, args):
     return constants.EXIT_FAILURE
 
 
+def SnapshotInstance(opts, args):
+  """Snapshot an instance.
+
+  @param opts: the command line options selected by the user
+  @type args: list
+  @param args: should contain only one element, the name of the
+      instance to be reinstalled
+  @rtype: int
+  @return: the desired exit code
+
+  """
+  instance_name  = args[0]
+  inames = _ExpandMultiNames(_EXPAND_INSTANCES, [instance_name])
+  if not inames:
+    raise errors.OpPrereqError("Selection filter does not match any instances",
+                               errors.ECODE_INVAL)
+  multi_on = len(inames) > 1
+  jex = JobExecutor(verbose=multi_on, opts=opts)
+  for instance_name in inames:
+    op = opcodes.OpInstanceSnapshot(instance_name=instance_name,
+                                    disks=opts.disks)
+    jex.QueueJob(instance_name, op)
+
+  results = jex.WaitOrShow(not opts.submit_only)
+
+  if compat.all(map(compat.fst, results)):
+    return constants.EXIT_SUCCESS
+  else:
+    return constants.EXIT_FAILURE
+
 def RemoveInstance(opts, args):
   """Remove an instance.
 
@@ -1523,6 +1553,10 @@ commands = {
      m_pri_node_tags_opt, m_sec_node_tags_opt, m_inst_tags_opt, SELECT_OS_OPT,
      SUBMIT_OPT, DRY_RUN_OPT, PRIORITY_OPT, OSPARAMS_OPT],
     "[-f] <instance>", "Reinstall a stopped instance"),
+  "snapshot": (
+    SnapshotInstance, [ArgInstance(min=1,max=1)],
+    [DISK_OPT, SUBMIT_OPT, DRY_RUN_OPT],
+    "<instance>", "Snapshot an instance's disk(s)"),
   "remove": (
     RemoveInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, SHUTDOWN_TIMEOUT_OPT, IGNORE_FAILURES_OPT, SUBMIT_OPT,

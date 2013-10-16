@@ -99,6 +99,14 @@ instance (Arbitrary a) => Arbitrary (SetParamsMods a) where
                     , SetParamsNew        <$> arbitrary
                     ]
 
+instance Arbitrary ISnapParams where
+  arbitrary = ISnapParams <$> genNameNE
+
+instance (Arbitrary a) => Arbitrary (SetSnapParams a) where
+  arbitrary = oneof [ pure SetSnapParamsEmpty
+                    , SetSnapParamsValid <$> arbitrary
+                    ]
+
 instance Arbitrary ExportTarget where
   arbitrary = oneof [ ExportTargetLocal <$> genNodeNameNE
                     , ExportTargetRemote <$> pure []
@@ -228,7 +236,8 @@ instance Arbitrary OpCodes.OpCode where
         OpCodes.OpInstanceReinstall <$> genFQDN <*> arbitrary <*>
           genMaybe genNameNE <*> genMaybe (pure emptyJSObject)
       "OP_INSTANCE_REMOVE" ->
-        OpCodes.OpInstanceRemove <$> genFQDN <*> arbitrary <*> arbitrary
+        OpCodes.OpInstanceRemove <$> genFQDN <*> arbitrary <*>
+          arbitrary <*> arbitrary
       "OP_INSTANCE_RENAME" ->
         OpCodes.OpInstanceRename <$> genFQDN <*> genNodeNameNE <*>
           arbitrary <*> arbitrary
@@ -339,6 +348,8 @@ instance Arbitrary OpCodes.OpCode where
         OpCodes.OpNetworkDisconnect <$> genNameNE <*> genNameNE
       "OP_NETWORK_QUERY" ->
         OpCodes.OpNetworkQuery <$> genFieldsNE <*> genNamesNE <*> arbitrary
+      "OP_INSTANCE_SNAPSHOT" ->
+        OpCodes.OpInstanceSnapshot <$> genFQDN <*> arbitrary
       "OP_RESTRICTED_COMMAND" ->
         OpCodes.OpRestrictedCommand <$> arbitrary <*> genNodeNamesNE <*>
           genNameNE

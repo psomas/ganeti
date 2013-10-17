@@ -1449,6 +1449,7 @@ class OpInstanceRemove(OpCode):
     _PShutdownTimeout,
     ("ignore_failures", False, ht.TBool,
      "Whether to ignore failures during removal"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = ht.TNone
 
@@ -1738,6 +1739,7 @@ class OpInstanceSetParams(OpCode):
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
     ("hotplug", False, ht.TBool, "Whether to hotplug device"),
     ("hotplug_if_possible", False, ht.TBool, "If possible then hotplug device"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = _TSetParamsResult
 

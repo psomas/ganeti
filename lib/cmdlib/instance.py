@@ -3296,6 +3296,8 @@ class LUInstanceSetParams(LogicalUnit):
 
     (anno_disk,) = AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
+      if self.op.keep_disks and disk.dev_type in constants.DT_EXT:
+        continue
       self.cfg.SetDiskID(disk, node)
       msg = self.rpc.call_blockdev_remove(node, disk).fail_msg
       if msg:

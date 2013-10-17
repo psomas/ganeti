@@ -98,6 +98,7 @@ module Ganeti.OpParams
   , pIgnoreIpolicy
   , pHotplug
   , pHotplugIfPossible
+  , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
   , pInstSnaps
@@ -741,6 +742,10 @@ pHotplug = defaultFalse "hotplug"
 
 pHotplugIfPossible :: Field
 pHotplugIfPossible = defaultFalse "hotplug_if_possible"
+
+-- | Whether to remove disks.
+pKeepDisks :: Field
+pKeepDisks = defaultFalse "keep_disks"
 
 -- * Parameters for node resource model
 

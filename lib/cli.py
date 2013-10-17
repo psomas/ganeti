@@ -97,6 +97,7 @@ __all__ = [
   "GLOBAL_SHARED_FILEDIR_OPT",
   "HOTPLUG_OPT",
   "HOTPLUG_IF_POSSIBLE_OPT",
+  "KEEPDISKS_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -1650,6 +1651,10 @@ HOTPLUG_IF_POSSIBLE_OPT = cli_option("--hotplug-if-possible",
                                      action="store_true", default=False,
                                      help="Hotplug devices in case"
                                           " hotplug is supported")
+
+KEEPDISKS_OPT = cli_option("--keep-disks", dest="keep_disks",
+                           action="store_true", default=False,
+                           help="Do not remove disks")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT, REASON_OPT]

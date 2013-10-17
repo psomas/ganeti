@@ -257,7 +257,7 @@ instance Arbitrary OpCodes.OpCode where
           arbitrary <*> genMaybe genNameNE <*> genMaybe (pure emptyJSObject)
       "OP_INSTANCE_REMOVE" ->
         OpCodes.OpInstanceRemove <$> genFQDN <*> return Nothing <*>
-          arbitrary <*> arbitrary
+          arbitrary <*> arbitrary <*> arbitrary
       "OP_INSTANCE_RENAME" ->
         OpCodes.OpInstanceRename <$> genFQDN <*> return Nothing <*>
           genNodeNameNE <*> arbitrary <*> arbitrary
@@ -299,7 +299,7 @@ instance Arbitrary OpCodes.OpCode where
           pure emptyJSObject <*> arbitrary <*> genMaybe genNodeNameNE <*>
           return Nothing <*> genMaybe genNodeNameNE <*> return Nothing <*>
           genMaybe genNameNE <*> pure emptyJSObject <*> arbitrary <*>
-          arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+          arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
       "OP_INSTANCE_GROW_DISK" ->
         OpCodes.OpInstanceGrowDisk <$> genFQDN <*> return Nothing <*>
           arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

@@ -1433,6 +1433,7 @@ class OpInstanceRemove(OpCode):
     _PShutdownTimeout,
     ("ignore_failures", False, ht.TBool,
      "Whether to ignore failures during removal"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = ht.TNone
 
@@ -1720,7 +1721,8 @@ class OpInstanceSetParams(OpCode):
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
-    ("hotplug", False, ht.TBool, "Whether to hotplug device")
+    ("hotplug", False, ht.TBool, "Whether to hotplug device"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = _TSetParamsResult
 

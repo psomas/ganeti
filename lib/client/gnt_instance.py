@@ -429,7 +429,8 @@ def RemoveInstance(opts, args):
 
   op = opcodes.OpInstanceRemove(instance_name=instance_name,
                                 ignore_failures=opts.ignore_failures,
-                                shutdown_timeout=opts.shutdown_timeout)
+                                shutdown_timeout=opts.shutdown_timeout,
+                                keep_disks=opts.keep_disks)
   SubmitOrSend(op, opts, cl=cl)
   return 0
 
@@ -1341,6 +1342,7 @@ def SetInstanceParams(opts, args):
                                    nics=nics,
                                    disks=disks,
                                    hotplug=opts.hotplug,
+                                   keep_disks=opts.keep_disks,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
                                    pnode=opts.new_primary_node,
@@ -1525,7 +1527,7 @@ commands = {
   "remove": (
     RemoveInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, SHUTDOWN_TIMEOUT_OPT, IGNORE_FAILURES_OPT, SUBMIT_OPT,
-     DRY_RUN_OPT, PRIORITY_OPT],
+     DRY_RUN_OPT, PRIORITY_OPT, KEEPDISKS_OPT],
     "[-f] <instance>", "Shuts down the instance and removes it"),
   "rename": (
     RenameInstance,
@@ -1545,7 +1547,7 @@ commands = {
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
      ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
-     NOCONFLICTSCHECK_OPT, NEW_PRIMARY_OPT, HOTPLUG_OPT],
+     NOCONFLICTSCHECK_OPT, NEW_PRIMARY_OPT, HOTPLUG_OPT, KEEPDISKS_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

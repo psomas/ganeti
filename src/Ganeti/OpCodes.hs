@@ -320,6 +320,7 @@ $(genOpCode "OpCode"
      [ pInstanceName
      , pShutdownTimeout
      , pIgnoreFailures
+     , pKeepDisks
      ])
   , ("OpInstanceRename",
      [ pInstanceName
@@ -398,6 +399,7 @@ $(genOpCode "OpCode"
      , pOffline
      , pIpConflictsCheck
      , pHotplug
+     , pKeepDisks
      ])
   , ("OpInstanceGrowDisk",
      [ pInstanceName

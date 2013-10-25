@@ -2508,5 +2508,9 @@ OPCODE_REASON_SOURCES = compat.UniqueFrozenset([
   OPCODE_REASON_SRC_USER,
   ])
 
+# disk removal timeouts
+DISK_REMOVE_RETRY_INTERVAL = 3
+DISK_REMOVE_RETRY_TIMEOUT = 30
+
 # Do not re-export imported modules
 del re, _vcsversion, _autoconf, socket, pathutils, compat

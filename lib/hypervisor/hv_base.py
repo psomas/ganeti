@@ -557,9 +557,30 @@ class BaseHypervisor(object):
     """
     pass
 
-  def HotplugSupported(self, instance, action, dev_type):
+  # pylint: disable=R0201,W0613
+  def VerifyHotplugSupport(self, instance, action, dev_type):
     """Whether hotplug is supported.
+
+    Given the target device and hotplug action checks if hotplug is
+    actually supported.
+
+    @type instance: L{objects.Instance}
+    @param instance: the instance object
+    @type action: string
+    @param action: one of the supported hotplug commands
+    @type dev_type: string
+    @param dev_type: one of the supported device types to hotplug
+    @raise errors.HotplugError: if hotplugging is not supported
 
     Depends on instance's hvparam, the action. and the dev_type
     """
-    pass
+    raise errors.HotplugError("Hotplug is not supported.")
+
+  # pylint: disable=R0201,W0613
+  def HotplugSupported(self, instance):
+    """Checks if hotplug is supported.
+
+    By default is not. Currently only KVM hypervisor supports it.
+
+    """
+    raise errors.HotplugError("Hotplug is not supported by this hypervisor")

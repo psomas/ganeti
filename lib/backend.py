@@ -1646,6 +1646,11 @@ def HotplugDevice(instance, action, dev_type, device, extra, seq):
 
   """
   hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  try:
+    hyper.VerifyHotplugSupport(instance, action, dev_type)
+  except errors.HotplugError, err:
+    _Fail("Hotplug is not supported: %s", err)
+
   if action == constants.HOTPLUG_ACTION_ADD:
     fn = hyper.HotAddDevice
   elif action == constants.HOTPLUG_ACTION_REMOVE:
@@ -1655,8 +1660,18 @@ def HotplugDevice(instance, action, dev_type, device, extra, seq):
   else:
     assert action in constants.HOTPLUG_ALL_ACTIONS
   # This will raise an exception if hotplug is no supported for this case
-  hyper.HotplugSupported(instance, action, dev_type)
   return fn(instance, dev_type, device, extra, seq)
+
+
+def HotplugSupported(instance):
+  """Checks if hotplug is generally supported.
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  try:
+    hyper.HotplugSupported(instance)
+  except errors.HotplugError, err:
+    _Fail("Hotplug is not supported: %s", err)
 
 
 def BlockdevCreate(disk, size, owner, on_primary, info, excl_stor):

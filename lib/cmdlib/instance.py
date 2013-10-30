@@ -2663,6 +2663,11 @@ class LUInstanceSetParams(LogicalUnit):
     # dictionary with instance information after the modification
     ispec = {}
 
+    if self.op.hotplug:
+      result = self.rpc.call_hotplug_supported(self.instance.primary_node,
+                                               self.instance)
+      result.Raise("Hotplug is not supported.")
+
     # Check disk modifications. This is done here and not in CheckArguments
     # (as with NICs), because we need to know the instance's disk template
     if instance.disk_template == constants.DT_EXT:

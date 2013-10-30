@@ -1952,26 +1952,16 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     dev.pci = int(free)
 
-  def HotplugSupported(self, instance, action, dev_type):
+  def VerifyHotplugSupport(self, instance, action, dev_type):
     """Check if hotplug is supported.
 
     Hotplug is *not* supported in case of:
-     - qemu versions < 1.0
      - security models and chroot (disk hotplug)
      - fdsend module is missing (nic hot-add)
 
     @raise errors.HypervisorError: in previous cases
 
     """
-    output = self._CallMonitorCommand(instance.name, self._INFO_VERSION_CMD)
-    # TODO: search for netdev_add, drive_add, device_add.....
-    match = self._INFO_VERSION_RE.search(output.stdout)
-    if not match:
-      raise errors.HotplugError("Try hotplug only in running instances.")
-    v_major, v_min, _, _ = match.groups()
-    if (v_major, v_min) <= (1, 0):
-      raise errors.HotplugError("Hotplug not supported for qemu versions < 1.0")
-
     if dev_type == constants.HOTPLUG_TARGET_DISK:
       hvp = instance.hvparams
       security_model = hvp[constants.HV_SECURITY_MODEL]
@@ -1988,6 +1978,25 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       raise errors.HotplugError("Cannot hot-add NIC."
                                 " fdsend python module is missing.")
     return True
+
+  def HotplugSupported(self, instance):
+    """Checks if hotplug is generally supported.
+
+    Hotplug is *not* supported in case of:
+     - qemu versions < 1.0
+     - for stopped instances
+
+    @raise errors.HypervisorError: in one of the previous cases
+
+    """
+    output = self._CallMonitorCommand(instance.name, self._INFO_VERSION_CMD)
+    # TODO: search for netdev_add, drive_add, device_add.....
+    match = self._INFO_VERSION_RE.search(output.stdout)
+    if not match:
+      raise errors.HotplugError("Try hotplug only in running instances.")
+    v_major, v_min, _, _ = match.groups()
+    if (int(v_major), int(v_min)) < (1, 0):
+      raise errors.HotplugError("Hotplug not supported for qemu versions < 1.0")
 
   def _CallHotplugCommand(self, name, cmd):
     output = self._CallMonitorCommand(name, cmd)

@@ -2770,6 +2770,11 @@ class LUInstanceSetParams(LogicalUnit):
                                       constants.DT_EXT),
                                      errors.ECODE_INVAL)
 
+    if self.op.hotplug:
+      result = self.rpc.call_hotplug_supported(self.instance.primary_node,
+                                               self.instance)
+      result.Raise("Hotplug is not supported.")
+
     # OS change
     if self.op.os_name and not self.op.force:
       CheckNodeHasOS(self, instance.primary_node, self.op.os_name,

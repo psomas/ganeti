@@ -30,11 +30,11 @@ override_dh_auto_clean:
 	# this is not removed by make distclean :(
 	rm -f ganeti
 
-	rm -f debian/ganeti.init
-	rm -f debian/ganeti.cron.d
-	rm -f debian/ganeti.default
-	rm -f debian/ganeti.postinst
-	rm -f debian/ganeti.postrm
+	rm -f debian/snf-ganeti.ganeti.init
+	rm -f debian/snf-ganeti.ganeti.cron.d
+	rm -f debian/snf-ganeti.ganeti.default
+	rm -f debian/snf-ganeti.postinst
+	rm -f debian/snf-ganeti.postrm
 	if [ -d doc/html.orig ]; then \
 		rm -rf doc/html; \
 		mv doc/html.orig doc/html; \
@@ -46,23 +46,26 @@ override_dh_auto_build:
 	mv doc/html doc/html.orig
 	$(MAKE) doc/html
 	$(CURDIR)/debian/genscript.py postinst "$(CURDIR)" | \
-		sed -f "$(CURDIR)/autotools/replace_vars.sed" >"$(CURDIR)/debian/ganeti.postinst"
-	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/ganeti.postrm"
+		sed -f "$(CURDIR)/autotools/replace_vars.sed" >"$(CURDIR)/debian/snf-ganeti.postinst"
+	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/snf-ganeti.postrm"
 
 # Add missing bits to ganeti and python-ganeti-rapi. We do not use
 # override_dh_install (plain) because it will fail in binary-arch builds.
 override_dh_install-indep:
 	dh_install -i -Xganeti-confd -Xmon-collector -Xhail -Xganeti-mond -Xganeti-luxid --fail-missing
-	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/ganeti.init
-	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/ganeti.cron.d
-	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/ganeti.default
+	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/snf-ganeti.ganeti.init
+	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/snf-ganeti.ganeti.cron.d
+	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/snf-ganeti.ganeti.default
 	
 	# Dummy Python module for the RAPI client
 	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/__init__.py
 	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/rapi/__init__.py
 
 override_dh_installinit:
-	dh_installinit --error-handler=true -i -- defaults 20 80
+	dh_installinit --name=ganeti --error-handler=true -i -- defaults 20 80
+
+override_dh_installcron:
+	dh_installcron --name=ganeti
 
 # Disable dh_sphinxdoc for binary-arch, as it will raise an error
 override_dh_sphinxdoc-arch:

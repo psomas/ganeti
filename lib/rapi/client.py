@@ -881,7 +881,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
     return self._SendRequest(HTTP_POST, "/%s/instances" % GANETI_RAPI_VERSION,
                              query, body)
 
-  def DeleteInstance(self, instance, dry_run=False, reason=None):
+  def DeleteInstance(self, instance, dry_run=False, reason=None, **kwargs):
     """Deletes an instance.
 
     @type instance: str
@@ -894,12 +894,14 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     """
     query = []
+    body = kwargs
+
     _AppendDryRunIf(query, dry_run)
     _AppendReason(query, reason)
 
     return self._SendRequest(HTTP_DELETE,
                              ("/%s/instances/%s" %
-                              (GANETI_RAPI_VERSION, instance)), query, None)
+                              (GANETI_RAPI_VERSION, instance)), query, body)
 
   def ModifyInstance(self, instance, reason=None, **kwargs):
     """Modifies an instance.
@@ -1087,7 +1089,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
                               (GANETI_RAPI_VERSION, instance)), query, None)
 
   def RebootInstance(self, instance, reboot_type=None, ignore_secondaries=None,
-                     dry_run=False, reason=None):
+                     dry_run=False, reason=None, **kwargs):
     """Reboots an instance.
 
     @type instance: str
@@ -1106,6 +1108,8 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     """
     query = []
+    body = kwargs
+
     _AppendDryRunIf(query, dry_run)
     _AppendIf(query, reboot_type, ("type", reboot_type))
     _AppendIf(query, ignore_secondaries is not None,
@@ -1114,7 +1118,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     return self._SendRequest(HTTP_POST,
                              ("/%s/instances/%s/reboot" %
-                              (GANETI_RAPI_VERSION, instance)), query, None)
+                              (GANETI_RAPI_VERSION, instance)), query, body)
 
   def ShutdownInstance(self, instance, dry_run=False, no_remember=False,
                        reason=None, **kwargs):

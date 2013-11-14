@@ -1018,7 +1018,7 @@ class R_2_instances_name(baserlib.OpcodeResource):
 
     """
     assert len(self.items) == 1
-    return ({}, {
+    return (self.request_body, {
       "instance_name": self.items[0],
       "ignore_failures": False,
       "dry_run": self.dryRun(),
@@ -1057,7 +1057,7 @@ class R_2_instances_name_reboot(baserlib.OpcodeResource):
     ignore_secondaries=[False|True] parameters.
 
     """
-    return ({}, {
+    return (self.request_body, {
       "instance_name": self.items[0],
       "reboot_type":
         self.queryargs.get("type", [constants.INSTANCE_REBOOT_HARD])[0],

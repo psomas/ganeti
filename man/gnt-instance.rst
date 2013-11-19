@@ -132,6 +132,9 @@ ip
     connected to the said network. ``--no-conflicts-check`` can be used
     to override this check. The special value **pool** causes Ganeti to
     select an IP from the the network the NIC is or will be connected to.
+    One can pick an externally reserved IP of a network along with
+    ``--no-conflict-check``. Note that this IP cannot be assigned to
+    any other instance until it gets released.
 
 mode
     specifies the connection mode for this NIC: routed, bridged or
@@ -1105,6 +1108,7 @@ MODIFY
 | [\--offline \| \--online]
 | [\--submit]
 | [\--ignore-ipolicy]
+| [\--hotplug]
 | {*instance*}
 
 Modifies the memory size, number of vcpus, ip address, MAC address
@@ -1180,11 +1184,32 @@ immediately.
 If ``--ignore-ipolicy`` is given any instance policy violations occuring
 during this operation are ignored.
 
+If ``--hotplug`` is given any disk and nic modifications will take
+effect without the need of actual reboot. Please note that this feature
+is currently supported only for KVM hypervisor and for versions greater
+than 1.0.
+
 See **ganeti**\(7) for a description of ``--submit`` and other common
 options.
 
 Most of the changes take effect at the next restart. If the instance is
 running, there is no effect on the instance.
+
+
+SNAPSHOT
+^^^^^^^^
+
+| **snapshot**
+| {\--disk=*ID*:snapshot_name=*VAL*
+| [\--submit]
+| {*instance*}
+
+This only works for instances with ext disk template. It eventualla runs
+the snapshot script of the corresponding extstorage provider.
+The ``--disk 0:snapshot_name=snap1`` will take snapshot of the first disk
+by exporting snapshot name (via VOL_SNAPSHOT_NAME) and disk related info
+to the script environment. *ID* can be a disk index, name or UUID.
+
 
 REINSTALL
 ^^^^^^^^^

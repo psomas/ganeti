@@ -537,6 +537,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     constants.IDISK_METAVG,
     constants.IDISK_PROVIDER,
     constants.IDISK_NAME,
+    constants.IDISK_SNAPSHOT_NAME,
     ]))
 
   def _RunAllocator(self):
@@ -1169,7 +1170,7 @@ def _SafeShutdownInstanceDisks(lu, instance, disks=None):
 
 
 def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
-                           ignore_size=False):
+                          ignore_size=False, check=True):
   """Prepare the block devices for an instance.
 
   This sets up the block devices on all nodes.
@@ -1195,7 +1196,8 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   device_info = []
   disks_ok = True
   iname = instance.name
-  disks = ExpandCheckDisks(instance, disks)
+  if check:
+    disks = ExpandCheckDisks(instance, disks)
 
   # With the two passes mechanism we try to reduce the window of
   # opportunity for the race condition of switching DRBD to primary
@@ -1251,7 +1253,7 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
                       inst_disk.iv_name, node, msg)
         disks_ok = False
       else:
-        dev_path = result.payload
+        dev_path, _ = result.payload
 
     device_info.append((instance.primary_node, inst_disk.iv_name, dev_path))
 
@@ -2111,8 +2113,14 @@ class TLReplaceDisks(Tasklet):
         if msg or not result.payload:
           if not msg:
             msg = "disk not found"
-          raise errors.OpExecError("Can't find disk/%d on node %s: %s" %
-                                   (idx, node, msg))
+          if not self._CheckDisksActivated(self.instance):
+            extra_hint = ("\nDisks seem to be not properly activated. Try"
+                          " running activate-disks on the instance before"
+                          " using replace-disks.")
+          else:
+            extra_hint = ""
+          raise errors.OpExecError("Can't find disk/%d on node %s: %s%s" %
+                                   (idx, node, msg, extra_hint))
 
   def _CheckDisksConsistency(self, node_name, on_primary, ldisk):
     for idx, dev in enumerate(self.instance.disks):

@@ -95,6 +95,8 @@ __all__ = [
   "GLOBAL_FILEDIR_OPT",
   "HID_OS_OPT",
   "GLOBAL_SHARED_FILEDIR_OPT",
+  "HOTPLUG_OPT",
+  "KEEPDISKS_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -1637,6 +1639,14 @@ NOCONFLICTSCHECK_OPT = cli_option("--no-conflicts-check",
 INCLUDEDEFAULTS_OPT = cli_option("--include-defaults", dest="include_defaults",
                                  default=False, action="store_true",
                                  help="Include default values")
+
+HOTPLUG_OPT = cli_option("--hotplug", dest="hotplug",
+                         action="store_true", default=False,
+                         help="Try to hotplug device")
+
+KEEPDISKS_OPT = cli_option("--keep-disks", dest="keep_disks",
+                           action="store_true", default=False,
+                           help="Do not remove disks")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT, REASON_OPT]

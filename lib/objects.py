@@ -489,7 +489,8 @@ class ConfigData(ConfigObject):
 
 class NIC(ConfigObject):
   """Config object representing a network card."""
-  __slots__ = ["name", "mac", "ip", "network", "nicparams", "netinfo"] + _UUID
+  __slots__ = ["name", "mac", "ip", "network",
+               "nicparams", "netinfo", "pci"] + _UUID
 
   @classmethod
   def CheckParameterSyntax(cls, nicparams):
@@ -513,7 +514,7 @@ class NIC(ConfigObject):
 class Disk(ConfigObject):
   """Config object representing a block device."""
   __slots__ = ["name", "dev_type", "logical_id", "physical_id",
-               "children", "iv_name", "size", "mode", "params"] + _UUID
+               "children", "iv_name", "size", "mode", "params", "pci"] + _UUID
 
   def CreateOnSecondary(self):
     """Test if this device needs to be created on a secondary node."""
@@ -1301,6 +1302,7 @@ class ExtStorage(ConfigObject):
     "detach_script",
     "setinfo_script",
     "verify_script",
+    "snapshot_script",
     "supported_parameters",
     ]
 

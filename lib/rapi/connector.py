@@ -197,6 +197,8 @@ def GetHandlers(node_name_pattern, instance_name_pattern,
       rlib2.R_2_instances_name_reboot,
     translate_fn("/2/instances/", instance_name, "/reinstall"):
       rlib2.R_2_instances_name_reinstall,
+    translate_fn("/2/instances/", instance_name, "/snapshot"):
+      rlib2.R_2_instances_name_snapshot,
     translate_fn("/2/instances/", instance_name, "/replace-disks"):
       rlib2.R_2_instances_name_replace_disks,
     translate_fn("/2/instances/", instance_name, "/shutdown"):

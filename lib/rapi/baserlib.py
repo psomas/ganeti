@@ -528,8 +528,18 @@ class OpcodeResource(ResourceBase):
       }
     return common_static
 
+  def _GetDepends(self):
+    ret = {}
+    if isinstance(self.request_body, dict):
+      depends = self.getBodyParameter("depends", None)
+      if depends:
+        ret.update({"depends": depends})
+    return ret
+
   def _GenericHandler(self, opcode, rename, fn):
     (body, specific_static) = fn()
+    if isinstance(body, dict):
+      body.update(self._GetDepends())
     static = self._GetCommonStatic()
     if specific_static:
       static.update(specific_static)

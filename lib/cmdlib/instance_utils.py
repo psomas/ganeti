@@ -269,6 +269,8 @@ def RemoveDisks(lu, instance, target_node=None, ignore_failures=False):
     else:
       edata = device.ComputeNodeTree(instance.primary_node)
     for node, disk in edata:
+      if lu.op.keep_disks and disk.dev_type in constants.DT_EXT:
+        continue
       lu.cfg.SetDiskID(disk, node)
       result = lu.rpc.call_blockdev_remove(node, disk)
       if result.fail_msg:

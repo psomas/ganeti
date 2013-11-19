@@ -538,3 +538,49 @@ class BaseHypervisor(object):
       return "; ".join(msgs)
     else:
       return None
+
+  def HotAddDevice(self, instance, dev_type, device, extra, seq):
+    """Hot-add a device.
+
+    """
+    pass
+
+  def HotDelDevice(self, instance, dev_type, device, extra, seq):
+    """Hot-del a device.
+
+    """
+    pass
+
+  def HotModDevice(self, instance, dev_type, device, extra, seq):
+    """Hot-mod a device.
+
+    """
+    pass
+
+  # pylint: disable=R0201,W0613
+  def VerifyHotplugSupport(self, instance, action, dev_type):
+    """Whether hotplug is supported.
+
+    Given the target device and hotplug action checks if hotplug is
+    actually supported.
+
+    @type instance: L{objects.Instance}
+    @param instance: the instance object
+    @type action: string
+    @param action: one of the supported hotplug commands
+    @type dev_type: string
+    @param dev_type: one of the supported device types to hotplug
+    @raise errors.HotplugError: if hotplugging is not supported
+
+    Depends on instance's hvparam, the action. and the dev_type
+    """
+    raise errors.HotplugError("Hotplug is not supported.")
+
+  # pylint: disable=R0201,W0613
+  def HotplugSupported(self, instance):
+    """Checks if hotplug is supported.
+
+    By default is not. Currently only KVM hypervisor supports it.
+
+    """
+    raise errors.HotplugError("Hotplug is not supported by this hypervisor")

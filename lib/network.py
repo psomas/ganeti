@@ -26,6 +26,8 @@
 import ipaddr
 
 from bitarray import bitarray
+from base64 import b64encode
+from base64 import b64decode
 
 from ganeti import errors
 
@@ -92,14 +94,18 @@ class AddressPool(object):
       self.gateway6 = ipaddr.IPv6Address(self.net.gateway6)
 
     if self.net.reservations:
-      self.reservations = bitarray(self.net.reservations)
+      self.reservations = bitarray()
+      # pylint: disable=E1103
+      self.reservations.frombytes(b64decode(self.net.reservations))
     else:
       self.reservations = bitarray(self.network.numhosts)
       # pylint: disable=E1103
       self.reservations.setall(False)
 
     if self.net.ext_reservations:
-      self.ext_reservations = bitarray(self.net.ext_reservations)
+      self.ext_reservations = bitarray()
+      # pylint: disable=E1103
+      self.ext_reservations.frombytes(b64decode(self.net.ext_reservations))
     else:
       self.ext_reservations = bitarray(self.network.numhosts)
       # pylint: disable=E1103
@@ -129,8 +135,8 @@ class AddressPool(object):
 
     """
     # pylint: disable=E1103
-    self.net.ext_reservations = self.ext_reservations.to01()
-    self.net.reservations = self.reservations.to01()
+    self.net.ext_reservations = b64encode(self.ext_reservations.tobytes())
+    self.net.reservations = b64encode(self.reservations.tobytes())
 
   def _Mark(self, address, value=True, external=False):
     idx = self._GetAddrIndex(address)
@@ -153,8 +159,6 @@ class AddressPool(object):
   def Validate(self):
     assert len(self.reservations) == self._GetSize()
     assert len(self.ext_reservations) == self._GetSize()
-    all_res = self.reservations & self.ext_reservations
-    assert not all_res.any()
 
     if self.gateway is not None:
       assert self.gateway in self.network
@@ -188,25 +192,40 @@ class AddressPool(object):
     """
     return self.all_reservations.to01().replace("1", "X").replace("0", ".")
 
-  def IsReserved(self, address):
+  def IsReserved(self, address, external=False):
     """Checks if the given IP is reserved.
 
     """
     idx = self._GetAddrIndex(address)
-    return self.all_reservations[idx]
+    if external:
+      return self.ext_reservations[idx]
+    else:
+      return self.reservations[idx]
 
   def Reserve(self, address, external=False):
     """Mark an address as used.
 
     """
-    if self.IsReserved(address):
-      raise errors.AddressPoolError("%s is already reserved" % address)
+    if self.IsReserved(address, external):
+      if external:
+        msg = "IP %s is already externally reserved" % address
+      else:
+        msg = "IP %s is already used by an instance" % address
+      raise errors.AddressPoolError(msg)
+
     self._Mark(address, external=external)
 
   def Release(self, address, external=False):
     """Release a given address reservation.
 
     """
+    if not self.IsReserved(address, external):
+      if external:
+        msg = "IP %s is not externally reserved" % address
+      else:
+        msg = "IP %s is not used by an instance" % address
+      raise errors.AddressPoolError(msg)
+
     self._Mark(address, value=False, external=external)
 
   def GetFreeAddress(self):

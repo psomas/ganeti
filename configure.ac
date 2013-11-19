@@ -1,7 +1,7 @@
 # Configure script for Ganeti
 m4_define([gnt_version_major], [2])
 m4_define([gnt_version_minor], [8])
-m4_define([gnt_version_revision], [0])
+m4_define([gnt_version_revision], [2])
 m4_define([gnt_version_suffix], [])
 m4_define([gnt_version_full],
           m4_format([%d.%d.%d%s],
@@ -623,6 +623,11 @@ AC_GHC_PKG_CHECK([temporary], [], [HS_NODEV=1])
 #        of the checks.
 AC_GHC_PKG_CHECK([attoparsec], [], [HS_NODEV=1])
 AC_GHC_PKG_CHECK([vector], [], [HS_NODEV=1])
+AC_GHC_PKG_CHECK([snap-server], [], [HS_NODEV=1])
+AC_GHC_PKG_CHECK([regex-pcre], [], [HS_NODEV=1])
+AC_GHC_PKG_CHECK([Crypto], [], [HS_NODEV=1])
+AC_GHC_PKG_CHECK([text], [], [HS_NODEV=1])
+AC_GHC_PKG_CHECK([hinotify], [], [HS_NODEV=1])
 if test -n "$HS_NODEV"; then
    AC_MSG_WARN(m4_normalize([Required development modules were not found,
                              you won't be able to run Haskell unittests]))

@@ -1626,6 +1626,54 @@ def GetMigrationStatus(instance):
     _Fail("Failed to get migration status: %s", err, exc=True)
 
 
+def HotplugDevice(instance, action, dev_type, device, extra, seq):
+  """Hotplug a device
+
+  Hotplug is currently supported only for KVM Hypervisor.
+  @type instance: L{objects.Instance}
+  @param instance: the instance to which we hotplug a device
+  @type action: string
+  @param action: the hotplug action to perform
+  @type dev_type: string
+  @param dev_type: the device type to hotplug
+  @type device: either L{objects.NIC} or L{objects.Disk}
+  @param device: the device object to hotplug
+  @type extra: string
+  @param extra: extra info used by hotplug code (e.g. disk link)
+  @type seq: int
+  @param seq: the index of the device from master perspective
+  @raise RPCFail: in case instance does not have KVM hypervisor
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  try:
+    hyper.VerifyHotplugSupport(instance, action, dev_type)
+  except errors.HotplugError, err:
+    _Fail("Hotplug is not supported: %s", err)
+
+  if action == constants.HOTPLUG_ACTION_ADD:
+    fn = hyper.HotAddDevice
+  elif action == constants.HOTPLUG_ACTION_REMOVE:
+    fn = hyper.HotDelDevice
+  elif action == constants.HOTPLUG_ACTION_MODIFY:
+    fn = hyper.HotModDevice
+  else:
+    assert action in constants.HOTPLUG_ALL_ACTIONS
+  # This will raise an exception if hotplug is no supported for this case
+  return fn(instance, dev_type, device, extra, seq)
+
+
+def HotplugSupported(instance):
+  """Checks if hotplug is generally supported.
+
+  """
+  hyper = hypervisor.GetHypervisor(instance.hypervisor)
+  try:
+    hyper.HotplugSupported(instance)
+  except errors.HotplugError, err:
+    _Fail("Hotplug is not supported: %s", err)
+
+
 def BlockdevCreate(disk, size, owner, on_primary, info, excl_stor):
   """Creates a block device for an instance.
 
@@ -1801,10 +1849,16 @@ def BlockdevRemove(disk):
     rdev = None
   if rdev is not None:
     r_path = rdev.dev_path
-    try:
-      rdev.Remove()
-    except errors.BlockDeviceError, err:
-      msgs.append(str(err))
+    def _TryRemove():
+      try:
+        rdev.Remove()
+        return []
+      except errors.BlockDeviceError, err:
+        return [str(err)]
+
+    msgs.extend(utils.SimpleRetry([], _TryRemove,
+                                  constants.DISK_REMOVE_RETRY_INTERVAL,
+                                  constants.DISK_REMOVE_RETRY_TIMEOUT))
     if not msgs:
       DevCacheManager.RemoveCache(r_path)
 
@@ -1883,18 +1937,18 @@ def BlockdevAssemble(disk, owner, as_primary, idx):
 
   """
   try:
-    result = _RecursiveAssembleBD(disk, owner, as_primary)
-    if isinstance(result, bdev.BlockDev):
-      # pylint: disable=E1103
-      result = result.dev_path
+    device = _RecursiveAssembleBD(disk, owner, as_primary)
+    if isinstance(device, bdev.BlockDev):
+      dev_path = device.dev_path
+      link_name = None
       if as_primary:
-        _SymlinkBlockDev(owner, result, idx)
+        link_name = _SymlinkBlockDev(owner, dev_path, idx)
   except errors.BlockDeviceError, err:
     _Fail("Error while assembling disk: %s", err, exc=True)
   except OSError, err:
     _Fail("Error while symlinking disk: %s", err, exc=True)
 
-  return result
+  return dev_path, link_name
 
 
 def BlockdevShutdown(disk):
@@ -2639,7 +2693,7 @@ def BlockdevGrow(disk, amount, dryrun, backingstore):
     _Fail("Failed to grow block device: %s", err, exc=True)
 
 
-def BlockdevSnapshot(disk):
+def BlockdevSnapshot(disk, snapshot_name=None):
   """Create a snapshot copy of a block device.
 
   This function is called recursively, and the snapshot is actually created
@@ -2656,12 +2710,18 @@ def BlockdevSnapshot(disk):
       _Fail("DRBD device '%s' without backing storage cannot be snapshotted",
             disk.unique_id)
     return BlockdevSnapshot(disk.children[0])
-  elif disk.dev_type == constants.LD_LV:
+  elif disk.dev_type == constants.LD_LV and not snapshot_name:
     r_dev = _RecursiveFindBD(disk)
     if r_dev is not None:
       # FIXME: choose a saner value for the snapshot size
       # let's stay on the safe side and ask for the full size, for now
       return r_dev.Snapshot(disk.size)
+    else:
+      _Fail("Cannot find block device %s", disk)
+  elif disk.dev_type == constants.DT_EXT:
+    r_dev = _RecursiveFindBD(disk)
+    if r_dev is not None:
+      r_dev.Snapshot(snapshot_name)
     else:
       _Fail("Cannot find block device %s", disk)
   else:
@@ -3622,8 +3682,20 @@ def DrbdAttachNet(nodes_ip, disks, instance_name, multimaster):
     for rd in bdevs:
       stats = rd.GetProcStatus()
 
-      all_connected = (all_connected and
-                       (stats.is_connected or stats.is_in_resync))
+      if multimaster:
+        # In the multimaster case we have to wait explicitly until
+        # the resource is Connected and UpToDate/UpToDate, because
+        # we promote *both nodes* to primary directly afterwards.
+        # Being in resync is not enough, since there is a race during which we
+        # may promote a node with an Outdated disk to primary, effectively
+        # tearing down the connection.
+        all_connected = (all_connected and
+                         stats.is_connected and
+                         stats.is_disk_uptodate and
+                         stats.peer_disk_uptodate)
+      else:
+        all_connected = (all_connected and
+                         (stats.is_connected or stats.is_in_resync))
 
       if stats.is_standalone:
         # peer had different config info and this node became

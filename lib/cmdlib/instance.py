@@ -2668,7 +2668,11 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.hotplug:
       result = self.rpc.call_hotplug_supported(self.instance.primary_node,
                                                self.instance)
-      result.Raise("Hotplug is not supported.")
+      # result.Raise("Hotplug is not supported.")
+      if result.fail_msg:
+        self.LogWarning(result.fail_msg)
+        self.op.hotplug = False
+        self.LogInfo("Continuing execution..")
 
     # Check disk modifications. This is done here and not in CheckArguments
     # (as with NICs), because we need to know the instance's disk template

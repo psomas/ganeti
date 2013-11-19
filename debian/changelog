@@ -1,3 +1,12 @@
+ganeti (2.8.2+snapshot1+b64v1+hotplug+ippoolfix+rapifix-1~wheezy) wheezy; urgency=low
+
+  * Official ganeti with GRNET's custom patches
+  * Snapshot support for EXT instances
+  * base64 encoding for networks' reservations
+  * hotplug, ippoolfix, rapifix ported from stable-2.10
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Tue, 19 Nov 2013 16:37:05 +0200
+
 ganeti (2.8.0-1) unstable; urgency=low
 
   [ Iustin Pop ]

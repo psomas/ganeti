@@ -2691,6 +2691,8 @@ class LUInstanceSetParams(LogicalUnit):
                                            self.op.disk_template))
         raise errors.OpPrereqError(errmsg, errors.ECODE_STATE)
 
+  # too many local variables
+  # pylint: disable=R0914
   def CheckPrereq(self):
     """Check prerequisites.
 
@@ -2772,10 +2774,19 @@ class LUInstanceSetParams(LogicalUnit):
                                       constants.DT_EXT),
                                      errors.ECODE_INVAL)
 
-    if self.op.hotplug:
+    if self.op.hotplug or self.op.hotplug_if_possible:
       result = self.rpc.call_hotplug_supported(self.instance.primary_node,
                                                self.instance)
-      result.Raise("Hotplug is not supported.")
+      if result.fail_msg:
+        if self.op.hotplug:
+          result.Raise("Hotplug is not possible: %s" % result.fail_msg,
+                       prereq=True)
+        else:
+          self.LogWarning(result.fail_msg)
+          self.op.hotplug = False
+          self.LogInfo("Modification will take place without hotplugging.")
+      else:
+        self.op.hotplug = True
 
     # OS change
     if self.op.os_name and not self.op.force:

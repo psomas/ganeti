@@ -1943,6 +1943,8 @@ def BlockdevAssemble(disk, owner, as_primary, idx):
       link_name = None
       if as_primary:
         link_name = _SymlinkBlockDev(owner, dev_path, idx)
+    elif device:
+      return device, device
   except errors.BlockDeviceError, err:
     _Fail("Error while assembling disk: %s", err, exc=True)
   except OSError, err:

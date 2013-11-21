@@ -403,6 +403,7 @@ $(genOpCode "OpCode"
      , pOffline
      , pIpConflictsCheck
      , pHotplug
+     , pHotplugIfPossible
      , pKeepDisks
      ])
   , ("OpInstanceGrowDisk",

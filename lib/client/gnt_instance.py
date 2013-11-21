@@ -1372,6 +1372,7 @@ def SetInstanceParams(opts, args):
                                    nics=nics,
                                    disks=disks,
                                    hotplug=opts.hotplug,
+                                   hotplug_if_possible=opts.hotplug_if_possible,
                                    keep_disks=opts.keep_disks,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
@@ -1581,7 +1582,8 @@ commands = {
      DISK_TEMPLATE_OPT, SINGLE_NODE_OPT, OS_OPT, FORCE_VARIANT_OPT,
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
      ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
-     NOCONFLICTSCHECK_OPT, NEW_PRIMARY_OPT, HOTPLUG_OPT, KEEPDISKS_OPT],
+     NOCONFLICTSCHECK_OPT, NEW_PRIMARY_OPT, HOTPLUG_OPT, KEEPDISKS_OPT,
+     HOTPLUG_IF_POSSIBLE_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

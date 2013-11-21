@@ -1109,6 +1109,7 @@ MODIFY
 | [\--submit]
 | [\--ignore-ipolicy]
 | [\--hotplug]
+| [\--hotplug-if-possible]
 | {*instance*}
 
 Modifies the memory size, number of vcpus, ip address, MAC address
@@ -1188,6 +1189,11 @@ If ``--hotplug`` is given any disk and nic modifications will take
 effect without the need of actual reboot. Please note that this feature
 is currently supported only for KVM hypervisor and for versions greater
 than 1.0.
+
+If ``--hotplug-if-possible`` is given then ganeti won't abort in case
+hotplug is not supported. It will continue execution and modification
+will take place after reboot. This covers use cases where instances are
+not running or hypervisor is not KVM.
 
 See **ganeti**\(7) for a description of ``--submit`` and other common
 options.

@@ -97,6 +97,7 @@ module Ganeti.OpParams
   , pDiskState
   , pIgnoreIpolicy
   , pHotplug
+  , pHotplugIfPossible
   , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
@@ -732,6 +733,9 @@ pDiskParams = optionalField $
 -- | Whether to hotplug device.
 pHotplug :: Field
 pHotplug = defaultFalse "hotplug"
+
+pHotplugIfPossible :: Field
+pHotplugIfPossible = defaultFalse "hotplug_if_possible"
 
 -- | Whether to remove disks.
 pKeepDisks :: Field

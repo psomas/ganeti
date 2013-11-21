@@ -398,6 +398,7 @@ $(genOpCode "OpCode"
      , pOffline
      , pIpConflictsCheck
      , pHotplug
+     , pHotplugIfPossible
      ])
   , ("OpInstanceGrowDisk",
      [ pInstanceName

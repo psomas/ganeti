@@ -95,6 +95,7 @@ module Ganeti.OpParams
   , pDiskState
   , pIgnoreIpolicy
   , pHotplug
+  , pHotplugIfPossible
   , pAllowRuntimeChgs
   , pInstDisks
   , pDiskTemplate
@@ -706,6 +707,9 @@ pDiskParams = optionalField $
 -- | Whether to hotplug device.
 pHotplug :: Field
 pHotplug = defaultFalse "hotplug"
+
+pHotplugIfPossible :: Field
+pHotplugIfPossible = defaultFalse "hotplug_if_possible"
 
 -- * Parameters for node resource model
 

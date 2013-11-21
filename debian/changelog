@@ -1,3 +1,9 @@
+ganeti (2.8.2+snapshot1+b64v1+hotplug2+ippoolfix+rapifix-1~wheezy) wheezy; urgency=low
+
+  * Some hotplug related fixes (ported from stable-2.10)
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Thu, 21 Nov 2013 16:37:54 +0200
+
 ganeti (2.8.2+snapshot1+b64v1+hotplug+ippoolfix+rapifix-1~wheezy) wheezy; urgency=low
 
   * Official ganeti with GRNET's custom patches

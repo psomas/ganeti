@@ -1,3 +1,11 @@
+ganeti (2.8.2+snapshot1+b64v1+hotplug3+ippoolfix+rapifix+netxen-1~wheezy) wheezy; urgency=low
+
+  * Port xen network configuration mechanism from stable-2.10
+  * Export NIC's UUID and name to network conficuration scripts
+  * Minor hotplug related fix
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Fri, 22 Nov 2013 17:04:41 +0200
+
 ganeti (2.8.2+snapshot1+b64v1+hotplug2+ippoolfix+rapifix-1~wheezy) wheezy; urgency=low
 
   * Some hotplug related fixes (ported from stable-2.10)

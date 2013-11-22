@@ -399,12 +399,15 @@ class XenHypervisor(hv_base.BaseHypervisor):
         data.write("%s=%s\n" % (k, v))
 
     data.write("MAC=%s\n" % nic.mac)
-    data.write("IP=%s\n" % nic.ip)
     data.write("INTERFACE_INDEX=%s\n" % str(idx))
-    data.write("INTERFACE_NAME=%s\n" % nic.name)
     data.write("INTERFACE_UUID=%s\n" % nic.uuid)
     data.write("MODE=%s\n" % nic.nicparams[constants.NIC_MODE])
     data.write("LINK=%s\n" % nic.nicparams[constants.NIC_LINK])
+
+    if nic.ip:
+      data.write("IP=%s\n" % nic.ip)
+    if nic.name:
+      data.write("INTERFACE_NAME=%s\n" % nic.name)
 
     try:
       utils.WriteFile(cfg_file, data=data.getvalue())

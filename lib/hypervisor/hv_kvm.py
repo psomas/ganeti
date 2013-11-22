@@ -979,6 +979,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       "MODE": nic.nicparams[constants.NIC_MODE],
       "INTERFACE": tap,
       "INTERFACE_INDEX": str(seq),
+      "INTERFACE_NAME": nic.name,
+      "INTERFACE_UUID": nic.uuid,
       "TAGS": tags,
     }
 

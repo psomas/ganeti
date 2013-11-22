@@ -396,12 +396,13 @@ class XenHypervisor(hv_base.BaseHypervisor):
     return utils.PathJoin(self._cfgdir, instance_name)
 
   @classmethod
-  def _WriteNICInfoFile(cls, instance_name, idx, nic):
+  def _WriteNICInfoFile(cls, instance, idx, nic):
     """Write the Xen config file for the instance.
 
     This version of the function just writes the config file from static data.
 
     """
+    instance_name = instance.name
     dirs = [(dname, constants.RUN_DIRS_MODE)
             for dname in cls._DIRS + [cls._InstanceNICDir(instance_name)]]
     utils.EnsureDirs(dirs)
@@ -409,6 +410,7 @@ class XenHypervisor(hv_base.BaseHypervisor):
     cfg_file = cls._InstanceNICFile(instance_name, idx)
     data = StringIO()
 
+    data.write("TAGS=%s\n" % "\ ".join(instance.GetTags()))
     if nic.netinfo:
       netinfo = objects.Network.FromDict(nic.netinfo)
       data.write("NETWORK_NAME=%s\n" % netinfo.name)
@@ -1002,7 +1004,7 @@ class XenPvmHypervisor(XenHypervisor):
       if hvp[constants.HV_VIF_SCRIPT]:
         nic_str += ", script=%s" % hvp[constants.HV_VIF_SCRIPT]
       vif_data.append("'%s'" % nic_str)
-      self._WriteNICInfoFile(instance.name, idx, nic)
+      self._WriteNICInfoFile(instance, idx, nic)
 
     disk_data = \
       _GetConfigFileDiskData(block_devices, hvp[constants.HV_BLOCKDEV_PREFIX])
@@ -1171,7 +1173,7 @@ class XenHvmHypervisor(XenHypervisor):
       if hvp[constants.HV_VIF_SCRIPT]:
         nic_str += ", script=%s" % hvp[constants.HV_VIF_SCRIPT]
       vif_data.append("'%s'" % nic_str)
-      self._WriteNICInfoFile(instance.name, idx, nic)
+      self._WriteNICInfoFile(instance, idx, nic)
 
     config.write("vif = [%s]\n" % ",".join(vif_data))
 

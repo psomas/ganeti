@@ -1,3 +1,9 @@
+ganeti (2.8.2+snapshot1+b64v1+hotplug3+ippoolfix+rapifix+netxen+lockfix2-1~wheezy) wheezy; urgency=low
+
+  * Fix locking issues
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Mon, 25 Nov 2013 19:39:25 +0200
+
 ganeti (2.8.2+snapshot1+b64v1+hotplug3+ippoolfix+rapifix+netxen-1~wheezy) wheezy; urgency=low
 
   * Port xen network configuration mechanism from stable-2.10

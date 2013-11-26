@@ -3200,14 +3200,10 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     changes = []
-    mode = params.get(constants.IDISK_MODE, None)
-    if mode:
-      disk.mode = mode
-      changes.append(("disk.mode/%d" % idx, disk.mode))
-
-    name = params.get(constants.IDISK_NAME, None)
-    disk.name = name
-    changes.append(("disk.name/%d" % idx, disk.name))
+    for key in [constants.IDISK_MODE, constants.IDISK_NAME]:
+      if key in params:
+        setattr(disk, key, params[key])
+        changes.append(("disk.%s/%d" % (key, idx), params[key]))
 
     return changes
 

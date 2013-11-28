@@ -1656,6 +1656,18 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     block_devices = [(objects.Disk.FromDict(sdisk), link)
                      for sdisk, link in serialized_blockdevs]
 
+    # Upgrade kvm_nics and block_devices with missing uuid slot
+    # This adds a dummy uuid that will be overriden after reboot
+    # These uuids will be writen to runtime files only if
+    # a hotplug action takes place.
+    for n in kvm_nics:
+      if not n.uuid:
+        n.uuid = utils.NewUUID()
+
+    for d, p in block_devices:
+      if not d.uuid:
+        d.uuid = utils.NewUUID()
+
     return (kvm_cmd, kvm_nics, hvparams, block_devices)
 
   def _RunKVMCmd(self, name, kvm_cmd, tap_fds=None):

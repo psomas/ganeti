@@ -980,9 +980,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       "MODE": nic.nicparams[constants.NIC_MODE],
       "INTERFACE": tap,
       "INTERFACE_INDEX": str(seq),
-      "INTERFACE_UUID": nic.uuid,
       "TAGS": " ".join(instance.GetTags()),
     }
+    if nic.uuid:
+      env["INTERFACE_UUID"] = nic.uuid
 
     if nic.ip:
       env["IP"] = nic.ip

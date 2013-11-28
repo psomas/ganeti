@@ -510,6 +510,19 @@ class NIC(ConfigObject):
         not nicparams[constants.NIC_LINK]):
       raise errors.ConfigurationError("Missing bridged NIC link")
 
+  @classmethod
+  def FromDict(cls, val):
+    """Custom function for NICs.
+
+    Remove deprecated idx. Add dummy UUID if not found.
+    Needed for old runtime files.
+
+    """
+    if "idx" in val:
+      del val["idx"]
+    obj = super(NIC, cls).FromDict(val)
+    return obj
+
 
 class Disk(ConfigObject):
   """Config object representing a block device."""
@@ -763,6 +776,8 @@ class Disk(ConfigObject):
     """Custom function for Disks
 
     """
+    if "idx" in val:
+      del val["idx"]
     obj = super(Disk, cls).FromDict(val)
     if obj.children:
       obj.children = outils.ContainerFromDicts(obj.children, list, Disk)

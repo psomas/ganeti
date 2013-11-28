@@ -1,3 +1,9 @@
+ganeti (2.8.2+snapshot1+b64v1+hotplug5+ippoolfix+rapifix+netxen+lockfix2-1~wheezy) wheezy; urgency=low
+
+  * Fix migration issues of instances with old runtime files
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Thu, 28 Nov 2013 12:59:02 +0200
+
 ganeti (2.8.2+snapshot1+b64v1+hotplug3+ippoolfix+rapifix+netxen+lockfix2-1~wheezy) wheezy; urgency=low
 
   * Fix locking issues

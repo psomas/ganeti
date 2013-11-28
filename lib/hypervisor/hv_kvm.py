@@ -1850,6 +1850,14 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     tapfds = []
     taps = []
     devlist = self._GetKVMOutput(kvm_path, self._KVMOPT_DEVICELIST)
+
+    bdev_opts = self._GenerateKVMBlockDevicesOptions(instance,
+                                                     up_hvp,
+                                                     kvm_disks,
+                                                     kvmhelp,
+                                                     devlist)
+    kvm_cmd.extend(bdev_opts)
+
     if not kvm_nics:
       kvm_cmd.extend(["-net", "none"])
     else:
@@ -1937,12 +1945,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         continue
       self._ConfigureNIC(instance, nic_seq, nic, taps[nic_seq])
 
-    bdev_opts = self._GenerateKVMBlockDevicesOptions(instance,
-                                                     up_hvp,
-                                                     kvm_disks,
-                                                     kvmhelp,
-                                                     devlist)
-    kvm_cmd.extend(bdev_opts)
     # CPU affinity requires kvm to start paused, so we set this flag if the
     # instance is not already paused and if we are not going to accept a
     # migrating instance. In the latter case, pausing is not needed.

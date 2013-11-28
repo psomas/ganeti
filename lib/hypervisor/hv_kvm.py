@@ -114,7 +114,7 @@ _RUNTIME_ENTRY = {
   }
 
 
-def _GenerateDeviceKVMId(dev_type, dev):
+def _GenerateDeviceKVMId(dev_type, dev, idx=None):
   """Helper function to generate a unique device name used by KVM
 
   QEMU monitor commands use names to identify devices. Here we use their pci
@@ -129,11 +129,17 @@ def _GenerateDeviceKVMId(dev_type, dev):
 
   """
 
-  if not dev.pci:
-    raise errors.HotplugError("Hotplug is not supported for %s with UUID %s" %
-                              (dev_type, dev.uuid))
+  # proper device id - available in latest Ganeti versions
+  if dev.pci and dev.uuid:
+    return "%s-%s-pci-%d" % (dev_type.lower(), dev.uuid.split("-")[0], dev.pci)
 
-  return "%s-%s-pci-%d" % (dev_type.lower(), dev.uuid.split("-")[0], dev.pci)
+  # dummy device id - returned only to _GenerateKVMBlockDevicesOptions
+  # This enables -device option for paravirtual disk_type
+  if idx is not None:
+    return "%s-%d" % (dev_type.lower(), idx)
+
+  raise errors.HotplugError("Hotplug is not supported for devices"
+                            " without UUID or PCI info")
 
 
 def _UpdatePCISlots(dev, pci_reservations):
@@ -1214,7 +1220,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       cache_val = ",cache=%s" % disk_cache
     else:
       cache_val = ""
-    for cfdev, dev_path in block_devices:
+    for idx, (cfdev, dev_path) in enumerate(block_devices):
       if cfdev.mode != constants.DISK_RDWR:
         raise errors.HypervisorError("Instance has read-only disks which"
                                      " are not supported by KVM")
@@ -1232,12 +1238,15 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         # block_devices are the 4th entry of runtime file that did not exist in
         # the past. That means that cfdev should always have pci slot and
         # _GenerateDeviceKVMId() will not raise a exception.
-        kvm_devid = _GenerateDeviceKVMId(constants.HOTPLUG_TARGET_DISK, cfdev)
+        kvm_devid = _GenerateDeviceKVMId(constants.HOTPLUG_TARGET_DISK,
+                                         cfdev, idx)
         drive_val += (",id=%s" % kvm_devid)
-        drive_val += (",bus=0,unit=%d" % cfdev.pci)
+        if cfdev.pci:
+          drive_val += (",bus=0,unit=%d" % cfdev.pci)
         dev_val = ("%s,drive=%s,id=%s" %
                    (device_driver, kvm_devid, kvm_devid))
-        dev_val += ",bus=pci.0,addr=%s" % hex(cfdev.pci)
+        if cfdev.pci:
+          dev_val += ",bus=pci.0,addr=%s" % hex(cfdev.pci)
         dev_opts.extend(["-device", dev_val])
 
       dev_opts.extend(["-drive", drive_val])

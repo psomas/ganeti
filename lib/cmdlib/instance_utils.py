@@ -570,34 +570,34 @@ def BuildDiskLogicalIDEnv(template_name, idx, disk):
       vg, name = disk.logical_id
       ret = {
         "INSTANCE_DISK%d_VG" % idx : vg,
-        "INSTANCE_DISK%d_NAME" % idx : name
+        "INSTANCE_DISK%d_ID" % idx : name
         }
     elif template_name in (constants.DT_FILE, constants.DT_SHARED_FILE):
       file_driver, name = disk.logical_id
       ret = {
         "INSTANCE_DISK%d_DRIVER" % idx : file_driver,
-        "INSTANCE_DISK%d_NAME" % idx : name
+        "INSTANCE_DISK%d_ID" % idx : name
         }
 
     elif template_name == constants.DT_BLOCK:
       block_driver, adopt = disk.logical_id
       ret = {
         "INSTANCE_DISK%d_DRIVER" % idx : block_driver,
-        "INSTANCE_DISK%d_NAME" % idx : name
+        "INSTANCE_DISK%d_ID" % idx : name
         }
 
     elif template_name == constants.DT_RBD:
       rbd, name = disk.logical_id
       ret = {
         "INSTANCE_DISK%d_DRIVER" % idx : rbd,
-        "INSTANCE_DISK%d_NAME" % idx : name
+        "INSTANCE_DISK%d_ID" % idx : name
         }
 
     elif template_name == constants.DT_EXT:
       provider, name = disk.logical_id
       ret = {
         "INSTANCE_DISK%d_PROVIDER" % idx : provider,
-        "INSTANCE_DISK%d_NAME" % idx : name
+        "INSTANCE_DISK%d_ID" % idx : name
         }
 
     elif template_name == constants.DT_DRBD8:
@@ -612,9 +612,9 @@ def BuildDiskLogicalIDEnv(template_name, idx, disk):
         "INSTANCE_DISK%d_PMINOR" % idx : pmin,
         "INSTANCE_DISK%d_SMINOR" % idx : smin,
         "INSTANCE_DISK%d_DATA_VG" % idx : data_vg,
-        "INSTANCE_DISK%d_DATA_NAME" % idx : data_name,
+        "INSTANCE_DISK%d_DATA_ID" % idx : data_name,
         "INSTANCE_DISK%d_META_VG" % idx : meta_vg,
-        "INSTANCE_DISK%d_META_NAME" % idx : meta_name,
+        "INSTANCE_DISK%d_META_ID" % idx : meta_name,
         }
 
     elif template_name == constants.DT_DISKLESS:

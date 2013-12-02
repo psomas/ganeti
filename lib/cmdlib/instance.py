@@ -2275,10 +2275,6 @@ class LUInstanceSetParams(LogicalUnit):
       if constants.IDISK_SIZE in params:
         raise errors.OpPrereqError("Disk size change not possible, use"
                                    " grow-disk", errors.ECODE_INVAL)
-      if len(params) > 2:
-        raise errors.OpPrereqError("Disk modification doesn't support"
-                                   " additional arbitrary parameters",
-                                   errors.ECODE_INVAL)
       name = params.get(constants.IDISK_NAME, None)
       if name is not None and name.lower() == constants.VALUE_NONE:
         params[constants.IDISK_NAME] = None
@@ -3194,16 +3190,18 @@ class LUInstanceSetParams(LogicalUnit):
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
 
-  @staticmethod
-  def _ModifyDisk(idx, disk, params, _):
+  def _ModifyDisk(self, idx, disk, params, _):
     """Modifies a disk.
 
     """
     changes = []
-    for key in [constants.IDISK_MODE, constants.IDISK_NAME]:
-      if key in params:
-        setattr(disk, key, params[key])
-        changes.append(("disk.%s/%d" % (key, idx), params[key]))
+    for key, value in params.iteritems():
+      if key in [constants.IDISK_MODE, constants.IDISK_NAME]:
+        setattr(disk, key, value)
+        changes.append(("disk.%s/%d" % (key, idx), value))
+      elif self.instance.disk_template == constants.DT_EXT:
+        disk.params[key] = value
+        changes.append(("disk.params:%s/%d" % (key, idx), value))
 
     return changes
 

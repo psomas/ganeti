@@ -3234,7 +3234,14 @@ class LUInstanceSetParams(LogicalUnit):
         setattr(disk, key, value)
         changes.append(("disk.%s/%d" % (key, idx), value))
       elif self.instance.disk_template == constants.DT_EXT:
-        disk.params[key] = value
+        # stolen from GetUpdatedParams: default means reset/delete
+        if value.lower() == constants.VALUE_DEFAULT:
+          try:
+            del disk.params[key]
+          except KeyError:
+            pass
+        else:
+          disk.params[key] = value
         changes.append(("disk.params:%s/%d" % (key, idx), value))
 
     return changes

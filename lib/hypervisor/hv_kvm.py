@@ -114,6 +114,8 @@ _RUNTIME_ENTRY = {
   constants.HOTPLUG_TARGET_DISK: lambda d, e: (d, e)
   }
 
+_MIGRATION_CAPS_DELIM = ":"
+
 
 def _GenerateDeviceKVMId(dev_type, dev, idx=None):
   """Helper function to generate a unique device name used by KVM
@@ -702,6 +704,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     constants.HV_MIGRATION_BANDWIDTH: hv_base.REQ_NONNEGATIVE_INT_CHECK,
     constants.HV_MIGRATION_DOWNTIME: hv_base.REQ_NONNEGATIVE_INT_CHECK,
     constants.HV_MIGRATION_MODE: hv_base.MIGRATION_MODE_CHECK,
+    constants.HV_KVM_MIGRATION_CAPS: hv_base.NO_CHECK,
     constants.HV_USE_LOCALTIME: hv_base.NO_CHECK,
     constants.HV_DISK_CACHE:
       hv_base.ParamInSet(True, constants.HT_VALID_CACHE_TYPES),
@@ -2519,6 +2522,17 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     migrate_command = ("migrate_set_downtime %dms" %
                        instance.hvparams[constants.HV_MIGRATION_DOWNTIME])
     self._CallMonitorCommand(instance_name, migrate_command)
+
+    # These commands are supported in latest qemu versions.
+    # Since _CallMonitorCommand does not catch monitor errors
+    # this does not raise an exception in case command is not supported
+    # TODO: either parse output of command or see if the command supported
+    # via info help (see hotplug)
+    migration_caps = instance.hvparams[constants.HV_KVM_MIGRATION_CAPS]
+    if migration_caps:
+      for c in migration_caps.split(_MIGRATION_CAPS_DELIM):
+        migrate_command = ("migrate_set_capability %s on" % c)
+        self._CallMonitorCommand(instance_name, migrate_command)
 
     migrate_command = "migrate -d tcp:%s:%s" % (target, port)
     self._CallMonitorCommand(instance_name, migrate_command)

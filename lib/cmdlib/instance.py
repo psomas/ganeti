@@ -559,6 +559,22 @@ class LUInstanceCreate(LogicalUnit):
     self.needed_locks[locking.LEVEL_NODE_RES] = \
       CopyLockList(self.needed_locks[locking.LEVEL_NODE])
 
+    # Optimistically acquire shared group locks (we're reading the
+    # configuration).  We can't just call GetInstanceNodeGroups, because the
+    # instance doesn't exist yet. Therefore we lock all node groups of all
+    # nodes we have.
+    if self.needed_locks[locking.LEVEL_NODE] == locking.ALL_SET:
+      # In the case we lock all nodes for opportunistic allocation, we have no
+      # choice than to lock all groups, because they're allocated before nodes.
+      # This is sad, but true. At least we release all those we don't need in
+      # CheckPrereq later.
+      self.needed_locks[locking.LEVEL_NODEGROUP] = locking.ALL_SET
+    else:
+      self.needed_locks[locking.LEVEL_NODEGROUP] = \
+        list(self.cfg.GetNodeGroupsFromNodes(
+          self.needed_locks[locking.LEVEL_NODE]))
+    self.share_locks[locking.LEVEL_NODEGROUP] = 1
+
   def DeclareLocks(self, level):
     if level == locking.LEVEL_NODE_RES and \
       self.opportunistic_locks[locking.LEVEL_NODE]:
@@ -634,7 +650,7 @@ class LUInstanceCreate(LogicalUnit):
       nics=NICListToTuple(self, self.nics),
       disk_template=self.op.disk_template,
       disks=[(d[constants.IDISK_NAME], d.get("uuid", ""),
-              d[constants.IDISK_SIZE], d[constants.IDISK_MODE])
+              d[constants.IDISK_SIZE], d[constants.IDISK_MODE], {})
              for d in self.disks],
       bep=self.be_full,
       hvp=self.hv_full,
@@ -846,6 +862,21 @@ class LUInstanceCreate(LogicalUnit):
     """Check prerequisites.
 
     """
+    # Check that the optimistically acquired groups are correct wrt the
+    # acquired nodes
+    owned_groups = frozenset(self.owned_locks(locking.LEVEL_NODEGROUP))
+    owned_nodes = frozenset(self.owned_locks(locking.LEVEL_NODE))
+    cur_groups = list(self.cfg.GetNodeGroupsFromNodes(owned_nodes))
+    if not owned_groups.issuperset(cur_groups):
+      raise errors.OpPrereqError("New instance %s's node groups changed since"
+                                 " locks were acquired, current groups are"
+                                 " are '%s', owning groups '%s'; retry the"
+                                 " operation" %
+                                 (self.op.instance_name,
+                                  utils.CommaJoin(cur_groups),
+                                  utils.CommaJoin(owned_groups)),
+                                 errors.ECODE_STATE)
+
     self._CalculateFileStorageDir()
 
     if self.op.mode == constants.INSTANCE_IMPORT:
@@ -957,6 +988,9 @@ class LUInstanceCreate(LogicalUnit):
     ReleaseLocks(self, locking.LEVEL_NODE, keep=keep_locks)
     ReleaseLocks(self, locking.LEVEL_NODE_RES, keep=keep_locks)
     ReleaseLocks(self, locking.LEVEL_NODE_ALLOC)
+    # Release all unneeded group locks
+    ReleaseLocks(self, locking.LEVEL_NODEGROUP,
+                 keep=self.cfg.GetNodeGroupsFromNodes(keep_locks))
 
     assert (self.owned_locks(locking.LEVEL_NODE) ==
             self.owned_locks(locking.LEVEL_NODE_RES)), \
@@ -2275,10 +2309,6 @@ class LUInstanceSetParams(LogicalUnit):
       if constants.IDISK_SIZE in params:
         raise errors.OpPrereqError("Disk size change not possible, use"
                                    " grow-disk", errors.ECODE_INVAL)
-      if len(params) > 2:
-        raise errors.OpPrereqError("Disk modification doesn't support"
-                                   " additional arbitrary parameters",
-                                   errors.ECODE_INVAL)
       name = params.get(constants.IDISK_NAME, None)
       if name is not None and name.lower() == constants.VALUE_NONE:
         params[constants.IDISK_NAME] = None
@@ -3194,16 +3224,25 @@ class LUInstanceSetParams(LogicalUnit):
       ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
       ])
 
-  @staticmethod
-  def _ModifyDisk(idx, disk, params, _):
+  def _ModifyDisk(self, idx, disk, params, _):
     """Modifies a disk.
 
     """
     changes = []
-    for key in [constants.IDISK_MODE, constants.IDISK_NAME]:
-      if key in params:
-        setattr(disk, key, params[key])
-        changes.append(("disk.%s/%d" % (key, idx), params[key]))
+    for key, value in params.iteritems():
+      if key in [constants.IDISK_MODE, constants.IDISK_NAME]:
+        setattr(disk, key, value)
+        changes.append(("disk.%s/%d" % (key, idx), value))
+      elif self.instance.disk_template == constants.DT_EXT:
+        # stolen from GetUpdatedParams: default means reset/delete
+        if value.lower() == constants.VALUE_DEFAULT:
+          try:
+            del disk.params[key]
+          except KeyError:
+            pass
+        else:
+          disk.params[key] = value
+        changes.append(("disk.params:%s/%d" % (key, idx), value))
 
     return changes
 

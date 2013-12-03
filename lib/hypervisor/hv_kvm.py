@@ -1232,6 +1232,11 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         boot_disk = False
         if needs_boot_flag and disk_type != constants.HT_DISK_IDE:
           boot_val = ",boot=on"
+
+      # For ext we allow overriding disk_cache hypervisor params per disk
+      disk_cache = cfdev.params.get("cache", None)
+      if disk_cache:
+        cache_val = ",cache=%s" % disk_cache
       drive_val = "file=%s,format=raw%s%s%s" % \
                   (dev_path, if_val, boot_val, cache_val)
 
@@ -1249,6 +1254,16 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         if cfdev.pci:
           dev_val += ",bus=pci.0,addr=%s" % hex(cfdev.pci)
         dev_opts.extend(["-device", dev_val])
+
+      # TODO: export disk geometry in IDISK_PARAMS
+      heads = cfdev.params.get('heads', None)
+      secs = cfdev.params.get('secs', None)
+      if heads and secs:
+        nr_sectors = cfdev.size * 1024 * 1024 / 512
+        cyls = nr_sectors / (int(heads) * int(secs))
+        if cyls and heads and secs:
+          drive_val += (",cyls=%d,heads=%d,secs=%d" %
+                        (cyls, int(heads), int(secs)))
 
       dev_opts.extend(["-drive", drive_val])
 
@@ -2329,6 +2344,17 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     migrate_command = ("migrate_set_downtime %dms" %
                        instance.hvparams[constants.HV_MIGRATION_DOWNTIME])
+    self._CallMonitorCommand(instance_name, migrate_command)
+
+    # These commands are supported in latest qemu versions.
+    # Since _CallMonitorCommand does not catch monitor errors
+    # this does not raise an exception in case command is not supported
+    # TODO: either parse output of command or see if the command supported
+    # via info help (see hotplug)
+    migrate_command = ("migrate_set_capability xbzrle on")
+    self._CallMonitorCommand(instance_name, migrate_command)
+
+    migrate_command = ("migrate_set_capability auto-converge on")
     self._CallMonitorCommand(instance_name, migrate_command)
 
     migrate_command = "migrate -d tcp:%s:%s" % (target, port)

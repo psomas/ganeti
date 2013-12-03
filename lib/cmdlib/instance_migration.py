@@ -709,6 +709,8 @@ class TLMigrateInstance(Tasklet):
       self._WaitUntilSync()
 
     self.feedback_fn("* preparing %s to accept the instance" % target_node)
+    for disk in instance.disks:
+      self.cfg.SetDiskID(disk, target_node)
     result = self.rpc.call_accept_instance(target_node,
                                            instance,
                                            migration_info,

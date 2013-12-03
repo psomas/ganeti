@@ -1500,6 +1500,20 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         dev_val += ",bus=pci.0,addr=%s" % hex(cfdev.pci)
         dev_opts.extend(["-device", dev_val])
 
+      # TODO: export disk geometry in IDISK_PARAMS
+      heads = cfdev.params.get('heads', None)
+      secs = cfdev.params.get('secs', None)
+      if heads and secs:
+        nr_sectors = cfdev.size * 1024 * 1024 / 512
+        cyls = nr_sectors / (int(heads) * int(secs))
+        if cyls > 16383:
+          cyls = 16383
+        elif cyls < 2:
+          cyls = 2
+        if cyls and heads and secs:
+          drive_val += (",cyls=%d,heads=%d,secs=%d" %
+                        (cyls, int(heads), int(secs)))
+
       dev_opts.extend(["-drive", drive_val])
 
     return dev_opts

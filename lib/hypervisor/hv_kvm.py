@@ -2373,6 +2373,17 @@ class KVMHypervisor(hv_base.BaseHypervisor):
                        instance.hvparams[constants.HV_MIGRATION_DOWNTIME])
     self._CallMonitorCommand(instance_name, migrate_command)
 
+    # These commands are supported in latest qemu versions.
+    # Since _CallMonitorCommand does not catch monitor errors
+    # this does not raise an exception in case command is not supported
+    # TODO: either parse output of command or see if the command supported
+    # via info help (see hotplug)
+    migrate_command = ("migrate_set_capability xbzrle on")
+    self._CallMonitorCommand(instance_name, migrate_command)
+
+    migrate_command = ("migrate_set_capability auto-converge on")
+    self._CallMonitorCommand(instance_name, migrate_command)
+
     migrate_command = "migrate -d tcp:%s:%s" % (target, port)
     self._CallMonitorCommand(instance_name, migrate_command)
 

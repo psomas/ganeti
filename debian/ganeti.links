@@ -1,0 +1,34 @@
+usr/share/ganeti/gnt-debug usr/sbin/gnt-debug
+usr/share/ganeti/gnt-job usr/sbin/gnt-job
+usr/share/ganeti/gnt-os usr/sbin/gnt-os
+usr/share/ganeti/ganeti-noded usr/sbin/ganeti-noded
+usr/share/ganeti/gnt-instance usr/sbin/gnt-instance
+usr/share/ganeti/ganeti-cleaner usr/sbin/ganeti-cleaner
+usr/share/ganeti/gnt-cluster usr/sbin/gnt-cluster
+usr/share/ganeti/gnt-node usr/sbin/gnt-node
+usr/share/ganeti/ganeti-watcher usr/sbin/ganeti-watcher
+usr/share/ganeti/ganeti-rapi usr/sbin/ganeti-rapi
+usr/share/ganeti/ganeti-listrunner usr/sbin/ganeti-listrunner
+usr/share/ganeti/ganeti-masterd usr/sbin/ganeti-masterd
+usr/share/ganeti/gnt-network usr/sbin/gnt-network
+usr/share/ganeti/gnt-backup usr/sbin/gnt-backup
+usr/share/ganeti/gnt-group usr/sbin/gnt-group
+usr/share/ganeti/gnt-storage usr/sbin/gnt-storage
+
+usr/share/ganeti/check-cert-expired	/usr/lib/ganeti/check-cert-expired
+usr/share/ganeti/ensure-dirs		/usr/lib/ganeti/ensure-dirs
+usr/share/ganeti/import-export		/usr/lib/ganeti/import-export
+usr/share/ganeti/node-daemon-setup	/usr/lib/ganeti/node-daemon-setup
+usr/share/ganeti/prepare-node-join	/usr/lib/ganeti/prepare-node-join
+
+usr/share/ganeti/burnin usr/lib/ganeti/tools/burnin
+usr/share/ganeti/cfgshell usr/lib/ganeti/tools/cfgshell
+usr/share/ganeti/cfgupgrade usr/lib/ganeti/tools/cfgupgrade
+usr/share/ganeti/cfgupgrade12 usr/lib/ganeti/tools/cfgupgrade12
+usr/share/ganeti/cluster-merge usr/lib/ganeti/tools/cluster-merge
+usr/share/ganeti/confd-client usr/lib/ganeti/tools/confd-client
+usr/share/ganeti/lvmstrap usr/lib/ganeti/tools/lvmstrap
+usr/share/ganeti/move-instance usr/lib/ganeti/tools/move-instance
+usr/share/ganeti/node-cleanup usr/lib/ganeti/tools/node-cleanup
+usr/share/ganeti/ovfconverter usr/lib/ganeti/tools/ovfconverter
+usr/share/ganeti/sanitize-config usr/lib/ganeti/tools/sanitize-config

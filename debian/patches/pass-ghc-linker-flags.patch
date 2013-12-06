@@ -1,0 +1,16 @@
+Author: Apollon Oikonomopoulos <apoikos@gmail.com>
+Description: Pass linker flags to GHC
+ Enable hardening (relro) and as-needed
+
+Forwarded: no
+Last-Update: 2013-11-01
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -801,6 +801,7 @@
+ 	-O -Wall -Werror -isrc \
+ 	-fwarn-monomorphism-restriction \
+ 	-fwarn-tabs \
++        -optl -Wl,-z,relro -optl -Wl,--as-needed \
+ 	$(GHC_BYVERSION_FLAGS)
+ 
+ 

@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+GNT_USERGROUP_PREFIX="gnt-"
+
+%:
+	dh $@ --with python2,sphinxdoc,bash_completion
+
+override_dh_auto_configure:
+	./configure \
+	  --prefix=/usr \
+	  --localstatedir=/var \
+	  --sysconfdir=/etc \
+	  --with-export-dir=/var/lib/ganeti/export \
+	  --with-iallocator-search-path=/usr/local/lib/ganeti/iallocators,/usr/lib/ganeti/iallocators \
+	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
+	  --with-extstorage-search-path=/srv/ganeti/extstorage,/usr/local/lib/ganeti/extstorage,/usr/lib/ganeti/extstorage,/usr/share/ganeti/extstorage \
+	  --docdir=/usr/share/doc/ganeti \
+	  --enable-htools-rapi --enable-restricted-commands \
+	  --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
+	  --with-group-prefix=$(GNT_USERGROUP_PREFIX)
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	# this is not removed by make distclean :(
+	rm -f ganeti
+
+	rm -f debian/ganeti.init
+	rm -f debian/ganeti.cron.d
+	rm -f debian/ganeti.default
+	rm -f debian/ganeti.postinst
+	rm -f debian/ganeti.postrm
+	if [ -d doc/html.orig ]; then \
+		rm -rf doc/html; \
+		mv doc/html.orig doc/html; \
+	fi
+	dh_auto_clean
+
+override_dh_auto_build:
+	dh_auto_build
+	mv doc/html doc/html.orig
+	$(MAKE) doc/html
+	$(CURDIR)/debian/genscript.py postinst "$(CURDIR)" | \
+		sed -f "$(CURDIR)/autotools/replace_vars.sed" >"$(CURDIR)/debian/ganeti.postinst"
+	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/ganeti.postrm"
+
+# Add missing bits to ganeti and python-ganeti-rapi. We do not use
+# override_dh_install (plain) because it will fail in binary-arch builds.
+override_dh_install-indep:
+	dh_install -i -Xganeti-confd -Xmon-collector -Xhail -Xganeti-mond -Xganeti-luxid --fail-missing
+	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/ganeti.init
+	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/ganeti.cron.d
+	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/ganeti.default
+	
+	# Dummy Python module for the RAPI client
+	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/__init__.py
+	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/rapi/__init__.py
+
+override_dh_installinit:
+	dh_installinit --error-handler=true -i -- defaults 20 80
+
+# Disable dh_sphinxdoc for binary-arch, as it will raise an error
+override_dh_sphinxdoc-arch:
+
+# Disable the test suite, as it requires the daemon users to be present
+# at build time.
+override_dh_auto_test:
+
+
+.PHONY: override_dh_auto_configure override_dh_auto_clean override_dh_auto_build \
+	override_dh_installinit override_dh_install-indep override_dh_sphinxdoc-arch \
+	override_dh_auto_test

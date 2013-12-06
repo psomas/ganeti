@@ -1,0 +1,27 @@
+usr/share/man/man7/ganeti*
+usr/share/man/man8/gnt-*
+usr/share/man/man8/ganeti-*
+
+usr/lib/ganeti/
+
+usr/lib/python*/dist-packages/ganeti	/usr/share/ganeti
+usr/sbin/gnt-*				/usr/share/ganeti
+usr/sbin/ganeti-*			/usr/share/ganeti
+
+usr/lib/ganeti/check-cert-expired	/usr/share/ganeti
+usr/lib/ganeti/ensure-dirs		/usr/share/ganeti
+usr/lib/ganeti/import-export		/usr/share/ganeti
+usr/lib/ganeti/node-daemon-setup	/usr/share/ganeti
+usr/lib/ganeti/prepare-node-join	/usr/share/ganeti
+
+usr/lib/ganeti/tools/burnin		/usr/share/ganeti
+usr/lib/ganeti/tools/cfgshell		/usr/share/ganeti
+usr/lib/ganeti/tools/cfgupgrade		/usr/share/ganeti
+usr/lib/ganeti/tools/cfgupgrade12	/usr/share/ganeti
+usr/lib/ganeti/tools/cluster-merge	/usr/share/ganeti
+usr/lib/ganeti/tools/confd-client	/usr/share/ganeti
+usr/lib/ganeti/tools/lvmstrap		/usr/share/ganeti
+usr/lib/ganeti/tools/move-instance	/usr/share/ganeti
+usr/lib/ganeti/tools/node-cleanup	/usr/share/ganeti
+usr/lib/ganeti/tools/ovfconverter	/usr/share/ganeti
+usr/lib/ganeti/tools/sanitize-config	/usr/share/ganeti

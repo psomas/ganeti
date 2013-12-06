@@ -1,0 +1,73 @@
+ganeti (2.8.0-1) unstable; urgency=low
+
+  As of 2.8.0-1, ganeti is configured to use separate users for its daemons.
+  Each daemon now runs as a different user (all with a “gnt-” username prefix)
+  and root access is currently granted only to the node daemon. This is a
+  build-time setting and existing installations will be automatically converted
+  to use the new user separation model.
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Tue, 01 Oct 2013 18:02:24 +0300
+
+ganeti (2.7.0-2) unstable; urgency=low
+  The ganeti2 package has been renamed to ganeti, since the original reasons
+  for nameing the package ganeti2 (i.e. the 1.2 to 2.0 migration) no longer
+  apply. A dummy transitional ganeti2 package is provided for compatibility,
+  you can safely remove it after the installation has finished.
+
+  Since 2.7.0-2, all internal Ganeti Python libraries are shipped as a private
+  module. This is done because the Ganeti internal APIs are not guaranteed to
+  be stable and direct use by 3rd-party applications is discouraged. Thus, any
+  3rd-party programs importing Ganeti's Python code, should now live under
+  /usr/share/ganeti or include /usr/share/ganeti in Python's sys.path.
+
+  The RAPI client library, being the only stable external API, is now shipped
+  as a public module in its own package, python-ganeti-rapi.
+
+  Since 2.7.0-2, the HTML documentation is provided in the ganeti-doc package.
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Sat, 13 Jul 2013 04:04:27 +0300
+
+ganeti2 (2.1.1-1) unstable; urgency=low
+
+  Upgrading from Lenny's 1.2 directly to 2.1 requires a two-step method: first
+  run /usr/lib/ganeti/tools/cfgupgrade12 followed by the normal
+  /usr/lib/ganeti/tools/cfgupgrade. This is somewhat more tricky than the
+  intermediate step (1.2 to 2.0 and 2.0 to 2.1), but should otherwise work.
+  Backup of the configuration directory is of course recommended, and reading
+  the wiki page too. Note: if running 2.0, it is possible do to the upgrade
+  without downtime. If running 1.2, it is a must to stop instances.
+
+  Detailed instructions (for both 1.2->2.1 and 2.0->2.1 upgrades):
+
+  - stop cron, or comment out the watcher entry in cron
+  - stop ganeti on the master node
+  - make a backup of /var/lib/ganeti
+  - install new software
+  - if running 1.2, stop all instances
+  - if running 1.2, first migrate all instances to DRBD8 using
+    /usr/lib/ganeti/tools/drbd8-upgrade
+  - if running 1.2, on the master node run /usr/lib/ganeti/tools/cfgupgrade12
+  - on the master node, run /usr/lib/ganeti/tools/cfgupgrade
+  - if both cfgupgrade runs have finished successfully, remove the file
+    /var/lib/ganeti/ssconf_hypervisor on all nodes on which it still exists
+  - on all non-master nodes, restart ganeti (invoke-rc.d ganeti restart); this
+    will give some warnings for rapi and confd daemons, but ignore them for now
+  - on the master node, restart ganeti, and confirm "gnt-node list" works
+  - on the master node, run "gnt-cluster redist-conf"
+  - restart ganeti on all nodes now (once more, and on the master node last)
+  - check that "gnt-cluster verify" doesn't complain
+  - you can now start all instances (if you stopped them)
+  - you can now restart cron (or re-enable the watcher entry)
+
+ -- Iustin Pop <iustin@debian.org>  Sat, 17 Apr 2010 19:05:45 +0200
+
+ganeti2 (2.0.3-1) unstable; urgency=low
+
+  Upgrading from the 'ganeti' package (versions 1.2.x) requires manual
+  intervention; the proper procedure is available at
+  http://code.google.com/p/ganeti/wiki/UpgradeNotes and requires full
+  cluster shutdown. It is recommended to read that first before
+  installing this package.
+
+ -- Iustin Pop <iusty@k1024.org>  Sat, 25 Jul 2009 12:12:46 +0200
+

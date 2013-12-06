@@ -1,0 +1,7 @@
+etc/ganeti
+usr/lib/ganeti
+usr/lib/ganeti/iallocators
+usr/share/ganeti/extstorage
+usr/share/lintian/overrides
+var/lib/ganeti
+var/log/ganeti

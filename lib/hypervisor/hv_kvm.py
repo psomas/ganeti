@@ -92,16 +92,16 @@ _FIND_RUNTIME_ENTRY = {
   constants.HOTPLUG_TARGET_NIC:
     lambda nic, kvm_nics: [n for n in kvm_nics if n.uuid == nic.uuid],
   constants.HOTPLUG_TARGET_DISK:
-    lambda disk, kvm_disks: [(d, l, u) for (d, l, u) in kvm_disks
+    lambda disk, kvm_disks: [(d, l) for (d, l) in kvm_disks
                              if d.uuid == disk.uuid]
   }
 _RUNTIME_DEVICE = {
   constants.HOTPLUG_TARGET_NIC: lambda d: d,
-  constants.HOTPLUG_TARGET_DISK: lambda (d, e, _): d
+  constants.HOTPLUG_TARGET_DISK: lambda (d, e): d
   }
 _RUNTIME_ENTRY = {
   constants.HOTPLUG_TARGET_NIC: lambda d, e: d,
-  constants.HOTPLUG_TARGET_DISK: lambda d, e: (d, e, None)
+  constants.HOTPLUG_TARGET_DISK: lambda d, e: (d, e)
   }
 
 
@@ -148,8 +148,8 @@ def _AnalyzeSerializedRuntime(serialized_runtime):
     kvm_cmd, serialized_nics, hvparams, serialized_blockdevs = loaded_runtime
 
   kvm_nics = [objects.NIC.FromDict(snic) for snic in serialized_nics]
-  block_devices = [(objects.Disk.FromDict(sdisk), link, uri)
-                   for sdisk, link, uri in serialized_blockdevs]
+  block_devices = [(objects.Disk.FromDict(sdisk), link)
+                   for sdisk, link in serialized_blockdevs]
 
   return (kvm_cmd, kvm_nics, hvparams, block_devices)
 
@@ -1531,8 +1531,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     kvm_cmd, kvm_nics, hvparams, block_devices = kvm_runtime
 
     serialized_nics = [nic.ToDict() for nic in kvm_nics]
-    serialized_blockdevs = [(blk.ToDict(), link, uri)
-                            for blk, link, uri in block_devices]
+    serialized_blockdevs = [(blk.ToDict(), link)
+                            for blk, link in block_devices]
     serialized_form = serializer.Dump((kvm_cmd, serialized_nics, hvparams,
                                       serialized_blockdevs))
 

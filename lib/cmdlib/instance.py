@@ -3192,6 +3192,7 @@ class LUInstanceSetParams(LogicalUnit):
                          cleanup=new_disks)
 
     if self.op.hotplug:
+      self.cfg.SetDiskID(disk, self.instance.primary_node)
       result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
                                                (disk, self.instance),
                                                self.instance.name, True, idx)

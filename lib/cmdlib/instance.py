@@ -650,7 +650,7 @@ class LUInstanceCreate(LogicalUnit):
       nics=NICListToTuple(self, self.nics),
       disk_template=self.op.disk_template,
       disks=[(d[constants.IDISK_NAME], d.get("uuid", ""),
-              d[constants.IDISK_SIZE], d[constants.IDISK_MODE])
+              d[constants.IDISK_SIZE], d[constants.IDISK_MODE], {})
              for d in self.disks],
       bep=self.be_full,
       hvp=self.hv_full,
@@ -1041,7 +1041,8 @@ class LUInstanceCreate(LogicalUnit):
             self.LogInfo("Chose IP %s from network %s", nic.ip, nobj.name)
           else:
             try:
-              self.cfg.ReserveIp(net_uuid, nic.ip, self.proc.GetECId())
+              self.cfg.ReserveIp(net_uuid, nic.ip, self.proc.GetECId(),
+                                 check=self.op.conflicts_check)
             except errors.ReservationError:
               raise errors.OpPrereqError("IP address %s already in use"
                                          " or does not belong to network %s" %
@@ -1807,7 +1808,7 @@ class LUInstanceMove(LogicalUnit):
                         idx, result.fail_msg)
         errs.append(result.fail_msg)
         break
-      dev_path = result.payload
+      dev_path, _ = result.payload
       result = self.rpc.call_blockdev_export(source_node, (disk, instance),
                                              target_node, dev_path,
                                              cluster_name)
@@ -2190,10 +2191,12 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
       if op == constants.DDM_REMOVE:
         assert not params
 
-        if remove_fn is not None:
-          remove_fn(absidx, item, private)
-
         changes = [("%s/%s" % (kind, absidx), "remove")]
+
+        if remove_fn is not None:
+          msg = remove_fn(absidx, item, private)
+          if msg:
+            changes.append(("%s/%s" % (kind, absidx), msg))
 
         assert container[absidx] == item
         del container[absidx]
@@ -2584,7 +2587,8 @@ class LUInstanceSetParams(LogicalUnit):
         # Reserve new IP if in the new network if any
         elif new_net_uuid:
           try:
-            self.cfg.ReserveIp(new_net_uuid, new_ip, self.proc.GetECId())
+            self.cfg.ReserveIp(new_net_uuid, new_ip, self.proc.GetECId(),
+                               check=self.op.conflicts_check)
             self.LogInfo("Reserving IP %s in network %s",
                          new_ip, new_net_obj.name)
           except errors.ReservationError:
@@ -2671,6 +2675,8 @@ class LUInstanceSetParams(LogicalUnit):
                                            self.op.disk_template))
         raise errors.OpPrereqError(errmsg, errors.ECODE_STATE)
 
+  # too many local variables
+  # pylint: disable=R0914
   def CheckPrereq(self):
     """Check prerequisites.
 
@@ -2751,6 +2757,20 @@ class LUInstanceSetParams(LogicalUnit):
                                      (constants.IDISK_PROVIDER,
                                       constants.DT_EXT),
                                      errors.ECODE_INVAL)
+
+    if self.op.hotplug or self.op.hotplug_if_possible:
+      result = self.rpc.call_hotplug_supported(self.instance.primary_node,
+                                               self.instance)
+      if result.fail_msg:
+        if self.op.hotplug:
+          result.Raise("Hotplug is not possible: %s" % result.fail_msg,
+                       prereq=True)
+        else:
+          self.LogWarning(result.fail_msg)
+          self.op.hotplug = False
+          self.LogInfo("Modification will take place without hotplugging.")
+      else:
+        self.op.hotplug = True
 
     # OS change
     if self.op.os_name and not self.op.force:
@@ -2977,7 +2997,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in instance.nics]
       _ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                          self._CreateNewNic, self._ApplyNicMods, None)
+                          self._CreateNewNic, self._ApplyNicMods,
+                          self._RemoveNic)
       # Verify that NIC names are unique and valid
       utils.ValidateDeviceNames("NIC", nics)
       self._new_nics = nics
@@ -3152,6 +3173,22 @@ class LUInstanceSetParams(LogicalUnit):
         self.LogWarning("Could not remove metadata for disk %d on node %s,"
                         " continuing anyway: %s", idx, pnode, msg)
 
+  def _HotplugDevice(self, action, dev_type, device, extra, seq):
+    self.LogInfo("Trying to hotplug device...")
+    msg = "hotplug:"
+    result = self.rpc.call_hotplug_device(self.instance.primary_node,
+                                          self.instance, action, dev_type,
+                                          (device, self.instance),
+                                          extra, seq)
+    if result.fail_msg:
+      self.LogWarning("Could not hotplug device: %s" % result.fail_msg)
+      self.LogInfo("Continuing execution..")
+      msg += "failed"
+    else:
+      self.LogInfo("Hotplug done.")
+      msg += "done"
+    return msg
+
   def _CreateNewDisk(self, idx, params, _):
     """Creates a new disk.
 
@@ -3179,9 +3216,27 @@ class LUInstanceSetParams(LogicalUnit):
                          disks=[(idx, disk, 0)],
                          cleanup=new_disks)
 
-    return (disk, [
-      ("disk/%d" % idx, "add:size=%s,mode=%s" % (disk.size, disk.mode)),
-      ])
+    changes = [
+      ("disk/%d" % idx,
+      "add:size=%s,mode=%s" % (disk.size, disk.mode)),
+      ]
+    if self.op.hotplug:
+      self.cfg.SetDiskID(disk, self.instance.primary_node)
+      result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
+                                               (disk, self.instance),
+                                               self.instance.name, True, idx)
+      if result.fail_msg:
+        changes.append(("disk/%d" % idx, "assemble:failed"))
+        self.LogWarning("Can't assemble newly created disk %d: %s",
+                        idx, result.fail_msg)
+      else:
+        _, link_name = result.payload
+        msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                                  constants.HOTPLUG_TARGET_DISK,
+                                  disk, link_name, idx)
+        changes.append(("disk/%d" % idx, msg))
+
+    return (disk, changes)
 
   def _ModifyDisk(self, idx, disk, params, _):
     """Modifies a disk.
@@ -3216,8 +3271,17 @@ class LUInstanceSetParams(LogicalUnit):
     """Removes a disk.
 
     """
+    hotmsg = ""
+    if self.op.hotplug:
+      hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                                   constants.HOTPLUG_TARGET_DISK,
+                                   root, None, idx)
+      ShutdownInstanceDisks(self, self.instance, [root])
+
     (anno_disk,) = AnnotateDiskParams(self.instance, [root], self.cfg)
     for node, disk in anno_disk.ComputeNodeTree(self.instance.primary_node):
+      if self.op.keep_disks and disk.dev_type in constants.DT_EXT:
+        continue
       self.cfg.SetDiskID(disk, node)
       msg = self.rpc.call_blockdev_remove(node, disk).fail_msg
       if msg:
@@ -3227,6 +3291,8 @@ class LUInstanceSetParams(LogicalUnit):
     # if this is a DRBD disk, return its port to the pool
     if root.dev_type in constants.LDS_DRBD:
       self.cfg.AddTcpUdpPort(root.logical_id[2])
+
+    return hotmsg
 
   def _CreateNewNic(self, idx, params, private):
     """Creates data structure for a new network interface.
@@ -3243,13 +3309,20 @@ class LUInstanceSetParams(LogicalUnit):
                        nicparams=nicparams)
     nobj.uuid = self.cfg.GenerateUniqueID(self.proc.GetECId())
 
-    return (nobj, [
+    changes = [
       ("nic.%d" % idx,
        "add:mac=%s,ip=%s,mode=%s,link=%s,network=%s" %
        (mac, ip, private.filled[constants.NIC_MODE],
-       private.filled[constants.NIC_LINK],
-       net)),
-      ])
+       private.filled[constants.NIC_LINK], net)),
+      ]
+
+    if self.op.hotplug:
+      msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                                constants.HOTPLUG_TARGET_NIC,
+                                nobj, None, idx)
+      changes.append(("nic.%d" % idx, msg))
+
+    return (nobj, changes)
 
   def _ApplyNicMods(self, idx, nic, params, private):
     """Modifies a network interface.
@@ -3274,7 +3347,19 @@ class LUInstanceSetParams(LogicalUnit):
       for (key, val) in nic.nicparams.items():
         changes.append(("nic.%s/%d" % (key, idx), val))
 
+    if self.op.hotplug:
+      msg = self._HotplugDevice(constants.HOTPLUG_ACTION_MODIFY,
+                                constants.HOTPLUG_TARGET_NIC,
+                                nic, None, idx)
+      changes.append(("nic/%d" % idx, msg))
+
     return changes
+
+  def _RemoveNic(self, idx, nic, _):
+    if self.op.hotplug:
+      return self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                                 constants.HOTPLUG_TARGET_NIC,
+                                 nic, None, idx)
 
   def Exec(self, feedback_fn):
     """Modifies an instance.

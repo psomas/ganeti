@@ -24,7 +24,9 @@
 """
 
 import logging
+import errno
 import string # pylint: disable=W0402
+import shutil
 from cStringIO import StringIO
 
 from ganeti import constants
@@ -319,6 +321,9 @@ class XenHypervisor(hv_base.BaseHypervisor):
   CAN_MIGRATE = True
   REBOOT_RETRY_COUNT = 60
   REBOOT_RETRY_INTERVAL = 10
+  _ROOT_DIR = pathutils.RUN_DIR + "/xen-hypervisor"
+  _NICS_DIR = _ROOT_DIR + "/nic" # contains NICs' info
+  _DIRS = [_ROOT_DIR, _NICS_DIR]
 
   ANCILLARY_FILES = [
     XEND_CONFIG_FILE,
@@ -382,6 +387,57 @@ class XenHypervisor(hv_base.BaseHypervisor):
     return utils.PathJoin(self._cfgdir, instance_name)
 
   @classmethod
+  def _WriteNICInfoFile(cls, instance, idx, nic):
+    """Write the Xen config file for the instance.
+
+    This version of the function just writes the config file from static data.
+
+    """
+    instance_name = instance.name
+    dirs = [(dname, constants.RUN_DIRS_MODE)
+            for dname in cls._DIRS + [cls._InstanceNICDir(instance_name)]]
+    utils.EnsureDirs(dirs)
+
+    cfg_file = cls._InstanceNICFile(instance_name, idx)
+    data = StringIO()
+
+    data.write("TAGS=%s\n" % "\ ".join(instance.GetTags()))
+    if nic.netinfo:
+      netinfo = objects.Network.FromDict(nic.netinfo)
+      for k, v in netinfo.HooksDict().iteritems():
+        data.write("%s=%s\n" % (k, v))
+
+    data.write("MAC=%s\n" % nic.mac)
+    if nic.ip:
+      data.write("IP=%s\n" % nic.ip)
+    data.write("INTERFACE_INDEX=%s\n" % str(idx))
+    if nic.name:
+      data.write("INTERFACE_NAME=%s\n" % nic.name)
+    data.write("INTERFACE_UUID=%s\n" % nic.uuid)
+    data.write("MODE=%s\n" % nic.nicparams[constants.NIC_MODE])
+    data.write("LINK=%s\n" % nic.nicparams[constants.NIC_LINK])
+
+    try:
+      utils.WriteFile(cfg_file, data=data.getvalue())
+    except EnvironmentError, err:
+      raise errors.HypervisorError("Cannot write Xen instance configuration"
+                                   " file %s: %s" % (cfg_file, err))
+
+  @classmethod
+  def _InstanceNICDir(cls, instance_name):
+    """Returns the directory holding the tap device files for a given instance.
+
+    """
+    return utils.PathJoin(cls._NICS_DIR, instance_name)
+
+  @classmethod
+  def _InstanceNICFile(cls, instance_name, seq):
+    """Returns the name of the file containing the tap device for a given NIC
+
+    """
+    return utils.PathJoin(cls._InstanceNICDir(instance_name), str(seq))
+
+  @classmethod
   def _GetConfig(cls, instance, startup_memory, block_devices):
     """Build Xen configuration for an instance.
 
@@ -422,6 +478,11 @@ class XenHypervisor(hv_base.BaseHypervisor):
 
     """
     utils.RemoveFile(self._ConfigFileName(instance_name))
+    try:
+      shutil.rmtree(self._InstanceNICDir(instance_name))
+    except OSError, err:
+      if err.errno != errno.ENOENT:
+        raise
 
   def _StashConfigFile(self, instance_name):
     """Move the Xen config file to the log directory and return its new path.
@@ -854,6 +915,7 @@ class XenPvmHypervisor(XenHypervisor):
     constants.HV_CPU_CAP: hv_base.OPT_NONNEGATIVE_INT_CHECK,
     constants.HV_CPU_WEIGHT:
       (False, lambda x: 0 < x < 65536, "invalid weight", None, None),
+    constants.HV_VIF_SCRIPT: hv_base.OPT_FILE_CHECK,
     }
 
   def _GetConfig(self, instance, startup_memory, block_devices):
@@ -905,14 +967,17 @@ class XenPvmHypervisor(XenHypervisor):
     config.write("name = '%s'\n" % instance.name)
 
     vif_data = []
-    for nic in instance.nics:
+    for idx, nic in enumerate(instance.nics):
       nic_str = "mac=%s" % (nic.mac)
       ip = getattr(nic, "ip", None)
       if ip is not None:
         nic_str += ", ip=%s" % ip
       if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
         nic_str += ", bridge=%s" % nic.nicparams[constants.NIC_LINK]
+      if hvp[constants.HV_VIF_SCRIPT]:
+        nic_str += ", script=%s" % hvp[constants.HV_VIF_SCRIPT]
       vif_data.append("'%s'" % nic_str)
+      self._WriteNICInfoFile(instance, idx, nic)
 
     disk_data = \
       _GetConfigFileDiskData(block_devices, hvp[constants.HV_BLOCKDEV_PREFIX])
@@ -977,6 +1042,7 @@ class XenHvmHypervisor(XenHypervisor):
     constants.HV_VIF_TYPE:
       hv_base.ParamInSet(False, constants.HT_HVM_VALID_VIF_TYPES),
     constants.HV_VIRIDIAN: hv_base.NO_CHECK,
+    constants.HV_VIF_SCRIPT: hv_base.OPT_FILE_CHECK,
     }
 
   def _GetConfig(self, instance, startup_memory, block_devices):
@@ -1070,14 +1136,17 @@ class XenHvmHypervisor(XenHypervisor):
       # parameter 'model' is only valid with type 'ioemu'
       nic_type_str = ", model=%s, type=%s" % \
         (nic_type, constants.HT_HVM_VIF_IOEMU)
-    for nic in instance.nics:
+    for idx, nic in enumerate(instance.nics):
       nic_str = "mac=%s%s" % (nic.mac, nic_type_str)
       ip = getattr(nic, "ip", None)
       if ip is not None:
         nic_str += ", ip=%s" % ip
       if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
         nic_str += ", bridge=%s" % nic.nicparams[constants.NIC_LINK]
+      if hvp[constants.HV_VIF_SCRIPT]:
+        nic_str += ", script=%s" % hvp[constants.HV_VIF_SCRIPT]
       vif_data.append("'%s'" % nic_str)
+      self._WriteNICInfoFile(instance, idx, nic)
 
     config.write("vif = [%s]\n" % ",".join(vif_data))
 

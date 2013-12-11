@@ -1,4 +1,4 @@
-Source: ganeti
+Source: snf-ganeti
 Section: admin
 Priority: extra
 Maintainer: Debian Ganeti Team <pkg-ganeti-devel@lists.alioth.debian.org>
@@ -55,7 +55,7 @@ Description: Cluster-based virtualization management software
 
 Package: ganeti2
 Architecture: all
-Depends: ganeti, ${misc:Depends}
+Depends: snf-ganeti, ${misc:Depends}
 Description: transitional dummy package
  This is a transitional dummy package for ganeti. It can safely be removed.
 

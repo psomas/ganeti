@@ -1,3 +1,11 @@
+snf-ganeti (2.10.3-1~wheezy) unstable; urgency=low
+
+  * Rebuild from latest Ganeti stable-2.10 branch
+  * Use official wheezy-backports debian files
+  * Rename ganeti to snf-ganeti
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Mon, 05 May 2014 17:34:04 +0200
+
 ganeti (2.10.2-2~bpo70+1) wheezy-backports; urgency=medium
 
   * Rebuild for wheezy-backports.

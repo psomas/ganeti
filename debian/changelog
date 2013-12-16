@@ -1,3 +1,9 @@
+snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+ipfix1+backports1-1~wheezy) wheezy; urgency=low
+
+  * Do not require IP if mode is routed (needed for IPv6 only NICs)
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Mon, 16 Dec 2013 13:54:53 +0200
+
 snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+backports1-1~wheezy) wheezy; urgency=low
 
   * snap adds snapshot support for ext disk template

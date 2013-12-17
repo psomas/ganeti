@@ -831,7 +831,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
     return self._SendRequest(HTTP_POST, "/%s/instances" % GANETI_RAPI_VERSION,
                              query, body)
 
-  def DeleteInstance(self, instance, dry_run=False):
+  def DeleteInstance(self, instance, dry_run=False, **kwargs):
     """Deletes an instance.
 
     @type instance: str
@@ -842,11 +842,13 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     """
     query = []
+    body = kwargs
+
     _AppendDryRunIf(query, dry_run)
 
     return self._SendRequest(HTTP_DELETE,
                              ("/%s/instances/%s" %
-                              (GANETI_RAPI_VERSION, instance)), query, None)
+                              (GANETI_RAPI_VERSION, instance)), query, body)
 
   def ModifyInstance(self, instance, **kwargs):
     """Modifies an instance.
@@ -863,6 +865,23 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     return self._SendRequest(HTTP_PUT,
                              ("/%s/instances/%s/modify" %
+                              (GANETI_RAPI_VERSION, instance)), None, body)
+
+  def SnapshotInstance(self, instance, **kwargs):
+    """Takes snapshot of instance's disks.
+
+    More details for parameters can be found in the RAPI documentation.
+
+    @type instance: string
+    @param instance: Instance name
+    @rtype: string
+    @return: job id
+
+    """
+    body = kwargs
+
+    return self._SendRequest(HTTP_PUT,
+                             ("/%s/instances/%s/snapshot" %
                               (GANETI_RAPI_VERSION, instance)), None, body)
 
   def ActivateInstanceDisks(self, instance, ignore_size=None):
@@ -1001,7 +1020,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
                               (GANETI_RAPI_VERSION, instance)), query, None)
 
   def RebootInstance(self, instance, reboot_type=None, ignore_secondaries=None,
-                     dry_run=False, reason=None):
+                     dry_run=False, reason=None, **kwargs):
     """Reboots an instance.
 
     @type instance: str
@@ -1020,6 +1039,8 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     """
     query = []
+    body = kwargs
+
     _AppendDryRunIf(query, dry_run)
     _AppendIf(query, reboot_type, ("type", reboot_type))
     _AppendIf(query, ignore_secondaries is not None,
@@ -1028,7 +1049,7 @@ class GanetiRapiClient(object): # pylint: disable=R0904
 
     return self._SendRequest(HTTP_POST,
                              ("/%s/instances/%s/reboot" %
-                              (GANETI_RAPI_VERSION, instance)), query, None)
+                              (GANETI_RAPI_VERSION, instance)), query, body)
 
   def ShutdownInstance(self, instance, dry_run=False, no_remember=False,
                        reason=None, **kwargs):

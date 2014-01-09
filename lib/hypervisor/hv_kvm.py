@@ -456,7 +456,6 @@ class QmpConnection(MonitorSocket):
   _RETURN_KEY = RETURN_KEY = "return"
   _ACTUAL_KEY = ACTUAL_KEY = "actual"
   _ERROR_CLASS_KEY = "class"
-  _ERROR_DATA_KEY = "data"
   _ERROR_DESC_KEY = "desc"
   _EXECUTE_KEY = "execute"
   _ARGUMENTS_KEY = "arguments"
@@ -600,11 +599,10 @@ class QmpConnection(MonitorSocket):
       err = response[self._ERROR_KEY]
       if err:
         raise errors.HypervisorError("kvm: error executing the %s"
-                                     " command: %s (%s, %s):" %
+                                     " command: %s (%s):" %
                                      (command,
                                       err[self._ERROR_DESC_KEY],
-                                      err[self._ERROR_CLASS_KEY],
-                                      err[self._ERROR_DATA_KEY]))
+                                      err[self._ERROR_CLASS_KEY]))
 
       elif not response[self._EVENT_KEY]:
         return response
@@ -1186,12 +1184,21 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     try:
       qmp = QmpConnection(self._InstanceQmpMonitor(instance_name))
       qmp.connect()
-      vcpus = len(qmp.Execute("query-cpus")[qmp.RETURN_KEY])
+      resp = qmp.Execute("query-cpus")
+      logging.warning("************* instance %s query-cpus: %s",
+                      instance_name, resp)
+      vcpus = len(resp[qmp.RETURN_KEY])
       # Will fail if ballooning is not enabled, but we can then just resort to
       # the value above.
-      mem_bytes = qmp.Execute("query-balloon")[qmp.RETURN_KEY][qmp.ACTUAL_KEY]
+      resp = qmp.Execute("query-balloon")
+      logging.warning("************* instance %s query-balloon: %s",
+                      instance_name, resp)
+      mem_bytes = resp[qmp.RETURN_KEY][qmp.ACTUAL_KEY]
       memory = mem_bytes / 1048576
     except errors.HypervisorError:
+      pass
+    except TypeError:
+      logging.warning("************ TypeError while handling qmp msg")
       pass
 
     return (instance_name, pid, memory, vcpus, istat, times)

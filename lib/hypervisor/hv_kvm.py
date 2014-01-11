@@ -527,6 +527,7 @@ class QmpConnection(MonitorSocket):
     # Check if there is already a message in the buffer
     (message, self._buf) = self._ParseMessage(self._buf)
     if message:
+      logging.warning("Message already in the buffer: %s", message)
       return message
 
     recv_buffer = StringIO.StringIO(self._buf)
@@ -540,6 +541,7 @@ class QmpConnection(MonitorSocket):
 
         (message, self._buf) = self._ParseMessage(recv_buffer.getvalue())
         if message:
+          logging.warning("New message in the buffer: %s", message)
           return message
 
     except socket.timeout, err:
@@ -1191,6 +1193,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       memory = mem_bytes / 1048576
     except errors.HypervisorError:
       pass
+    except TyperError:
+      logging.warning("QMP race detected!!")
 
     return (instance_name, pid, memory, vcpus, istat, times)
 

@@ -2085,7 +2085,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     device specific method.
 
     """
-    # in case of hot-mod this is given
+    # in case of hot-mod if the device already exists this is given
     if device.pci is None:
       self._GetFreePCISlot(instance, device)
     kvm_devid = _GenerateDeviceKVMId(dev_type, device)
@@ -2146,7 +2146,11 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     if dev_type == constants.HOTPLUG_TARGET_NIC:
       # putting it back in the same pci slot
-      device.pci = self.HotDelDevice(instance, dev_type, device, _, seq)
+      try:
+        device.pci = self.HotDelDevice(instance, dev_type, device, _, seq)
+      except errors.HotplugError:
+        logging.info("Device not found in runtime file. Assuming it was"
+                     " previously added without --hotplug option.")
       # TODO: remove sleep when socat gets removed
       time.sleep(2)
       self.HotAddDevice(instance, dev_type, device, _, seq)

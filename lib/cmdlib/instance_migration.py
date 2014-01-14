@@ -134,7 +134,7 @@ class LUInstanceFailover(LogicalUnit):
     """
     instance = self._migrater.instance
     source_node = instance.primary_node
-    target_node = self.op.target_node
+    target_node = self._migrater.target_node
     env = {
       "IGNORE_CONSISTENCY": self.op.ignore_consistency,
       "SHUTDOWN_TIMEOUT": self.op.shutdown_timeout,
@@ -159,6 +159,7 @@ class LUInstanceFailover(LogicalUnit):
     """
     instance = self._migrater.instance
     nl = [self.cfg.GetMasterNode()] + list(instance.secondary_nodes)
+    nl.append(self._migrater.target_node)
     return (nl, nl + [instance.primary_node])
 
 
@@ -197,7 +198,7 @@ class LUInstanceMigrate(LogicalUnit):
     """
     instance = self._migrater.instance
     source_node = instance.primary_node
-    target_node = self.op.target_node
+    target_node = self._migrater.target_node
     env = BuildInstanceHookEnvByObject(self, instance)
     env.update({
       "MIGRATE_LIVE": self._migrater.live,
@@ -211,7 +212,7 @@ class LUInstanceMigrate(LogicalUnit):
       env["OLD_SECONDARY"] = target_node
       env["NEW_SECONDARY"] = source_node
     else:
-      env["OLD_SECONDARY"] = env["NEW_SECONDARY"] = None
+      env["OLD_SECONDARY"] = env["NEW_SECONDARY"] = ""
 
     return env
 
@@ -222,6 +223,7 @@ class LUInstanceMigrate(LogicalUnit):
     instance = self._migrater.instance
     snodes = list(instance.secondary_nodes)
     nl = [self.cfg.GetMasterNode(), instance.primary_node] + snodes
+    nl.append(self._migrater.target_node)
     return (nl, nl)
 
 
@@ -346,7 +348,7 @@ class TLMigrateInstance(Tasklet):
         raise errors.ConfigurationError("No secondary node but using"
                                         " %s disk template" %
                                         instance.disk_template)
-      target_node = secondary_nodes[0]
+      self.target_node = target_node = secondary_nodes[0]
       if self.lu.op.iallocator or (self.lu.op.target_node and
                                    self.lu.op.target_node != target_node):
         if self.failover:

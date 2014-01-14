@@ -456,7 +456,6 @@ class QmpConnection(MonitorSocket):
   _RETURN_KEY = RETURN_KEY = "return"
   _ACTUAL_KEY = ACTUAL_KEY = "actual"
   _ERROR_CLASS_KEY = "class"
-  _ERROR_DATA_KEY = "data"
   _ERROR_DESC_KEY = "desc"
   _EXECUTE_KEY = "execute"
   _ARGUMENTS_KEY = "arguments"
@@ -528,6 +527,7 @@ class QmpConnection(MonitorSocket):
     # Check if there is already a message in the buffer
     (message, self._buf) = self._ParseMessage(self._buf)
     if message:
+      logging.warning("Message already in the buffer: %s", message)
       return message
 
     recv_buffer = StringIO.StringIO(self._buf)
@@ -541,6 +541,7 @@ class QmpConnection(MonitorSocket):
 
         (message, self._buf) = self._ParseMessage(recv_buffer.getvalue())
         if message:
+          logging.warning("New message in the buffer: %s", message)
           return message
 
     except socket.timeout, err:
@@ -600,11 +601,10 @@ class QmpConnection(MonitorSocket):
       err = response[self._ERROR_KEY]
       if err:
         raise errors.HypervisorError("kvm: error executing the %s"
-                                     " command: %s (%s, %s):" %
+                                     " command: %s (%s):" %
                                      (command,
                                       err[self._ERROR_DESC_KEY],
-                                      err[self._ERROR_CLASS_KEY],
-                                      err[self._ERROR_DATA_KEY]))
+                                      err[self._ERROR_CLASS_KEY]))
 
       elif not response[self._EVENT_KEY]:
         return response
@@ -1193,6 +1193,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       memory = mem_bytes / 1048576
     except errors.HypervisorError:
       pass
+    except TyperError:
+      logging.warning("QMP race detected!!")
 
     return (instance_name, pid, memory, vcpus, istat, times)
 
@@ -2068,11 +2070,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if (int(v_major), int(v_min)) < (1, 0):
       raise errors.HotplugError("Hotplug not supported for qemu versions < 1.0")
 
-  def _CallHotplugCommand(self, name, cmd):
-    output = self._CallMonitorCommand(name, cmd)
-    # TODO: parse output and check if succeeded
-    for line in output.stdout.splitlines():
-      logging.info("%s", line)
+  def _CallHotplugCommands(self, name, cmds):
+    for c in cmds:
+      output = self._CallMonitorCommand(name, c)
+      # TODO: parse output and check if succeeded
+      for line in output.stdout.splitlines():
+        logging.info("%s", line)
+      time.sleep(2)
 
   def HotAddDevice(self, instance, dev_type, device, extra, seq):
     """ Helper method to hot-add a new device
@@ -2081,27 +2085,27 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     device specific method.
 
     """
-    # in case of hot-mod this is given
+    # in case of hot-mod if the device already exists this is given
     if device.pci is None:
       self._GetFreePCISlot(instance, device)
     kvm_devid = _GenerateDeviceKVMId(dev_type, device)
     runtime = self._LoadKVMRuntime(instance)
     if dev_type == constants.HOTPLUG_TARGET_DISK:
-      command = "drive_add dummy file=%s,if=none,id=%s,format=raw\n" % \
-                 (extra, kvm_devid)
-      command += ("device_add virtio-blk-pci,bus=pci.0,addr=%s,drive=%s,id=%s" %
-                  (hex(device.pci), kvm_devid, kvm_devid))
+      cmds = ["drive_add dummy file=%s,if=none,id=%s,format=raw" %
+                (extra, kvm_devid)]
+      cmds += ["device_add virtio-blk-pci,bus=pci.0,addr=%s,drive=%s,id=%s" %
+                (hex(device.pci), kvm_devid, kvm_devid)]
     elif dev_type == constants.HOTPLUG_TARGET_NIC:
       (tap, fd) = _OpenTap()
       self._ConfigureNIC(instance, seq, device, tap)
       self._PassTapFd(instance, fd, device)
-      command = "netdev_add tap,id=%s,fd=%s\n" % (kvm_devid, kvm_devid)
+      cmds = ["netdev_add tap,id=%s,fd=%s" % (kvm_devid, kvm_devid)]
       args = "virtio-net-pci,bus=pci.0,addr=%s,mac=%s,netdev=%s,id=%s" % \
                (hex(device.pci), device.mac, kvm_devid, kvm_devid)
-      command += "device_add %s" % args
+      cmds += ["device_add %s" % args]
       utils.WriteFile(self._InstanceNICFile(instance.name, seq), data=tap)
 
-    self._CallHotplugCommand(instance.name, command)
+    self._CallHotplugCommands(instance.name, cmds)
     # update relevant entries in runtime file
     index = _DEVICE_RUNTIME_INDEX[dev_type]
     entry = _RUNTIME_ENTRY[dev_type](device, extra)
@@ -2120,13 +2124,13 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     kvm_device = _RUNTIME_DEVICE[dev_type](entry)
     kvm_devid = _GenerateDeviceKVMId(dev_type, kvm_device)
     if dev_type == constants.HOTPLUG_TARGET_DISK:
-      command = "device_del %s\n" % kvm_devid
-      command += "drive_del %s" % kvm_devid
+      cmds = ["device_del %s" % kvm_devid]
+      cmds += ["drive_del %s" % kvm_devid]
     elif dev_type == constants.HOTPLUG_TARGET_NIC:
-      command = "device_del %s\n" % kvm_devid
-      command += "netdev_del %s" % kvm_devid
+      cmds = ["device_del %s" % kvm_devid]
+      cmds += ["netdev_del %s" % kvm_devid]
       utils.RemoveFile(self._InstanceNICFile(instance.name, seq))
-    self._CallHotplugCommand(instance.name, command)
+    self._CallHotplugCommands(instance.name, cmds)
     index = _DEVICE_RUNTIME_INDEX[dev_type]
     runtime[index].remove(entry)
     self._SaveKVMRuntime(instance, runtime)
@@ -2142,9 +2146,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     if dev_type == constants.HOTPLUG_TARGET_NIC:
       # putting it back in the same pci slot
-      device.pci = self.HotDelDevice(instance, dev_type, device, _, seq)
+      try:
+        device.pci = self.HotDelDevice(instance, dev_type, device, _, seq)
+      except errors.HotplugError:
+        logging.info("Device not found in runtime file. Assuming it was"
+                     " previously added without --hotplug option.")
       # TODO: remove sleep when socat gets removed
-      time.sleep(2)
       self.HotAddDevice(instance, dev_type, device, _, seq)
 
   def _PassTapFd(self, instance, fd, nic):

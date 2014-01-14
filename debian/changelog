@@ -1,3 +1,13 @@
+snf-ganeti (2.8.3+snap1+b64v1+kvm2+ext1+lockfix1+ipfix1+backports2-1~wheezy) wheezy; urgency=low
+
+  * (kvm) Hotplug a device found only in config.data
+  * (kvm) Each hotplug qemu commmand with a separate socat
+  * (kvm) Workaround for QMP misbahavior
+  * (2.9) Remove deprecated _ERROR_DATA_KEY in QMP
+  * (2.10) Include target node in hooks nodes for migration
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Tue, 14 Jan 2014 12:46:55 +0200
+
 snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+ipfix1+backports1-1~wheezy) wheezy; urgency=low
 
   * snap adds snapshot support for ext disk template

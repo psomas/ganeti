@@ -2152,7 +2152,6 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         logging.info("Device not found in runtime file. Assuming it was"
                      " previously added without --hotplug option.")
       # TODO: remove sleep when socat gets removed
-      time.sleep(2)
       self.HotAddDevice(instance, dev_type, device, _, seq)
 
   def _PassTapFd(self, instance, fd, nic):

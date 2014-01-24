@@ -104,6 +104,7 @@
 
 # tools
 /tools/kvm-ifup
+/tools/kvm-ifdown
 /tools/burnin
 /tools/ensure-dirs
 /tools/users-setup

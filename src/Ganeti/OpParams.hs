@@ -362,6 +362,7 @@ $(buildObject "IDiskParams" "idisk"
   , optionalField $ simpleField C.idiskMetavg [t| NonEmptyString |]
   , optionalField $ simpleField C.idiskName   [t| NonEmptyString |]
   , optionalField $ simpleField C.idiskProvider [t| NonEmptyString |]
+  , andRestArguments "opaque"
   ])
 
 -- | Disk changes type for OpInstanceRecreateDisks. This is a bit

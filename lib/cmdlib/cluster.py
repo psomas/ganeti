@@ -2350,6 +2350,7 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
     node_disks = {}
     node_disks_devonly = {}
     diskless_instances = set()
+    nodisk_instances = set()
     diskless = constants.DT_DISKLESS
 
     for nname in nodelist:
@@ -2362,6 +2363,8 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
                for disk in instanceinfo[inst].disks]
 
       if not disks:
+        nodisk_instances.update(inst for inst in node_instances
+                                if instanceinfo[inst].disk_template != diskless)
         # No need to collect data
         continue
 
@@ -2414,6 +2417,10 @@ class LUClusterVerifyGroup(LogicalUnit, _VerifyErrors):
 
     # Add empty entries for diskless instances.
     for inst in diskless_instances:
+      assert inst not in instdisk
+      instdisk[inst] = {}
+    # ...and disk-full instances that happen to have no disks
+    for inst in nodisk_instances:
       assert inst not in instdisk
       instdisk[inst] = {}
 

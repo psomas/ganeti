@@ -47,6 +47,7 @@ module Ganeti.THH ( declareSADT
                   , genLuxiOp
                   , Field (..)
                   , simpleField
+                  , andRestArguments
                   , withDoc
                   , defaultField
                   , optionalField
@@ -120,6 +121,20 @@ simpleField fname ftype =
         , fieldDefault     = Nothing
         , fieldConstr      = Nothing
         , fieldIsOptional  = NotOptional
+        , fieldDoc         = ""
+        }
+
+-- | Generate an AndRestArguments catch-all field.
+andRestArguments :: String -> Field
+andRestArguments fname =
+  Field { fieldName        = fname
+        , fieldType        = [t| M.Map String JSON.JSValue |]
+        , fieldRead        = Nothing
+        , fieldShow        = Nothing
+        , fieldExtraKeys   = []
+        , fieldDefault     = Nothing
+        , fieldConstr      = Nothing
+        , fieldIsOptional  = AndRestArguments
         , fieldDoc         = ""
         }
 

@@ -134,7 +134,7 @@ class LogicalVolume(base.BlockDev):
 
   @classmethod
   def Create(cls, unique_id, children, size, spindles, params, excl_stor,
-             dyn_params):
+             dyn_params, *args):
     """Create a new logical volume.
 
     """
@@ -216,7 +216,7 @@ class LogicalVolume(base.BlockDev):
     if result.failed:
       base.ThrowError("LV create failed (%s): %s",
                       result.fail_reason, result.output)
-    return LogicalVolume(unique_id, children, size, params, dyn_params)
+    return LogicalVolume(unique_id, children, size, params, dyn_params, *args)
 
   @staticmethod
   def _GetVolumeInfo(lvm_cmd, fields):
@@ -850,7 +850,7 @@ class FileStorage(base.BlockDev):
 
   @classmethod
   def Create(cls, unique_id, children, size, spindles, params, excl_stor,
-             dyn_params):
+             dyn_params, *args):
     """Create a new file.
 
     @param size: the size of file in MiB
@@ -919,7 +919,7 @@ class PersistentBlockDevice(base.BlockDev):
 
   @classmethod
   def Create(cls, unique_id, children, size, spindles, params, excl_stor,
-             dyn_params):
+             dyn_params, *args):
     """Create a new device
 
     This is a noop, we only return a PersistentBlockDevice instance
@@ -928,7 +928,8 @@ class PersistentBlockDevice(base.BlockDev):
     if excl_stor:
       raise errors.ProgrammerError("Persistent block device requested with"
                                    " exclusive_storage")
-    return PersistentBlockDevice(unique_id, children, 0, params, dyn_params)
+    return PersistentBlockDevice(unique_id, children, 0, params, dyn_params,
+                                 *args)
 
   def Remove(self):
     """Remove a device
@@ -1022,7 +1023,7 @@ class RADOSBlockDevice(base.BlockDev):
 
   @classmethod
   def Create(cls, unique_id, children, size, spindles, params, excl_stor,
-             dyn_params):
+             dyn_params, *args):
     """Create a new rbd device.
 
     Provision a new rbd volume inside a RADOS pool.
@@ -1045,7 +1046,8 @@ class RADOSBlockDevice(base.BlockDev):
       base.ThrowError("rbd creation failed (%s): %s",
                       result.fail_reason, result.output)
 
-    return RADOSBlockDevice(unique_id, children, size, params, dyn_params)
+    return RADOSBlockDevice(unique_id, children, size, params, dyn_params,
+                            *args)
 
   def Remove(self):
     """Remove the rbd device.
@@ -1378,7 +1380,7 @@ class ExtStorageDevice(base.BlockDev):
 
     """
     super(ExtStorageDevice, self).__init__(unique_id, children, size, params,
-                                           dyn_params)
+                                           dyn_params, *args)
     (self.name, self.uuid) = args
 
     if not isinstance(unique_id, (tuple, list)) or len(unique_id) != 2:
@@ -1413,7 +1415,8 @@ class ExtStorageDevice(base.BlockDev):
     _ExtStorageAction(constants.ES_ACTION_CREATE, unique_id,
                       params, size=str(size), name=name, uuid=uuid)
 
-    return ExtStorageDevice(unique_id, children, size, params, dyn_params)
+    return ExtStorageDevice(unique_id, children, size, params, dyn_params,
+                            *args)
 
   def Remove(self):
     """Remove the extstorage device.

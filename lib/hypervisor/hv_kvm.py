@@ -1007,6 +1007,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """Removes an instance's rutime sockets/files/dirs.
 
     """
+    # This takes info from NICDir and RuntimeFile
+    cls._UnconfigureInstanceNICs(instance_name)
     utils.RemoveFile(pidfile)
     utils.RemoveFile(cls._InstanceMonitor(instance_name))
     utils.RemoveFile(cls._InstanceSerial(instance_name))
@@ -2238,7 +2240,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     elif dev_type == constants.HOTPLUG_TARGET_NIC:
       cmds = ["device_del %s" % kvm_devid]
       cmds += ["netdev_del %s" % kvm_devid]
-      utils.RemoveFile(self._InstanceNICFile(instance.name, seq))
+      self._UnconfigureNic(instance.name, kvm_device, False)
+      self._RemoveInstanceNICFiles(instance.name, seq, device)
     self._CallHotplugCommands(instance.name, cmds)
     self._VerifyHotplugCommand(instance.name, kvm_device, dev_type, False)
     index = _DEVICE_RUNTIME_INDEX[dev_type]
@@ -2465,6 +2468,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
       self._WriteKVMRuntime(instance.name, info)
     else:
+      self._UnconfigureInstanceNICs(instance.name, info)
       self.StopInstance(instance, force=True)
 
   def MigrateInstance(self, instance, target, live):

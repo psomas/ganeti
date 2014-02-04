@@ -1232,29 +1232,33 @@ class KVMHypervisor(hv_base.BaseHypervisor):
         raise
 
   @staticmethod
-  def _ConfigureNIC(instance, seq, nic, tap):
-    """Run the network configuration script for a specified NIC
+  def _CreateNICEnv(instance_name, nic, tap, seq=None, instance_tags=None):
+    """Create environment variables for a specific NIC
 
-    @param instance: instance we're acting on
-    @type instance: instance object
-    @param seq: nic sequence number
-    @type seq: int
-    @param nic: nic we're acting on
-    @type nic: nic object
-    @param tap: the host's tap interface this NIC corresponds to
-    @type tap: str
+    This is needed during NIC ifup/ifdown scripts.
+    Since instance tags may change during NIC creation and removal
+    and because during cleanup instance object is not available we
+    pass them only upon NIC creation (instance startup/NIC hot-plugging).
 
     """
     env = {
       "PATH": "%s:/sbin:/usr/sbin" % os.environ["PATH"],
-      "INSTANCE": instance.name,
+      "INSTANCE": instance_name,
       "MAC": nic.mac,
       "MODE": nic.nicparams[constants.NIC_MODE],
-      "INTERFACE": tap,
-      "INTERFACE_INDEX": str(seq),
       "INTERFACE_UUID": nic.uuid,
-      "TAGS": " ".join(instance.GetTags()),
     }
+
+    if instance_tags:
+      env["TAGS"] = " ".join(instance_tags)
+
+    # This should always be available except for old instances in the
+    # cluster without uuid indexed tap files.
+    if tap:
+      env["INTERFACE"] = tap
+
+    if seq:
+      env["INTERFACE_INDEX"] = str(seq)
 
     if nic.ip:
       env["IP"] = nic.ip
@@ -1275,6 +1279,23 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
       env["BRIDGE"] = nic.nicparams[constants.NIC_LINK]
 
+    return env
+
+  @classmethod
+  def _ConfigureNIC(cls, instance, seq, nic, tap):
+    """Run the network configuration script for a specified NIC
+
+    @param instance: instance we're acting on
+    @type instance: instance object
+    @param seq: nic sequence number
+    @type seq: int
+    @param nic: nic we're acting on
+    @type nic: nic object
+    @param tap: the host's tap interface this NIC corresponds to
+    @type tap: str
+
+    """
+    env = cls._CreateNICEnv(instance.name, nic, tap, seq, instance.GetTags())
     result = utils.RunCmd([pathutils.KVM_IFUP, tap], env=env)
     if result.failed:
       raise errors.HypervisorError("Failed to configure interface %s: %s;"

@@ -518,7 +518,7 @@ class LogicalVolume(BlockDev):
   _INVALID_NAMES = compat.UniqueFrozenset([".", "..", "snapshot", "pvmove"])
   _INVALID_SUBSTRINGS = compat.UniqueFrozenset(["_mlog", "_mimage"])
 
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Attaches to a LV device.
 
     The unique_id is a tuple (vg_name, lv_name)
@@ -1376,7 +1376,7 @@ class DRBD8(BaseDRBD):
   _DISABLE_FLUSH_OPTION = "--no-disk-flushes" # -i
   _DISABLE_META_FLUSH_OPTION = "--no-md-flushes"  # -m
 
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     if children and children.count(None) > 0:
       children = []
     if len(children) not in (0, 2):
@@ -2360,7 +2360,7 @@ class FileStorage(BlockDev):
   The unique_id for the file device is a (file_driver, file_path) tuple.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Initalizes a file device backend.
 
     """
@@ -2521,7 +2521,7 @@ class PersistentBlockDevice(BlockDev):
   For the time being, pathnames are required to lie under /dev.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Attaches to a static block device.
 
     The unique_id is a path under /dev.

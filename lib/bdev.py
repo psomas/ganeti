@@ -573,7 +573,7 @@ class LogicalVolume(BlockDev):
     return map((lambda pv: pv.name), empty_pvs)
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new logical volume.
 
     """
@@ -2302,7 +2302,7 @@ class DRBD8(BaseDRBD):
     self.Shutdown()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new DRBD8 device.
 
     Since DRBD devices are not created per se, just assembled, this
@@ -2479,7 +2479,7 @@ class FileStorage(BlockDev):
       _ThrowError("Can't stat %s: %s", self.dev_path, err)
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new file.
 
     @param size: the size of file in MiB
@@ -2547,7 +2547,7 @@ class PersistentBlockDevice(BlockDev):
     self.Attach()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new device
 
     This is a noop, we only return a PersistentBlockDevice instance
@@ -2647,7 +2647,7 @@ class RADOSBlockDevice(BlockDev):
     self.Attach()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new rbd device.
 
     Provision a new rbd volume inside a RADOS pool.

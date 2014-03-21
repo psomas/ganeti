@@ -1508,6 +1508,9 @@ hvKvmFloppyImagePath = "floppy_image_path"
 hvKvmMachineVersion :: String
 hvKvmMachineVersion = "machine_version"
 
+hvKvmMigrationCaps :: String
+hvKvmMigrationCaps = "migration_caps"
+
 hvKvmPath :: String
 hvKvmPath = "kvm_path"
 
@@ -1690,6 +1693,7 @@ hvsParameterTypes = Map.fromList
   , (hvKvmFlag,                         VTypeString)
   , (hvKvmFloppyImagePath,              VTypeString)
   , (hvKvmMachineVersion,               VTypeString)
+  , (hvKvmMigrationCaps,                VTypeString)
   , (hvKvmPath,                         VTypeString)
   , (hvKvmSpiceAudioCompr,              VTypeBool)
   , (hvKvmSpiceBind,                    VTypeString)
@@ -3672,6 +3676,7 @@ hvcDefaults =
           , (hvVga,                             PyValueEx "")
           , (hvKvmExtra,                        PyValueEx "")
           , (hvKvmMachineVersion,               PyValueEx "")
+          , (hvKvmMigrationCaps,                PyValueEx "")
           , (hvVnetHdr,                         PyValueEx True)])
   , (Fake, Map.fromList [(hvMigrationMode, PyValueEx htMigrationLive)])
   , (Chroot, Map.fromList [(hvInitScript, PyValueEx "/ganeti-chroot")])

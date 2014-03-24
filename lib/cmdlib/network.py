@@ -30,7 +30,7 @@ from ganeti import qlang
 from ganeti import query
 from ganeti import utils
 from ganeti.cmdlib.base import LogicalUnit, NoHooksLU, QueryBase
-from ganeti.cmdlib.common import ShareAll, CheckNodeGroupInstances
+from ganeti.cmdlib.common import ShareAll
 
 
 def _BuildNetworkHookEnv(name, subnet, gateway, network6, gateway6,
@@ -169,7 +169,7 @@ class LUNetworkAdd(LogicalUnit):
         for ip in [node.primary_ip, node.secondary_ip]:
           try:
             if pool.Contains(ip):
-              pool.Reserve(ip)
+              pool.Reserve(ip, external=True)
               self.LogInfo("Reserved IP address of node '%s' (%s)",
                            node.name, ip)
           except errors.AddressPoolError, err:
@@ -179,7 +179,7 @@ class LUNetworkAdd(LogicalUnit):
       master_ip = self.cfg.GetClusterInfo().master_ip
       try:
         if pool.Contains(master_ip):
-          pool.Reserve(master_ip)
+          pool.Reserve(master_ip, external=True)
           self.LogInfo("Reserved cluster master IP address (%s)", master_ip)
       except errors.AddressPoolError, err:
         self.LogWarning("Cannot reserve cluster master IP address (%s): %s",
@@ -365,10 +365,7 @@ class LUNetworkSetParams(LogicalUnit):
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
         try:
-          if self.pool.IsReserved(ip):
-            self.LogWarning("IP address %s is already reserved", ip)
-          else:
-            self.pool.Reserve(ip, external=True)
+          self.pool.Reserve(ip, external=True)
         except errors.AddressPoolError, err:
           self.LogWarning("Cannot reserve IP address %s: %s", ip, err)
 
@@ -378,10 +375,7 @@ class LUNetworkSetParams(LogicalUnit):
           self.LogWarning("Cannot unreserve Gateway's IP")
           continue
         try:
-          if not self.pool.IsReserved(ip):
-            self.LogWarning("IP address %s is already unreserved", ip)
-          else:
-            self.pool.Release(ip, external=True)
+          self.pool.Release(ip, external=True)
         except errors.AddressPoolError, err:
           self.LogWarning("Cannot release IP address %s: %s", ip, err)
 
@@ -580,24 +574,17 @@ class LUNetworkConnect(LogicalUnit):
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
-    self.share_locks[locking.LEVEL_INSTANCE] = 1
 
     if self.op.conflicts_check:
+      self.needed_locks[locking.LEVEL_INSTANCE] = locking.ALL_SET
       self.needed_locks[locking.LEVEL_NETWORK] = [self.network_uuid]
       self.share_locks[locking.LEVEL_NETWORK] = 1
+      self.share_locks[locking.LEVEL_INSTANCE] = 1
 
   def DeclareLocks(self, level):
-    if level == locking.LEVEL_INSTANCE:
-      assert not self.needed_locks[locking.LEVEL_INSTANCE]
-
-      # Lock instances optimistically, needs verification once group lock has
-      # been acquired
-      if self.op.conflicts_check:
-        self.needed_locks[locking.LEVEL_INSTANCE] = \
-            self.cfg.GetNodeGroupInstances(self.group_uuid)
+    pass
 
   def BuildHooksEnv(self):
     ret = {
@@ -618,8 +605,6 @@ class LUNetworkConnect(LogicalUnit):
 
     # Check if locked instances are still correct
     owned_instances = frozenset(self.owned_locks(locking.LEVEL_INSTANCE))
-    if self.op.conflicts_check:
-      CheckNodeGroupInstances(self.cfg, self.group_uuid, owned_instances)
 
     self.netparams = {
       constants.NIC_MODE: self.network_mode,
@@ -666,19 +651,13 @@ class LUNetworkDisconnect(LogicalUnit):
     self.group_uuid = self.cfg.LookupNodeGroup(self.group_name)
 
     self.needed_locks = {
-      locking.LEVEL_INSTANCE: [],
+      locking.LEVEL_INSTANCE: locking.ALL_SET,
       locking.LEVEL_NODEGROUP: [self.group_uuid],
       }
     self.share_locks[locking.LEVEL_INSTANCE] = 1
 
   def DeclareLocks(self, level):
-    if level == locking.LEVEL_INSTANCE:
-      assert not self.needed_locks[locking.LEVEL_INSTANCE]
-
-      # Lock instances optimistically, needs verification once group lock has
-      # been acquired
-      self.needed_locks[locking.LEVEL_INSTANCE] = \
-        self.cfg.GetNodeGroupInstances(self.group_uuid)
+    pass
 
   def BuildHooksEnv(self):
     ret = {
@@ -697,7 +676,6 @@ class LUNetworkDisconnect(LogicalUnit):
 
     # Check if locked instances are still correct
     owned_instances = frozenset(self.owned_locks(locking.LEVEL_INSTANCE))
-    CheckNodeGroupInstances(self.cfg, self.group_uuid, owned_instances)
 
     self.group = self.cfg.GetNodeGroup(self.group_uuid)
     self.connected = True

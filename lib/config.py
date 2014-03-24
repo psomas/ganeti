@@ -384,7 +384,7 @@ class ConfigWriter:
     _, address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
     return address
 
-  def _UnlockedReserveIp(self, net_uuid, address, ec_id):
+  def _UnlockedReserveIp(self, net_uuid, address, ec_id, check=True):
     """Reserve a given IPv4 address for use by an instance.
 
     """
@@ -392,22 +392,25 @@ class ConfigWriter:
     pool = network.AddressPool(nobj)
     try:
       isreserved = pool.IsReserved(address)
+      isextreserved = pool.IsReserved(address, external=True)
     except errors.AddressPoolError:
       raise errors.ReservationError("IP address not in network")
     if isreserved:
       raise errors.ReservationError("IP address already in use")
+    if check and isextreserved:
+      raise errors.ReservationError("IP is externally reserved")
 
     return self._temporary_ips.Reserve(ec_id,
                                        (constants.RESERVE_ACTION,
                                         address, net_uuid))
 
   @locking.ssynchronized(_config_lock, shared=1)
-  def ReserveIp(self, net_uuid, address, ec_id):
+  def ReserveIp(self, net_uuid, address, ec_id, check=True):
     """Reserve a given IPv4 address for use by an instance.
 
     """
     if net_uuid:
-      return self._UnlockedReserveIp(net_uuid, address, ec_id)
+      return self._UnlockedReserveIp(net_uuid, address, ec_id, check)
 
   @locking.ssynchronized(_config_lock, shared=1)
   def ReserveLV(self, lv_name, ec_id):
@@ -1542,13 +1545,13 @@ class ConfigWriter:
     inst = self._config_data.instances[old_name].Copy()
     inst.name = new_name
 
-    for (idx, disk) in enumerate(inst.disks):
-      if disk.dev_type == constants.LD_FILE:
+    for (_, disk) in enumerate(inst.disks):
+      if disk.dev_type in [constants.DT_FILE, constants.DT_SHARED_FILE]:
         # rename the file paths in logical and physical id
         file_storage_dir = os.path.dirname(os.path.dirname(disk.logical_id[1]))
         disk.logical_id = (disk.logical_id[0],
                            utils.PathJoin(file_storage_dir, inst.name,
-                                          "disk%s" % idx))
+                                          os.path.basename(disk.logical_id[1])))
         disk.physical_id = disk.logical_id
 
     # Actually replace instance object

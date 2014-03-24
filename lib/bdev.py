@@ -264,7 +264,8 @@ class BlockDev(object):
   after assembly we'll have our correct major/minor.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  # pylint: disable=W0613
+  def __init__(self, unique_id, children, size, params, *args):
     self._children = children
     self.dev_path = None
     self.unique_id = unique_id
@@ -301,7 +302,7 @@ class BlockDev(object):
     raise NotImplementedError
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create the device.
 
     If the device cannot be created, it will return None
@@ -517,7 +518,7 @@ class LogicalVolume(BlockDev):
   _INVALID_NAMES = compat.UniqueFrozenset([".", "..", "snapshot", "pvmove"])
   _INVALID_SUBSTRINGS = compat.UniqueFrozenset(["_mlog", "_mimage"])
 
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Attaches to a LV device.
 
     The unique_id is a tuple (vg_name, lv_name)
@@ -572,7 +573,7 @@ class LogicalVolume(BlockDev):
     return map((lambda pv: pv.name), empty_pvs)
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new logical volume.
 
     """
@@ -1375,7 +1376,7 @@ class DRBD8(BaseDRBD):
   _DISABLE_FLUSH_OPTION = "--no-disk-flushes" # -i
   _DISABLE_META_FLUSH_OPTION = "--no-md-flushes"  # -m
 
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     if children and children.count(None) > 0:
       children = []
     if len(children) not in (0, 2):
@@ -2301,7 +2302,7 @@ class DRBD8(BaseDRBD):
     self.Shutdown()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new DRBD8 device.
 
     Since DRBD devices are not created per se, just assembled, this
@@ -2359,7 +2360,7 @@ class FileStorage(BlockDev):
   The unique_id for the file device is a (file_driver, file_path) tuple.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Initalizes a file device backend.
 
     """
@@ -2478,7 +2479,7 @@ class FileStorage(BlockDev):
       _ThrowError("Can't stat %s: %s", self.dev_path, err)
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new file.
 
     @param size: the size of file in MiB
@@ -2520,7 +2521,7 @@ class PersistentBlockDevice(BlockDev):
   For the time being, pathnames are required to lie under /dev.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Attaches to a static block device.
 
     The unique_id is a path under /dev.
@@ -2546,7 +2547,7 @@ class PersistentBlockDevice(BlockDev):
     self.Attach()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new device
 
     This is a noop, we only return a PersistentBlockDevice instance
@@ -2646,7 +2647,7 @@ class RADOSBlockDevice(BlockDev):
     self.Attach()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new rbd device.
 
     Provision a new rbd volume inside a RADOS pool.
@@ -2985,11 +2986,15 @@ class ExtStorageDevice(BlockDev):
   handling of the externally provided block devices.
 
   """
-  def __init__(self, unique_id, children, size, params):
+  def __init__(self, unique_id, children, size, params, *args):
     """Attaches to an extstorage block device.
 
     """
-    super(ExtStorageDevice, self).__init__(unique_id, children, size, params)
+    super(ExtStorageDevice, self).__init__(unique_id, children, size, params,
+                                           *args)
+
+    (self.name, self.uuid) = args
+
     if not isinstance(unique_id, (tuple, list)) or len(unique_id) != 2:
       raise ValueError("Invalid configuration data %s" % str(unique_id))
 
@@ -3000,13 +3005,15 @@ class ExtStorageDevice(BlockDev):
     self.Attach()
 
   @classmethod
-  def Create(cls, unique_id, children, size, params, excl_stor):
+  def Create(cls, unique_id, children, size, params, excl_stor, *args):
     """Create a new extstorage device.
 
     Provision a new volume using an extstorage provider, which will
     then be mapped to a block device.
 
     """
+    (name, uuid) = args
+
     if not isinstance(unique_id, (tuple, list)) or len(unique_id) != 2:
       raise errors.ProgrammerError("Invalid configuration data %s" %
                                    str(unique_id))
@@ -3017,9 +3024,9 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's create script,
     # to provision a new Volume inside the External Storage
     _ExtStorageAction(constants.ES_ACTION_CREATE, unique_id,
-                      params, str(size))
+                      params, size=str(size), name=name, uuid=uuid)
 
-    return ExtStorageDevice(unique_id, children, size, params)
+    return ExtStorageDevice(unique_id, children, size, params, name, uuid)
 
   def Remove(self):
     """Remove the extstorage device.
@@ -3035,7 +3042,7 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's remove script,
     # to remove the Volume from the External Storage
     _ExtStorageAction(constants.ES_ACTION_REMOVE, self.unique_id,
-                      self.ext_params)
+                      self.ext_params, name=self.name, uuid=self.uuid)
 
   def Rename(self, new_id):
     """Rename this device.
@@ -3055,7 +3062,8 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's attach script,
     # to attach an existing Volume to a block device under /dev
     self.dev_path = _ExtStorageAction(constants.ES_ACTION_ATTACH,
-                                      self.unique_id, self.ext_params)
+                                      self.unique_id, self.ext_params,
+                                      name=self.name, uuid=self.uuid)
 
     try:
       st = os.stat(self.dev_path)
@@ -3090,7 +3098,7 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's detach script,
     # to detach an existing Volume from it's block device under /dev
     _ExtStorageAction(constants.ES_ACTION_DETACH, self.unique_id,
-                      self.ext_params)
+                      self.ext_params, name=self.name, uuid=self.uuid)
 
     self.minor = None
     self.dev_path = None
@@ -3131,7 +3139,8 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's grow script,
     # to grow an existing Volume inside the External Storage
     _ExtStorageAction(constants.ES_ACTION_GROW, self.unique_id,
-                      self.ext_params, str(self.size), grow=str(new_size))
+                      self.ext_params, size=str(self.size), grow=str(new_size),
+                      name=self.name, uuid=self.uuid)
 
   def SetInfo(self, text):
     """Update metadata with info text.
@@ -3147,11 +3156,23 @@ class ExtStorageDevice(BlockDev):
     # Call the External Storage's setinfo script,
     # to set metadata for an existing Volume inside the External Storage
     _ExtStorageAction(constants.ES_ACTION_SETINFO, self.unique_id,
-                      self.ext_params, metadata=text)
+                      self.ext_params, metadata=text,
+                      name=self.name, uuid=self.uuid)
+
+  def Snapshot(self, snapshot_name):
+    """Take a snapshot of the block device.
+
+    """
+    # Call the External Storage's setinfo script,
+    # to set metadata for an existing Volume inside the External Storage
+    _ExtStorageAction(constants.ES_ACTION_SNAPSHOT, self.unique_id,
+                      self.ext_params, snapshot_name=snapshot_name,
+                      name=self.name, uuid=self.uuid)
 
 
 def _ExtStorageAction(action, unique_id, ext_params,
-                      size=None, grow=None, metadata=None):
+                      size=None, grow=None, metadata=None,
+                      snapshot_name=None, name=None, uuid=None):
   """Take an External Storage action.
 
   Take an External Storage action concerning or affecting
@@ -3183,7 +3204,8 @@ def _ExtStorageAction(action, unique_id, ext_params,
 
   # Create the basic environment for the driver's scripts
   create_env = _ExtStorageEnvironment(unique_id, ext_params, size,
-                                      grow, metadata)
+                                      grow, metadata, snapshot_name,
+                                      name, uuid)
 
   # Do not use log file for action `attach' as we need
   # to get the output from RunResult
@@ -3295,12 +3317,14 @@ def ExtStorageFromDisk(name, base_dir=None):
                        detach_script=es_files[constants.ES_SCRIPT_DETACH],
                        setinfo_script=es_files[constants.ES_SCRIPT_SETINFO],
                        verify_script=es_files[constants.ES_SCRIPT_VERIFY],
+                       snapshot_script=es_files[constants.ES_SCRIPT_SNAPSHOT],
                        supported_parameters=parameters)
   return True, es_obj
 
 
 def _ExtStorageEnvironment(unique_id, ext_params,
-                           size=None, grow=None, metadata=None):
+                           size=None, grow=None, metadata=None,
+                           snapshot_name=None, name=None, uuid=None):
   """Calculate the environment for an External Storage script.
 
   @type unique_id: tuple (driver, vol_name)
@@ -3334,6 +3358,15 @@ def _ExtStorageEnvironment(unique_id, ext_params,
 
   if metadata is not None:
     result["VOL_METADATA"] = metadata
+
+  if snapshot_name is not None:
+    result["VOL_SNAPSHOT_NAME"] = snapshot_name
+
+  if name is not None:
+    result["VOL_CNAME"] = name
+
+  if uuid is not None:
+    result["VOL_UUID"] = uuid
 
   return result
 
@@ -3401,7 +3434,7 @@ def FindDevice(disk, children):
   """
   _VerifyDiskType(disk.dev_type)
   device = DEV_MAP[disk.dev_type](disk.physical_id, children, disk.size,
-                                  disk.params)
+                                  disk.params, disk.name, disk.uuid)
   if not device.attached:
     return None
   return device
@@ -3423,7 +3456,7 @@ def Assemble(disk, children):
   _VerifyDiskType(disk.dev_type)
   _VerifyDiskParams(disk)
   device = DEV_MAP[disk.dev_type](disk.physical_id, children, disk.size,
-                                  disk.params)
+                                  disk.params, disk.name, disk.uuid)
   device.Assemble()
   return device
 
@@ -3443,5 +3476,6 @@ def Create(disk, children, excl_stor):
   _VerifyDiskType(disk.dev_type)
   _VerifyDiskParams(disk)
   device = DEV_MAP[disk.dev_type].Create(disk.physical_id, children, disk.size,
-                                         disk.params, excl_stor)
+                                         disk.params, excl_stor,
+                                         disk.name, disk.uuid)
   return device

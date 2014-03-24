@@ -1,3 +1,13 @@
+snf-ganeti (2.8.4+snap1+b64v1+kvm2+ext1+lockfix1+ipfix1+ifdown1+backports3-1~wheezy) wheezy; urgency=low
+
+  * Rebased to latest official stable-2.8 branch
+  * Add optional and on a best effort basis ifdown support
+  * Various cherry-picks and backports from later branches
+    + Fix couple of hotplug bugs
+    + Support KMV migration capabilities as an hvparam
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Mon, 24 Mar 2014 12:55:26 +0200
+
 snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+ipfix1+backports1-1~wheezy) wheezy; urgency=low
 
   * snap adds snapshot support for ext disk template

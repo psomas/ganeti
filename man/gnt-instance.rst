@@ -132,6 +132,9 @@ ip
     connected to the said network. ``--no-conflicts-check`` can be used
     to override this check. The special value **pool** causes Ganeti to
     select an IP from the the network the NIC is or will be connected to.
+    One can pick an externally reserved IP of a network along with
+    ``--no-conflict-check``. Note that this IP cannot be assigned to
+    any other instance until it gets released.
 
 mode
     specifies the connection mode for this NIC: routed, bridged or
@@ -759,6 +762,16 @@ machine\_version
     machine version (due to e.g. outdated drivers). In case it's not set
     the default version supported by your version of kvm is used.
 
+migration\_caps
+    Valid for the KVM hypervisor.
+
+    Enable specific migration capabilities by providing a ":" separated
+    list of supported capabilites. QEMU version 1.7.0 defines
+    x-rdma-pin-all, auto-converge, zero-blocks, and xbzrle. Please note
+    that while a combination of xbzrle and auto-converge might speed up
+    the migration process significantly, the first may cause BSOD on
+    Windows8r2 instances running on drbd.
+
 kvm\_path
     Valid for the KVM hypervisor.
 
@@ -1119,6 +1132,8 @@ MODIFY
 | [\--offline \| \--online]
 | [\--submit]
 | [\--ignore-ipolicy]
+| [\--hotplug]
+| [\--hotplug-if-possible]
 | {*instance*}
 
 Modifies the memory size, number of vcpus, ip address, MAC address
@@ -1194,11 +1209,42 @@ immediately.
 If ``--ignore-ipolicy`` is given any instance policy violations occuring
 during this operation are ignored.
 
+If ``--hotplug`` is given any disk and NIC modifications will take
+effect without the need of actual reboot. Please note that this feature
+is currently supported only for KVM hypervisor and there are some
+restrictions: a) KVM versions >= 1.0 support it b) instances with chroot
+or uid pool security model do not support disk hotplug c) RBD disks with
+userspace access mode can not be hotplugged (yet) d) if hotplug fails
+(for any reason) a warning is printed but execution is continued e)
+for existing NIC modification interactive verification is needed unless
+``--force`` option is passed.
+
+If ``--hotplug-if-possible`` is given then ganeti won't abort in case
+hotplug is not supported. It will continue execution and modification
+will take place after reboot. This covers use cases where instances are
+not running or hypervisor is not KVM.
+
 See **ganeti**\(7) for a description of ``--submit`` and other common
 options.
 
 Most of the changes take effect at the next restart. If the instance is
 running, there is no effect on the instance.
+
+
+SNAPSHOT
+^^^^^^^^
+
+| **snapshot**
+| {\--disk=*ID*:snapshot_name=*VAL*
+| [\--submit]
+| {*instance*}
+
+This only works for instances with ext disk template. It eventualla runs
+the snapshot script of the corresponding extstorage provider.
+The ``--disk 0:snapshot_name=snap1`` will take snapshot of the first disk
+by exporting snapshot name (via VOL_SNAPSHOT_NAME) and disk related info
+to the script environment. *ID* can be a disk index, name or UUID.
+
 
 REINSTALL
 ^^^^^^^^^

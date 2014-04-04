@@ -1425,6 +1425,22 @@ class OpInstanceReinstall(OpCode):
   OP_RESULT = ht.TNone
 
 
+class OpInstanceSnapshot(OpCode):
+  """Snapshot an instance."""
+  OP_DSC_FIELD = "instance_name"
+  OP_PARAMS = [
+    _PInstanceName,
+    ("disks", ht.EmptyList,
+     ht.TListOf(ht.TItems([ht.TOr(ht.TInt, ht.TString),
+                           ht.TDictOf(ht.TElemOf([
+                                      constants.IDISK_SNAPSHOT_NAME]),
+                                      ht.TNonEmptyString)
+                          ])),
+    "Disks to snapshot"),
+    ]
+  OP_RESULT = ht.TNone
+
+
 class OpInstanceRemove(OpCode):
   """Remove an instance."""
   OP_DSC_FIELD = "instance_name"
@@ -1433,6 +1449,7 @@ class OpInstanceRemove(OpCode):
     _PShutdownTimeout,
     ("ignore_failures", False, ht.TBool,
      "Whether to ignore failures during removal"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = ht.TNone
 
@@ -1720,6 +1737,9 @@ class OpInstanceSetParams(OpCode):
      "Whether to wait for the disk to synchronize, when changing template"),
     ("offline", None, ht.TMaybeBool, "Whether to mark instance as offline"),
     ("conflicts_check", True, ht.TBool, "Check for conflicting IPs"),
+    ("hotplug", False, ht.TBool, "Whether to hotplug device"),
+    ("hotplug_if_possible", False, ht.TBool, "If possible then hotplug device"),
+    ("keep_disks", False, ht.TBool, "Whether to remove disks")
     ]
   OP_RESULT = _TSetParamsResult
 

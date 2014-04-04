@@ -121,12 +121,13 @@ def BuildInstanceHookEnv(name, primary_node, secondary_nodes, os_type, status,
 
   if disks:
     disk_count = len(disks)
-    for idx, (name, uuid, size, mode) in enumerate(disks):
+    for idx, (name, uuid, size, mode, info) in enumerate(disks):
       if name:
         env["INSTANCE_DISK%d_NAME" % idx] = name
       env["INSTANCE_DISK%d_UUID" % idx] = uuid
       env["INSTANCE_DISK%d_SIZE" % idx] = size
       env["INSTANCE_DISK%d_MODE" % idx] = mode
+      env.update(info)
   else:
     disk_count = 0
 
@@ -173,8 +174,9 @@ def BuildInstanceHookEnvByObject(lu, instance, override=None):
     "vcpus": bep[constants.BE_VCPUS],
     "nics": NICListToTuple(lu, instance.nics),
     "disk_template": instance.disk_template,
-    "disks": [(disk.name, disk.uuid, disk.size, disk.mode)
-              for disk in instance.disks],
+    "disks": [(disk.name, disk.uuid, disk.size, disk.mode,
+               BuildDiskLogicalIDEnv(instance.disk_template, idx, disk))
+              for idx, disk in enumerate(instance.disks)],
     "bep": bep,
     "hvp": hvp,
     "hypervisor_name": instance.hypervisor,
@@ -269,6 +271,8 @@ def RemoveDisks(lu, instance, target_node=None, ignore_failures=False):
     else:
       edata = device.ComputeNodeTree(instance.primary_node)
     for node, disk in edata:
+      if lu.op.keep_disks and disk.dev_type in constants.DT_EXT:
+        continue
       lu.cfg.SetDiskID(disk, node)
       result = lu.rpc.call_blockdev_remove(node, disk)
       if result.fail_msg:
@@ -286,7 +290,15 @@ def RemoveDisks(lu, instance, target_node=None, ignore_failures=False):
       lu.cfg.AddTcpUdpPort(port)
 
   if instance.disk_template in constants.DTS_FILEBASED:
-    file_storage_dir = os.path.dirname(instance.disks[0].logical_id[1])
+    if len(instance.disks) > 0:
+      file_storage_dir = os.path.dirname(instance.disks[0].logical_id[1])
+    else:
+      if instance.disk_template == constants.DT_SHARED_FILE:
+        file_storage_dir = utils.PathJoin(lu.cfg.GetSharedFileStorageDir(),
+                                          instance.name)
+      else:
+        file_storage_dir = utils.PathJoin(lu.cfg.GetFileStorageDir(),
+                                          instance.name)
     if target_node:
       tgt = target_node
     else:
@@ -559,3 +571,60 @@ def _CheckOSVariant(os_obj, name):
 
   if variant not in os_obj.supported_variants:
     raise errors.OpPrereqError("Unsupported OS variant", errors.ECODE_INVAL)
+
+
+def BuildDiskLogicalIDEnv(template_name, idx, disk):
+  if template_name == constants.DT_PLAIN:
+    vg, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_VG" % idx : vg,
+      "INSTANCE_DISK%d_ID" % idx : name
+      }
+  elif template_name in (constants.DT_FILE, constants.DT_SHARED_FILE):
+    file_driver, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx : file_driver,
+      "INSTANCE_DISK%d_ID" % idx : name
+      }
+  elif template_name == constants.DT_BLOCK:
+    block_driver, adopt = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx : block_driver,
+      "INSTANCE_DISK%d_ID" % idx : adopt
+      }
+  elif template_name == constants.DT_RBD:
+    rbd, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx : rbd,
+      "INSTANCE_DISK%d_ID" % idx : name
+      }
+  elif template_name == constants.DT_EXT:
+    provider, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_PROVIDER" % idx : provider,
+      "INSTANCE_DISK%d_ID" % idx : name
+      }
+  elif template_name == constants.DT_DRBD8:
+    pnode, snode, port, pmin, smin, _ = disk.logical_id
+    data, meta = disk.children
+    data_vg, data_name = data.logical_id
+    meta_vg, meta_name = meta.logical_id
+    ret = {
+      "INSTANCE_DISK%d_PNODE" % idx : pnode,
+      "INSTANCE_DISK%d_SNODE" % idx : snode,
+      "INSTANCE_DISK%d_PORT" % idx : port,
+      "INSTANCE_DISK%d_PMINOR" % idx : pmin,
+      "INSTANCE_DISK%d_SMINOR" % idx : smin,
+      "INSTANCE_DISK%d_DATA_VG" % idx : data_vg,
+      "INSTANCE_DISK%d_DATA_ID" % idx : data_name,
+      "INSTANCE_DISK%d_META_VG" % idx : meta_vg,
+      "INSTANCE_DISK%d_META_ID" % idx : meta_name,
+      }
+  elif template_name == constants.DT_DISKLESS:
+    ret = {}
+
+  ret.update({
+    "INSTANCE_DISK%d_TEMPLATE_NAME" % idx: template_name
+    })
+
+  return ret

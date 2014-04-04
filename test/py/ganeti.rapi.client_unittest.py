@@ -1267,6 +1267,16 @@ class GanetiRapiClientTests(testutils.GanetiTestCase):
     self.assertEqual(serializer.LoadJson(self.rapi.GetLastRequestData()),
                      { "os_name": "linux", })
 
+  def testSnapshotInstance(self):
+    self.rapi.AddResponse("23681")
+    snap = [0, {"snapshot_name": "snap1"}]
+    job_id = self.client.SnapshotInstance("inst7210", disks=[snap])
+    self.assertEqual(job_id, 23681)
+    self.assertItems(["inst7210"])
+    self.assertHandler(rlib2.R_2_instances_name_snapshot)
+    self.assertEqual(serializer.LoadJson(self.rapi.GetLastRequestData()),
+                     {"disks": [snap]})
+
   def testModifyCluster(self):
     for mnh in [None, False, True]:
       self.rapi.AddResponse("14470")

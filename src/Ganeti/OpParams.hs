@@ -45,9 +45,11 @@ module Ganeti.OpParams
   , DiskAccess(..)
   , INicParams(..)
   , IDiskParams(..)
+  , ISnapParams(..)
   , RecreateDisksInfo(..)
   , DdmOldChanges(..)
   , SetParamsMods(..)
+  , SetSnapParams(..)
   , ExportTarget(..)
   , pInstanceName
   , pInstances
@@ -94,8 +96,12 @@ module Ganeti.OpParams
   , pHvState
   , pDiskState
   , pIgnoreIpolicy
+  , pHotplug
+  , pHotplugIfPossible
+  , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
+  , pInstSnaps
   , pDiskTemplate
   , pOptDiskTemplate
   , pFileDriver
@@ -423,6 +429,10 @@ $(buildObject "IDiskParams" "idisk"
   , optionalField $ simpleField C.idiskName   [t| NonEmptyString |]
   ])
 
+-- | Disk snapshot definition.
+$(buildObject "ISnapParams" "idisk"
+  [ simpleField C.idiskSnapshotName [t| NonEmptyString |]])
+
 -- | Disk changes type for OpInstanceRecreateDisks. This is a bit
 -- strange, because the type in Python is something like Either
 -- [DiskIndex] [DiskChanges], but we can't represent the type of an
@@ -490,6 +500,24 @@ instance (JSON a) => JSON (SetParamsMods a) where
   showJSON (SetParamsDeprecated v) = showJSON v
   showJSON (SetParamsNew v) = showJSON v
   readJSON = readSetParams
+
+-- | Instance snapshot params
+data SetSnapParams a
+  = SetSnapParamsEmpty
+  | SetSnapParamsValid (NonEmpty (Int, a))
+    deriving (Eq, Show)
+
+readSetSnapParams :: (JSON a) => JSValue -> Text.JSON.Result (SetSnapParams a)
+readSetSnapParams (JSArray []) = return SetSnapParamsEmpty
+readSetSnapParams v =
+  case readJSON v::Text.JSON.Result [(Int, JSValue)] of
+    Text.JSON.Ok _ -> liftM SetSnapParamsValid $ readJSON v
+    _ -> fail "Cannot parse snapshot params."
+
+instance (JSON a) => JSON (SetSnapParams a) where
+  showJSON SetSnapParamsEmpty = showJSON ()
+  showJSON (SetSnapParamsValid v) = showJSON v
+  readJSON = readSetSnapParams
 
 -- | Custom type for target_node parameter of OpBackupExport, which
 -- varies depending on mode. FIXME: this uses an UncheckedList since
@@ -708,6 +736,17 @@ pDiskParams = optionalField $
               simpleField "diskparams" [t| GenericContainer DiskTemplate
                                            UncheckedDict |]
 
+-- | Whether to hotplug device.
+pHotplug :: Field
+pHotplug = defaultFalse "hotplug"
+
+pHotplugIfPossible :: Field
+pHotplugIfPossible = defaultFalse "hotplug_if_possible"
+
+-- | Whether to remove disks.
+pKeepDisks :: Field
+pKeepDisks = defaultFalse "keep_disks"
+
 -- * Parameters for node resource model
 
 -- | Set hypervisor states.
@@ -738,6 +777,12 @@ type TestClusterOsList = [TestClusterOsListItem]
 -- | List of instance disks.
 pInstDisks :: Field
 pInstDisks = renameField "instDisks" $ simpleField "disks" [t| [IDiskParams] |]
+
+-- | List of instance snaps.
+pInstSnaps :: Field
+pInstSnaps =
+  renameField "instSnaps" $
+  simpleField "disks" [t| SetSnapParams ISnapParams |]
 
 -- | Instance disk template.
 pDiskTemplate :: Field

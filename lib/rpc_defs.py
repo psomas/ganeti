@@ -71,7 +71,8 @@ ACCEPT_OFFLINE_NODE = object()
  ED_BLOCKDEV_RENAME,
  ED_DISKS_DICT_DP,
  ED_SINGLE_DISK_DICT_DP,
- ED_NIC_DICT) = range(1, 15)
+ ED_NIC_DICT,
+ ED_DEVICE_DICT) = range(1, 16)
 
 
 def _Prepare(calls):
@@ -286,6 +287,17 @@ _INSTANCE_CALLS = [
     ("reinstall", None, None),
     ("debug", None, None),
     ], None, None, "Starts an instance"),
+  ("hotplug_device", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ("action", None, "Hotplug Action"),
+    ("dev_type", None, "Device type"),
+    ("device", ED_DEVICE_DICT, "Device dict"),
+    ("extra", None, "Extra info for device (dev_path for disk)"),
+    ("seq", None, "Device seq"),
+    ], None, None, "Hoplug a device to a running instance"),
+  ("hotplug_supported", SINGLE, None, constants.RPC_TMO_NORMAL, [
+    ("instance", ED_INST_DICT, "Instance object"),
+    ], None, None, "Check if hotplug is supported"),
   ]
 
 _IMPEXP_CALLS = [
@@ -417,6 +429,7 @@ _BLOCKDEV_CALLS = [
     ], None, None, "Export a given disk to another node"),
   ("blockdev_snapshot", SINGLE, None, constants.RPC_TMO_NORMAL, [
     ("cf_bdev", ED_SINGLE_DISK_DICT_DP, None),
+    ("snapshot_name", None, None),
     ], None, None, "Export a given disk to another node"),
   ("blockdev_rename", SINGLE, None, constants.RPC_TMO_NORMAL, [
     ("devlist", ED_BLOCKDEV_RENAME, None),

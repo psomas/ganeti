@@ -489,7 +489,8 @@ class ConfigData(ConfigObject):
 
 class NIC(ConfigObject):
   """Config object representing a network card."""
-  __slots__ = ["name", "mac", "ip", "network", "nicparams", "netinfo"] + _UUID
+  __slots__ = ["name", "mac", "ip", "network",
+               "nicparams", "netinfo", "pci"] + _UUID
 
   @classmethod
   def CheckParameterSyntax(cls, nicparams):
@@ -509,11 +510,24 @@ class NIC(ConfigObject):
         not nicparams[constants.NIC_LINK]):
       raise errors.ConfigurationError("Missing bridged NIC link")
 
+  @classmethod
+  def FromDict(cls, val):
+    """Custom function for NICs.
+
+    Remove deprecated idx. Add dummy UUID if not found.
+    Needed for old runtime files.
+
+    """
+    if "idx" in val:
+      del val["idx"]
+    obj = super(NIC, cls).FromDict(val)
+    return obj
+
 
 class Disk(ConfigObject):
   """Config object representing a block device."""
   __slots__ = ["name", "dev_type", "logical_id", "physical_id",
-               "children", "iv_name", "size", "mode", "params"] + _UUID
+               "children", "iv_name", "size", "mode", "params", "pci"] + _UUID
 
   def CreateOnSecondary(self):
     """Test if this device needs to be created on a secondary node."""
@@ -762,6 +776,8 @@ class Disk(ConfigObject):
     """Custom function for Disks
 
     """
+    if "idx" in val:
+      del val["idx"]
     obj = super(Disk, cls).FromDict(val)
     if obj.children:
       obj.children = outils.ContainerFromDicts(obj.children, list, Disk)
@@ -1310,6 +1326,7 @@ class ExtStorage(ConfigObject):
     "detach_script",
     "setinfo_script",
     "verify_script",
+    "snapshot_script",
     "supported_parameters",
     ]
 

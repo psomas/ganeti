@@ -1,4 +1,4 @@
-snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+ipfix1+backports1-1~wheezy) wheezy; urgency=low
+snf-ganeti (2.8.4+snap1+b64v1+kvm2+ext1+lockfix1+ipfix1+ifdown1+backports5-1~wheezy) wheezy; urgency=low
 
   * snap adds snapshot support for ext disk template
   * b64 saves networks' bitarrays in a more compact representation
@@ -8,13 +8,14 @@ snf-ganeti (2.8.3+snap1+b64v1+kvm1+ext1+lockfix1+ipfix1+backports1-1~wheezy) whe
     + allows cache, heads, cyls arbitrary params to reach kvm command
   * lockfix is a workaround for Issue #621
   * ipfix does not require IP if mode is routed (needed for IPv6 only NICs)
-  * backports is a set of patches backported from stable-2.10
-    + Hotplug support
+  * ifdown invokes an external script when a NIC is brought down
+  * backports is a set of patches backported from 2.9, 2.10 and 2.11
+    + Hotplug support + related fixes
     + Better networking support (NIC configuration scripts)
     + Change IP pool to support NAT instances
     + Change RAPI to accept depends body argument and shutdown_timeout
 
- -- Dimitris Aragiorgis <dimara@grnet.gr>  Tue, 17 Dec 2013 13:01:47 +0200
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Fri, 04 Apr 2014 13:21:23 +0300
 
 snf-ganeti (2.8.3-1~wheezy) wheezy; urgency=low
 

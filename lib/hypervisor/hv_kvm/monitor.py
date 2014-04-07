@@ -43,6 +43,19 @@ from ganeti import utils
 from ganeti import serializer
 
 
+class QmpCommandNotSupported(errors.HypervisorError):
+  """QMP command not supported by the monitor.
+
+  This is raised in case a QmpMonitor instance is asked to execute a command
+  not supported by the instance.
+
+  This is a KVM-specific exception, intended to assist in falling back to using
+  the human monitor for operations QMP does not support.
+
+  """
+  pass
+
+
 class QmpMessage(object):
   """QEMU Messaging Protocol (QMP) message.
 
@@ -197,7 +210,7 @@ class QmpConnection(MonitorSocket):
   def __init__(self, monitor_filename):
     super(QmpConnection, self).__init__(monitor_filename)
     self._buf = ""
-    self.supported_commands = frozenset()
+    self.supported_commands = None
 
   def connect(self):
     """Connects to the QMP monitor.
@@ -332,6 +345,14 @@ class QmpConnection(MonitorSocket):
 
     """
     self._check_connection()
+
+    # During the first calls of Execute, the list of supported commands has not
+    # yet been populated, so we can't use it.
+    if (self.supported_commands is not None and
+        command not in self.supported_commands):
+      raise QmpCommandNotSupported("Instance does not support the '%s'"
+                                    " QMP command." % command)
+
     message = QmpMessage({self._EXECUTE_KEY: command})
     if arguments:
       message[self._ARGUMENTS_KEY] = arguments

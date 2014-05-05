@@ -266,6 +266,11 @@ def _UpgradeSerializedRuntime(serialized_runtime):
   else:
     serialized_disks = []
 
+  for disk_entry in serialized_disks:
+    # Add empty uri entry
+    if len(disk_entry) < 3:
+      disk_entry += ("", )
+
   for nic in serialized_nics:
     # Add a dummy uuid slot if an pre-2.8 NIC is found
     if "uuid" not in nic:

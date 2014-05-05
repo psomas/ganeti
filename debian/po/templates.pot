@@ -1,0 +1,49 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ganeti\n"
+"Report-Msgid-Bugs-To: ganeti@packages.debian.org\n"
+"POT-Creation-Date: 2014-03-07 10:47+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid "Abort ${package} removal?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"You are attempting to remove ${package}, but it seems that the running "
+"Ganeti version is still ${version}."
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"This can happen if you upgrade the ganeti package to a new minor version, "
+"but have not run `gnt-cluster upgrade' yet. Removing ${package} will cause "
+"Ganeti to stop functioning correctly."
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"It is highly recommended to abort removal now and upgrade your cluster "
+"before removing ${package}."
+msgstr ""

@@ -769,6 +769,8 @@ class Disk(ConfigObject):
     """Custom function for Disks
 
     """
+    if "physical_id" in val:
+      del val["physical_id"]
     obj = super(Disk, cls).FromDict(val)
     if obj.children:
       obj.children = outils.ContainerFromDicts(obj.children, list, Disk)

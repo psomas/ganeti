@@ -99,7 +99,7 @@ module Ganeti.OpParams
   , pSkipChecks
   , pIgnoreErrors
   , pOptGroupName
-  , pDiskParams
+  , pGroupDiskParams
   , pHvState
   , pDiskState
   , pIgnoreIpolicy
@@ -621,8 +621,8 @@ pClusterOsParams =
   optionalField $
   simpleField "osparams" [t| GenericContainer String (JSObject JSValue) |]
 
-pDiskParams :: Field
-pDiskParams =
+pGroupDiskParams :: Field
+pGroupDiskParams =
   withDoc "Disk templates' parameter defaults" .
   optionalField $
   simpleField "diskparams"

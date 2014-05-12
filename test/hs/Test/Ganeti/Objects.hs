@@ -93,7 +93,7 @@ instance Arbitrary DiskLogicalId where
 instance Arbitrary Disk where
   arbitrary = Disk <$> arbitrary <*> pure [] <*> arbitrary
                    <*> arbitrary <*> arbitrary <*> arbitrary
-                   <*> arbitrary <*> arbitrary
+                   <*> arbitrary <*> arbitrary <*> arbitrary
 
 -- FIXME: we should generate proper values, >=0, etc., but this is
 -- hard for partial ones, where all must be wrapped in a 'Maybe'
@@ -182,8 +182,9 @@ genDiskWithChildren num_children = do
   mode <- arbitrary
   name <- genMaybe genName
   spindles <- arbitrary
+  params <- arbitrary
   uuid <- genName
-  let disk = Disk logicalid children ivname size mode name spindles uuid
+  let disk = Disk logicalid children ivname size mode name spindles params uuid
   return disk
 
 genDisk :: Gen Disk
@@ -204,6 +205,9 @@ $(genArbitrary ''IpFamily)
 $(genArbitrary ''FilledNDParams)
 $(genArbitrary ''FilledNicParams)
 $(genArbitrary ''FilledBeParams)
+
+instance Arbitrary DiskParams where
+  arbitrary = return $ GenericContainer Map.empty
 
 -- | No real arbitrary instance for 'ClusterHvParams' yet.
 instance Arbitrary ClusterHvParams where
@@ -539,7 +543,7 @@ caseIncludeLogicalIdPlain =
       lv_name = "1234sdf-qwef-2134-asff-asd2-23145d.data" :: String
       d =
         Disk (LIDPlain vg_name lv_name) [] "diskname" 1000 DiskRdWr
-          Nothing Nothing "asdfgr-1234-5123-daf3-sdfw-134f43"
+          Nothing Nothing Nothing "asdfgr-1234-5123-daf3-sdfw-134f43"
   in
     HUnit.assertBool "Unable to detect that plain Disk includes logical ID" $
       includesLogicalId vg_name lv_name d
@@ -553,10 +557,10 @@ caseIncludeLogicalIdDrbd =
         Disk
           (LIDDrbd8 "node1.example.com" "node2.example.com" 2000 1 5 "secret")
           [ Disk (LIDPlain "onevg" "onelv") [] "disk1" 1000 DiskRdWr Nothing
-              Nothing "145145-asdf-sdf2-2134-asfd-534g2x"
+              Nothing Nothing "145145-asdf-sdf2-2134-asfd-534g2x"
           , Disk (LIDPlain vg_name lv_name) [] "disk2" 1000 DiskRdWr Nothing
-              Nothing "6gd3sd-423f-ag2j-563b-dg34-gj3fse"
-          ] "diskname" 1000 DiskRdWr Nothing Nothing
+              Nothing Nothing "6gd3sd-423f-ag2j-563b-dg34-gj3fse"
+          ] "diskname" 1000 DiskRdWr Nothing Nothing Nothing
           "asdfgr-1234-5123-daf3-sdfw-134f43"
   in
     HUnit.assertBool "Unable to detect that plain Disk includes logical ID" $
@@ -569,7 +573,7 @@ caseNotIncludeLogicalIdPlain =
       lv_name = "1234sdf-qwef-2134-asff-asd2-23145d.data" :: String
       d =
         Disk (LIDPlain "othervg" "otherlv") [] "diskname" 1000 DiskRdWr
-          Nothing Nothing "asdfgr-1234-5123-daf3-sdfw-134f43"
+          Nothing Nothing Nothing "asdfgr-1234-5123-daf3-sdfw-134f43"
   in
     HUnit.assertBool "Unable to detect that plain Disk includes logical ID" $
       not (includesLogicalId vg_name lv_name d)

@@ -62,6 +62,7 @@ module Ganeti.Objects
   , PartialIPolicy(..)
   , fillIPolicy
   , GroupDiskParams
+  , DiskParams
   , NodeGroup(..)
   , IpFamily(..)
   , ipFamilyToVersion
@@ -390,6 +391,7 @@ data Disk = Disk
   , diskMode       :: DiskMode
   , diskName       :: Maybe String
   , diskSpindles   :: Maybe Int
+  , diskParams     :: Maybe DiskParams
   , diskUuid       :: String
   } deriving (Show, Eq)
 
@@ -402,6 +404,7 @@ $(buildObjectSerialisation "Disk" $
   , defaultField [| DiskRdWr |] $ simpleField "mode" [t| DiskMode |]
   , optionalField $ simpleField "name" [t| String |]
   , optionalField $ simpleField "spindles" [t| Int |]
+  , optionalField $ simpleField "params" [t| DiskParams |]
   ]
   ++ uuidFields)
 

@@ -1706,8 +1706,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     utils.EnsureDirs([(self._InstanceNICDir(instance.name),
                      constants.RUN_DIRS_MODE)])
     for nic_seq, tap in enumerate(taps):
-      utils.WriteFile(self._InstanceNICFile(instance.name, nic_seq),
-                      data=tap)
+      nic = kvm_nics[nic_seq]
+      self._WriteInstanceNICFiles(instance.name, nic_seq, nic, tap)
 
     if vnc_pwd:
       change_cmd = "change vnc password %s" % vnc_pwd
@@ -1888,7 +1888,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       (tap, tapfds, vhostfds) = OpenTap(features=features)
       self._ConfigureNIC(instance, seq, device, tap)
       self.qmp.HotAddNic(device, kvm_devid, tapfds, vhostfds, features)
-      utils.WriteFile(self._InstanceNICFile(instance.name, seq), data=tap)
+      self._WriteInstanceNICFiles(instance.name, seq, device, tap)
 
     self._VerifyHotplugCommand(instance, device, kvm_devid, True)
     # update relevant entries in runtime file

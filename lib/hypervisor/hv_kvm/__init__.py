@@ -717,6 +717,29 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     """
     hv_base.ConfigureNIC([pathutils.KVM_IFUP, tap], instance, seq, nic, tap)
 
+  @classmethod
+  def _UnconfigureNic(cls, instance_name, nic, only_local=True):
+    """Run ifdown script for a specific NIC
+
+    This is executed during instance cleanup and NIC hot-unplug
+
+    @param instance_name: instance we're acting on
+    @type instance_name: string
+    @param nic: nic we're acting on
+    @type nic: nic object
+    @param only_local: whether ifdown script should reset global conf (dns)
+    @type only_local: boolean
+
+    """
+    tap = cls._GetInstanceNICTap(instance_name, nic)
+    env = hv_base.CreateNICEnv(instance_name, nic, tap)
+    arg2 = str(only_local).lower()
+    result = utils.RunCmd([pathutils.KVM_IFDOWN, tap, arg2], env=env)
+    if result.failed:
+      raise errors.HypervisorError("Failed to unconfigure interface %s: %s;"
+                                   " network configuration script output: %s" %
+                                   (tap, result.fail_reason, result.output))
+
   @staticmethod
   def _VerifyAffinityPackage():
     if affinity is None:
@@ -1995,6 +2018,15 @@ class KVMHypervisor(hv_base.BaseHypervisor):
 
     """
     self._StopInstance(instance, force, name, timeout)
+
+  @classmethod
+  def _UnconfigureInstanceNICs(cls, instance_name, info=None):
+    """Get runtime NICs of an instance and unconfigure them
+
+    """
+    _, kvm_nics, __, ___ = cls._LoadKVMRuntime(instance_name, info)
+    for nic in kvm_nics:
+      cls._UnconfigureNic(instance_name, nic)
 
   def CleanupInstance(self, instance_name):
     """Cleanup after a stopped instance

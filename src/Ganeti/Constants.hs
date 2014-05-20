@@ -892,6 +892,11 @@ dtsBlock =
 dtsLvm :: FrozenSet String
 dtsLvm = diskTemplates `ConstantUtils.difference` dtsNotLvm
 
+-- | The set of lvm-based disk templates
+dtsHaveAccess :: FrozenSet String
+dtsHaveAccess = ConstantUtils.mkSet $
+  map Types.diskTemplateToRaw [DTRbd, DTExt]
+
 -- * Drbd
 
 drbdHmacAlg :: String
@@ -3769,7 +3774,9 @@ diskLdDefaults =
               , (ldpProtocol,      PyValueEx drbdDefaultNetProtocol)
               , (ldpResyncRate,    PyValueEx classicDrbdSyncSpeed)
               ])
-  , (DTExt, Map.empty)
+  , (DTExt, Map.fromList
+            [ (ldpAccess, PyValueEx diskKernelspace)
+            ])
   , (DTFile, Map.empty)
   , (DTPlain, Map.fromList [(ldpStripes, PyValueEx lvmStripecount)])
   , (DTRbd, Map.fromList
@@ -3801,7 +3808,9 @@ diskDtDefaults =
                    , (drbdProtocol,      PyValueEx drbdDefaultNetProtocol)
                    , (drbdResyncRate,    PyValueEx classicDrbdSyncSpeed)
                    ])
-  , (DTExt,        Map.empty)
+  , (DTExt,        Map.fromList
+                   [ (rbdAccess, PyValueEx diskKernelspace)
+                   ])
   , (DTFile,       Map.empty)
   , (DTPlain,      Map.fromList [(lvStripes, PyValueEx lvmStripecount)])
   , (DTRbd,        Map.fromList

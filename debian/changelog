@@ -1,3 +1,18 @@
+snf-ganeti (2.10.3+snap1+b64v1+ext1+lockfix1+ipfix1+ifdown1+backports1-1~wheezy) unstable; urgency=low
+
+  * snap adds snapshot support for ext disk template
+  * b64 saves networks' bitarrays in a more compact representation
+  * ext
+    + exports logical id in hooks
+    + allows cache, heads, cyls arbitrary params to reach kvm command
+  * lockfix is a workaround for Issue #621
+  * ipfix does not require IP if mode is routed (needed for IPv6 only NICs)
+  * backports is a set of patches backported from later branches
+    + Make disk.name and disk.uuid available in bdev
+    + Add migration capabilities as an hvparam
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Wed, 21 May 2014 17:03:16 +0300
+
 snf-ganeti (2.10.3-1~wheezy) unstable; urgency=low
 
   * Rebuild from latest Ganeti stable-2.10 branch

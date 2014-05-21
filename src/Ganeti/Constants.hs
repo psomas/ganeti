@@ -1317,6 +1317,9 @@ esActionSetinfo = "setinfo"
 esActionVerify :: String
 esActionVerify = "verify"
 
+esActionSnapshot :: String
+esActionSnapshot = "snapshot"
+
 esScriptCreate :: String
 esScriptCreate = esActionCreate
 
@@ -1338,6 +1341,9 @@ esScriptSetinfo = esActionSetinfo
 esScriptVerify :: String
 esScriptVerify = esActionVerify
 
+esScriptSnapshot :: String
+esScriptSnapshot = esActionSnapshot
+
 esScripts :: FrozenSet String
 esScripts =
   ConstantUtils.mkSet [esScriptAttach,
@@ -1346,7 +1352,8 @@ esScripts =
                        esScriptGrow,
                        esScriptRemove,
                        esScriptSetinfo,
-                       esScriptVerify]
+                       esScriptVerify,
+                       esScriptSnapshot]
 
 esParametersFile :: String
 esParametersFile = "parameters.list"
@@ -1504,6 +1511,9 @@ hvKvmFloppyImagePath = "floppy_image_path"
 
 hvKvmMachineVersion :: String
 hvKvmMachineVersion = "machine_version"
+
+hvKvmMigrationCaps :: String
+hvKvmMigrationCaps = "migration_caps"
 
 hvKvmPath :: String
 hvKvmPath = "kvm_path"
@@ -1687,6 +1697,7 @@ hvsParameterTypes = Map.fromList
   , (hvKvmFlag,                         VTypeString)
   , (hvKvmFloppyImagePath,              VTypeString)
   , (hvKvmMachineVersion,               VTypeString)
+  , (hvKvmMigrationCaps,                VTypeString)
   , (hvKvmPath,                         VTypeString)
   , (hvKvmSpiceAudioCompr,              VTypeBool)
   , (hvKvmSpiceBind,                    VTypeString)
@@ -2304,6 +2315,9 @@ idiskVg = "vg"
 idiskProvider :: String
 idiskProvider = "provider"
 
+idiskSnapshotName :: String
+idiskSnapshotName = "snapshot_name"
+
 idiskParamsTypes :: Map String VType
 idiskParamsTypes =
   Map.fromList [(idiskSize, VTypeSize),
@@ -2313,7 +2327,8 @@ idiskParamsTypes =
                 (idiskVg, VTypeString),
                 (idiskMetavg, VTypeString),
                 (idiskProvider, VTypeString),
-                (idiskName, VTypeMaybeString)]
+                (idiskName, VTypeMaybeString),
+                (idiskSnapshotName, VTypeString)]
 
 idiskParams :: FrozenSet String
 idiskParams = ConstantUtils.mkSet (Map.keys idiskParamsTypes)
@@ -3669,6 +3684,7 @@ hvcDefaults =
           , (hvVga,                             PyValueEx "")
           , (hvKvmExtra,                        PyValueEx "")
           , (hvKvmMachineVersion,               PyValueEx "")
+          , (hvKvmMigrationCaps,                PyValueEx "")
           , (hvVnetHdr,                         PyValueEx True)])
   , (Fake, Map.fromList [(hvMigrationMode, PyValueEx htMigrationLive)])
   , (Chroot, Map.fromList [(hvInitScript, PyValueEx "/ganeti-chroot")])
@@ -4241,6 +4257,10 @@ builtinDataCollectorVersion = "B"
 -- | The reason trail opcode parameter name
 opcodeReason :: String
 opcodeReason = "reason"
+
+-- | The reason trail opcode parameter name
+opcodeSequential :: String
+opcodeSequential = "sequential"
 
 diskstatsFile :: String
 diskstatsFile = "/proc/diskstats"

@@ -787,6 +787,16 @@ machine\_version
     machine version (due to e.g. outdated drivers). In case it's not set
     the default version supported by your version of kvm is used.
 
+migration\_caps
+    Valid for the KVM hypervisor.
+
+    Enable specific migration capabilities by providing a ":" separated
+    list of supported capabilites. QEMU version 1.7.0 defines
+    x-rdma-pin-all, auto-converge, zero-blocks, and xbzrle. Please note
+    that while a combination of xbzrle and auto-converge might speed up
+    the migration process significantly, the first may cause BSOD on
+    Windows8r2 instances running on drbd.
+
 kvm\_path
     Valid for the KVM hypervisor.
 
@@ -1256,6 +1266,22 @@ options.
 
 Most of the changes take effect at the next restart. If the instance is
 running, there is no effect on the instance.
+
+
+SNAPSHOT
+^^^^^^^^
+
+| **snapshot**
+| {\--disk=*ID*:snapshot_name=*VAL*
+| [\--submit]
+| {*instance*}
+
+This only works for instances with ext disk template. It eventualla runs
+the snapshot script of the corresponding extstorage provider.
+The ``--disk 0:snapshot_name=snap1`` will take snapshot of the first disk
+by exporting snapshot name (via VOL_SNAPSHOT_NAME) and disk related info
+to the script environment. *ID* can be a disk index, name or UUID.
+
 
 REINSTALL
 ^^^^^^^^^

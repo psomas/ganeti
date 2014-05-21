@@ -1,7 +1,7 @@
 # Configure script for Ganeti
 m4_define([gnt_version_major], [2])
 m4_define([gnt_version_minor], [10])
-m4_define([gnt_version_revision], [3])
+m4_define([gnt_version_revision], [4])
 m4_define([gnt_version_suffix], [])
 m4_define([gnt_version_full],
           m4_format([%d.%d.%d%s],
@@ -59,6 +59,15 @@ AC_ARG_ENABLE([symlinks],
   ])
 AC_SUBST(INSTALL_SYMLINKS, $INSTALL_SYMLINKS)
 AM_CONDITIONAL([INSTALL_SYMLINKS], [test "$INSTALL_SYMLINKS" = yes])
+
+# --with-haskell-flags=
+AC_ARG_WITH([haskell-flags],
+  [AS_HELP_STRING([--with-haskell-flags=FLAGS],
+    [Extra flags to pass to GHC]
+  )],
+  [hextra_configure="$withval"],
+  [hextra_configure=""])
+AC_SUBST(HEXTRA_CONFIGURE, $hextra_configure)
 
 # --with-ssh-initscript=...
 AC_ARG_WITH([ssh-initscript],

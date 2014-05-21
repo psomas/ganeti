@@ -43,10 +43,10 @@ from qa_utils import AssertCommand, GetCommandOutput, GetObjectInfo
 AVAILABLE_LOCKS = [locking.LEVEL_NODE, ]
 
 
-def _GetOutputFromMaster(cmd,
-                         # pylint: disable=W0613
-                         # (only in later branches required)
-                         use_multiplexer=True, log_cmd=True):
+def GetOutputFromMaster(cmd,
+                        # pylint: disable=W0613
+                        # (only in later branches required)
+                        use_multiplexer=True, log_cmd=True):
   """ Gets the output of a command executed on master.
 
   """
@@ -69,14 +69,35 @@ def ExecuteJobProducingCommand(cmd):
   @param cmd: The command to execute, broken into constituent components.
 
   """
-  job_id_output = _GetOutputFromMaster(cmd)
+  job_id_output = GetOutputFromMaster(cmd)
 
-  possible_job_ids = re.findall("JobID: ([0-9]+)", job_id_output)
+  # Usually, the output contains "JobID: <job_id>", but for instance related
+  # commands, the output is of the form "<job_id>: <instance_name>"
+  possible_job_ids = re.findall("JobID: ([0-9]+)", job_id_output) or \
+                     re.findall("([0-9]+): .+", job_id_output)
   if len(possible_job_ids) != 1:
     raise qa_error.Error("Cannot parse command output to find job id: output "
                          "is %s" % job_id_output)
 
   return int(possible_job_ids[0])
+
+
+def GetJobStatuses(job_ids=None):
+  """ Invokes gnt-job list and extracts an id to status dictionary.
+
+  @type job_ids: list
+  @param job_ids: list of job ids to query the status for; if C{None}, the
+                  status of all current jobs is returned
+  @rtype: dict of string to string
+  @return: A dictionary mapping job ids to matching statuses
+
+  """
+  cmd = ["gnt-job", "list", "--no-headers", "--output=id,status"]
+  if job_ids is not None:
+    cmd.extend(map(str, job_ids))
+
+  list_output = GetOutputFromMaster(cmd)
+  return dict(map(lambda s: s.split(), list_output.splitlines()))
 
 
 def _RetrieveTerminationInfo(job_id):
@@ -154,7 +175,7 @@ def _GetNodeUUIDMap(nodes):
   """
   cmd = ["gnt-node", "list", "--no-header", "-o", "name,uuid"]
   cmd.extend(nodes)
-  output = _GetOutputFromMaster(cmd)
+  output = GetOutputFromMaster(cmd)
   return dict(map(lambda x: x.split(), output.splitlines()))
 
 
@@ -204,7 +225,7 @@ def _GetBlockingLocks():
   # Due to mysterious issues when a SSH multiplexer is being used by two
   # threads, we turn it off, and block most of the logging to improve the
   # visibility of the other thread's output
-  locks_output = _GetOutputFromMaster("gnt-debug locks", use_multiplexer=False,
+  locks_output = GetOutputFromMaster("gnt-debug locks", use_multiplexer=False,
                                       log_cmd=False)
 
   # The first non-empty line is the header, which we do not need
@@ -257,6 +278,32 @@ class QAThread(threading.Thread):
     """
     if self._exc_info is not None:
       raise self._exc_info[0], self._exc_info[1], self._exc_info[2]
+
+
+class QAThreadGroup(object):
+  """This class manages a list of QAThreads.
+
+  """
+  def __init__(self):
+    self._threads = []
+
+  def Start(self, thread):
+    """Starts the given thread and adds it to this group.
+
+    @type thread: qa_job_utils.QAThread
+    @param thread: the thread to start and to add to this group.
+
+    """
+    thread.start()
+    self._threads.append(thread)
+
+  def JoinAndReraise(self):
+    """Joins all threads in this group and calls their C{reraise} method.
+
+    """
+    for thread in self._threads:
+      thread.join()
+      thread.reraise()
 
 
 # TODO: Can this be done as a decorator? Implement as needed.

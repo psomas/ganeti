@@ -557,6 +557,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     constants.IDISK_METAVG,
     constants.IDISK_PROVIDER,
     constants.IDISK_NAME,
+    constants.IDISK_SNAPSHOT_NAME,
     ]))
 
   def _RunAllocator(self):
@@ -2575,10 +2576,10 @@ class TLReplaceDisks(Tasklet):
     for to_node, to_result in result.items():
       msg = to_result.fail_msg
       if msg:
-        self.lu.LogWarning("Can't attach drbd disks on node %s: %s",
-                           self.cfg.GetNodeName(to_node), msg,
-                           hint=("please do a gnt-instance info to see the"
-                                 " status of disks"))
+        raise errors.OpExecError(
+          "Can't attach drbd disks on node %s: %s (please do a gnt-instance "
+          "info to see the status of disks)" %
+          (self.cfg.GetNodeName(to_node), msg))
 
     cstep = itertools.count(5)
 

@@ -39,9 +39,11 @@ module Ganeti.OpParams
   , DiskAccess(..)
   , INicParams(..)
   , IDiskParams(..)
+  , ISnapParams(..)
   , RecreateDisksInfo(..)
   , DdmOldChanges(..)
   , SetParamsMods(..)
+  , SetSnapParams(..)
   , ExportTarget(..)
   , pInstanceName
   , pInstanceUuid
@@ -96,8 +98,10 @@ module Ganeti.OpParams
   , pIgnoreIpolicy
   , pHotplug
   , pHotplugIfPossible
+  , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
+  , pInstSnaps
   , pDiskTemplate
   , pOptDiskTemplate
   , pFileDriver
@@ -210,11 +214,13 @@ module Ganeti.OpParams
   , pReplaceDisksMode
   , pReplaceDisksList
   , pAllowFailover
+  , pForceFailover
   , pDelayDuration
   , pDelayOnMaster
   , pDelayOnNodes
   , pDelayOnNodeUuids
   , pDelayRepeat
+  , pDelayNoLocks
   , pIAllocatorDirection
   , pIAllocatorMode
   , pIAllocatorReqName
@@ -251,6 +257,7 @@ module Ganeti.OpParams
   , pDependencies
   , pComment
   , pReason
+  , pSequential
   , pEnabledDiskTemplates
   ) where
 
@@ -350,6 +357,10 @@ $(buildObject "IDiskParams" "idisk"
   , optionalField $ simpleField C.idiskName   [t| NonEmptyString |]
   ])
 
+-- | Disk snapshot definition.
+$(buildObject "ISnapParams" "idisk"
+  [ simpleField C.idiskSnapshotName [t| NonEmptyString |]])
+
 -- | Disk changes type for OpInstanceRecreateDisks. This is a bit
 -- strange, because the type in Python is something like Either
 -- [DiskIndex] [DiskChanges], but we can't represent the type of an
@@ -418,6 +429,24 @@ instance (JSON a) => JSON (SetParamsMods a) where
   showJSON (SetParamsNew v) = showJSON v
   readJSON = readSetParams
 
+-- | Instance snapshot params
+data SetSnapParams a
+  = SetSnapParamsEmpty
+  | SetSnapParamsValid (NonEmpty (Int, a))
+    deriving (Eq, Show)
+
+readSetSnapParams :: (JSON a) => JSValue -> Text.JSON.Result (SetSnapParams a)
+readSetSnapParams (JSArray []) = return SetSnapParamsEmpty
+readSetSnapParams v =
+  case readJSON v::Text.JSON.Result [(Int, JSValue)] of
+    Text.JSON.Ok _ -> liftM SetSnapParamsValid $ readJSON v
+    _ -> fail "Cannot parse snapshot params."
+
+instance (JSON a) => JSON (SetSnapParams a) where
+  showJSON SetSnapParamsEmpty = showJSON ()
+  showJSON (SetSnapParamsValid v) = showJSON v
+  readJSON = readSetSnapParams
+
 -- | Custom type for target_node parameter of OpBackupExport, which
 -- varies depending on mode. FIXME: this uses an [JSValue] since
 -- we don't care about individual rows (just like the Python code
@@ -473,6 +502,11 @@ pReason =
   withDoc "Reason trail field" $
   simpleField C.opcodeReason [t| ReasonTrail |]
 
+pSequential :: Field
+pSequential =
+  withDoc "Sequential job execution" $
+  defaultFalse C.opcodeSequential
+
 -- * Parameters
 
 pDebugSimulateErrors :: Field
@@ -526,6 +560,10 @@ pInstances =
   defaultField [| [] |] $
   simpleField "instances" [t| [NonEmptyString] |]
 
+-- | Whether to remove disks.
+pKeepDisks :: Field
+pKeepDisks = defaultFalse "keep_disks"
+
 pOutputFields :: Field
 pOutputFields =
   withDoc "Selected output fields" $
@@ -535,6 +573,12 @@ pName :: Field
 pName =
   withDoc "A generic name" $
   simpleField "name" [t| NonEmptyString |]
+
+-- | List of instance snaps.
+pInstSnaps :: Field
+pInstSnaps =
+  renameField "instSnaps" $
+  simpleField "disks" [t| SetSnapParams ISnapParams |]
 
 pForce :: Field
 pForce =
@@ -1238,6 +1282,11 @@ pAllowFailover =
   withDoc "Whether we can fallback to failover if migration is not possible" $
   defaultFalse "allow_failover"
 
+pForceFailover :: Field
+pForceFailover =
+  withDoc "Disallow migration moves and always use failovers" $
+  defaultFalse "force_failover"
+
 pMoveTargetNode :: Field
 pMoveTargetNode =
   withDoc "Target node for instance move" .
@@ -1434,6 +1483,12 @@ pDelayRepeat =
   renameField "DelayRepeat" .
   defaultField [| forceNonNeg (0::Int) |] $
   simpleField "repeat" [t| NonNegative Int |]
+
+pDelayNoLocks :: Field
+pDelayNoLocks =
+  withDoc "Don't take locks during the delay" .
+  renameField "DelayNoLocks" $
+  defaultTrue "no_locks"
 
 pIAllocatorDirection :: Field
 pIAllocatorDirection =

@@ -207,11 +207,6 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
 
       nic_ip = ip
 
-    # TODO: check the ip address for uniqueness
-    if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip:
-      raise errors.OpPrereqError("Routed nic mode requires an ip address",
-                                 errors.ECODE_INVAL)
-
     # MAC address verification
     mac = nic.get(constants.INIC_MAC, constants.VALUE_AUTO)
     if mac not in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
@@ -692,7 +687,7 @@ class LUInstanceCreate(LogicalUnit):
       nics=NICListToTuple(self, self.nics),
       disk_template=self.op.disk_template,
       disks=[(d[constants.IDISK_NAME], d.get("uuid", ""),
-              d[constants.IDISK_SIZE], d[constants.IDISK_MODE])
+              d[constants.IDISK_SIZE], d[constants.IDISK_MODE], {})
              for d in self.disks],
       bep=self.be_full,
       hvp=self.hv_full,
@@ -2611,8 +2606,7 @@ class LUInstanceSetParams(LogicalUnit):
     elif new_mode == constants.NIC_MODE_ROUTED:
       ip = params.get(constants.INIC_IP, old_ip)
       if ip is None:
-        raise errors.OpPrereqError("Cannot set the NIC IP address to None"
-                                   " on a routed NIC", errors.ECODE_INVAL)
+        self.LogInfo("Allowing mode=routed, ip=None (can have an ip6)")
 
     elif new_mode == constants.NIC_MODE_OVS:
       # TODO: check OVS link
@@ -3418,6 +3412,8 @@ class LUInstanceSetParams(LogicalUnit):
     (anno_disk,) = AnnotateDiskParams(self.instance, [root], self.cfg)
     for node_uuid, disk in anno_disk.ComputeNodeTree(
                              self.instance.primary_node):
+      if self.op.keep_disks and disk.dev_type is constants.DT_EXT:
+        continue
       msg = self.rpc.call_blockdev_remove(node_uuid, (disk, self.instance)) \
               .fail_msg
       if msg:

@@ -21,11 +21,8 @@
 source @PKGLIBDIR@/net-common
 
 # Execute the user-supplied network script, if applicable
-if [ -x "$CONF_DIR/kvm-ifup-custom" ]; then
-  exec $CONF_DIR/kvm-ifup-custom "$@"
+if [ -x "$CONF_DIR/kvm-ifdown-custom" ]; then
+  exec $CONF_DIR/kvm-ifdown-custom "$@"
 fi
 
-check
-setup_bridge
-setup_ovs
-setup_route
+exit 0

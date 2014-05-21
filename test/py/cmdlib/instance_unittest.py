@@ -218,8 +218,7 @@ class TestLUInstanceCreate(CmdlibTestCase):
                          nics=[{
                            constants.INIC_MODE: constants.NIC_MODE_ROUTED
                          }])
-    self.ExecOpCodeExpectOpPrereqError(
-      op, "Routed nic mode requires an ip address")
+    self.ExecOpCode(op)
 
   def testValicMac(self):
     op = self.CopyOpCode(self.diskless_op,
@@ -2009,8 +2008,7 @@ class TestLUInstanceSetParams(CmdlibTestCase):
                                 {
                                   constants.INIC_MODE: constants.NIC_MODE_ROUTED
                                 })])
-    self.ExecOpCodeExpectOpPrereqError(
-      op, "Cannot set the NIC IP address to None on a routed NIC")
+    self.ExecOpCode(op)
 
   def testModifyNicSetMac(self):
     op = self.CopyOpCode(self.op,

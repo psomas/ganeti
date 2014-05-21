@@ -87,6 +87,7 @@ __all__ = [
   "FIELDS_OPT",
   "FILESTORE_DIR_OPT",
   "FILESTORE_DRIVER_OPT",
+  "FORCE_FAILOVER_OPT",
   "FORCE_FILTER_OPT",
   "FORCE_OPT",
   "FORCE_VARIANT_OPT",
@@ -97,6 +98,7 @@ __all__ = [
   "GLOBAL_SHARED_FILEDIR_OPT",
   "HOTPLUG_OPT",
   "HOTPLUG_IF_POSSIBLE_OPT",
+  "KEEPDISKS_OPT",
   "HVLIST_OPT",
   "HVOPTS_OPT",
   "HYPERVISOR_OPT",
@@ -196,6 +198,7 @@ __all__ = [
   "IPOLICY_STD_SPECS_OPT",
   "IPOLICY_DISK_TEMPLATES",
   "IPOLICY_VCPU_RATIO",
+  "SEQUENTIAL_OPT",
   "SPICE_CACERT_OPT",
   "SPICE_CERT_OPT",
   "SRC_DIR_OPT",
@@ -843,6 +846,10 @@ PRINT_JOBID_OPT = cli_option("--print-jobid", dest="print_jobid",
                              help=("Additionally print the job as first line"
                                    " on stdout (for scripting)."))
 
+SEQUENTIAL_OPT = cli_option("--sequential", dest="sequential",
+                            default=False, action="store_true",
+                            help=("Execute all resulting jobs sequentially"))
+
 SYNC_OPT = cli_option("--sync", dest="do_locking",
                       default=False, action="store_true",
                       help=("Grab locks while doing the queries"
@@ -1051,6 +1058,12 @@ ALLOW_FAILOVER_OPT = cli_option("--allow-failover",
                                 dest="allow_failover",
                                 action="store_true", default=False,
                                 help="If migration is not possible fallback to"
+                                     " failover")
+
+FORCE_FAILOVER_OPT = cli_option("--force-failover",
+                                dest="force_failover",
+                                action="store_true", default=False,
+                                help="Do not use migration, always use"
                                      " failover")
 
 NONLIVE_OPT = cli_option("--non-live", dest="live",
@@ -1653,6 +1666,10 @@ HOTPLUG_IF_POSSIBLE_OPT = cli_option("--hotplug-if-possible",
                                      action="store_true", default=False,
                                      help="Hotplug devices in case"
                                           " hotplug is supported")
+
+KEEPDISKS_OPT = cli_option("--keep-disks", dest="keep_disks",
+                           action="store_true", default=False,
+                           help="Do not remove disks")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT, REASON_OPT]

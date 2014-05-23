@@ -373,6 +373,16 @@ Modifies the instance parameters.
 :pre-execution: master node, primary and secondary nodes
 :post-execution: master node, primary and secondary nodes
 
+OP_INSTANCE_SNAPSHOT
+++++++++++++++++++++
+
+Takes a snapshot of instance's disk (must be ext template).
+
+:directory: instance-snapshot
+:env. vars:
+:pre-execution: master node, primary and secondary nodes
+:post-execution: master node, primary and secondary nodes
+
 OP_INSTANCE_FAILOVER
 ++++++++++++++++++++
 

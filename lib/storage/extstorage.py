@@ -248,10 +248,19 @@ class ExtStorageDevice(base.BlockDev):
                     " ExtStorage provider for the '%s' hypervisor"
                     % (self.driver, hypervisor))
 
+  def Snapshot(self, snapshot_name):
+    """Take a snapshot of the block device.
+
+    """
+    # Call the External Storage's setinfo script,
+    # to set metadata for an existing Volume inside the External Storage
+    _ExtStorageAction(constants.ES_ACTION_SNAPSHOT, self.unique_id,
+                      self.ext_params, snapshot_name=snapshot_name)
+
 
 def _ExtStorageAction(action, unique_id, ext_params,
                       size=None, grow=None, metadata=None,
-                      name=None, uuid=None):
+                      name=None, uuid=None, snapshot_name=None):
   """Take an External Storage action.
 
   Take an External Storage action concerning or affecting
@@ -287,7 +296,8 @@ def _ExtStorageAction(action, unique_id, ext_params,
 
   # Create the basic environment for the driver's scripts
   create_env = _ExtStorageEnvironment(unique_id, ext_params, size,
-                                      grow, metadata, name, uuid)
+                                      grow, metadata, name, uuid,
+                                      snapshot_name)
 
   # Do not use log file for action `attach' as we need
   # to get the output from RunResult
@@ -399,13 +409,14 @@ def ExtStorageFromDisk(name, base_dir=None):
                        detach_script=es_files[constants.ES_SCRIPT_DETACH],
                        setinfo_script=es_files[constants.ES_SCRIPT_SETINFO],
                        verify_script=es_files[constants.ES_SCRIPT_VERIFY],
+                       snapshot_script=es_files[constants.ES_SCRIPT_SNAPSHOT],
                        supported_parameters=parameters)
   return True, es_obj
 
 
 def _ExtStorageEnvironment(unique_id, ext_params,
                            size=None, grow=None, metadata=None,
-                           name=None, uuid=None):
+                           name=None, uuid=None, snapshot_name=None):
   """Calculate the environment for an External Storage script.
 
   @type unique_id: tuple (driver, vol_name)
@@ -449,6 +460,9 @@ def _ExtStorageEnvironment(unique_id, ext_params,
 
   if uuid is not None:
     result["VOL_UUID"] = uuid
+
+  if snapshot_name is not None:
+    result["VOL_SNAPSHOT_NAME"] = snapshot_name
 
   return result
 

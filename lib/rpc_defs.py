@@ -437,6 +437,7 @@ _BLOCKDEV_CALLS = [
     ], None, None, "Export a given disk to another node"),
   ("blockdev_snapshot", SINGLE, None, constants.RPC_TMO_NORMAL, [
     ("cf_bdev", ED_SINGLE_DISK_DICT_DP, None),
+    ("snapshot_name", None, None),
     ], None, None, "Export a given disk to another node"),
   ("blockdev_rename", SINGLE, None, constants.RPC_TMO_NORMAL, [
     ("devlist", ED_BLOCKDEV_RENAME, None),

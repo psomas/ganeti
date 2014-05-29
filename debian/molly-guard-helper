@@ -1,0 +1,96 @@
+#!/usr/bin/python
+#
+# molly-guard helper script to detect running Ganeti instances.
+#
+# Copyright (c) 2014 Apollon Oikonomopoulos <apoikos@debian.org>
+#
+# This program is free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this package; if not, write to the Free
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+# Boston, MA  02110-1301 USA
+#
+
+import os
+import sys
+import signal
+import socket
+
+
+try:
+    from ganeti.ssconf import SimpleStore
+    from ganeti.hypervisor import GetHypervisor
+    from ganeti.errors import HypervisorError, ConfigurationError
+except ImportError:
+    sys.stderr.write("W: unable to import Ganeti code\n")
+    sys.exit(0)
+
+
+def sigh(action, hostname):
+    """ Exit with an error code to prevent system shutdown/reboot """
+    sys.stdout.write("Good thing I asked; I won't %s %s ...\n" %
+                     (action, hostname))
+    sys.exit(1)
+
+
+def main():
+    action = os.environ.get("MOLLYGUARD_CMD", "?")
+    hostname = socket.gethostname()
+
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT):
+        signal.signal(sig, lambda frame, stack: sigh(action, hostname))
+
+    conf = SimpleStore()
+
+    instances = []
+    try:
+        enabled_hvs = conf.GetHypervisorList()
+    except ConfigurationError:
+        # Cluster is probably not initialized
+        sys.stderr.write("W: failed to get hypervisor list"
+                         " (not part of a cluster?)\n")
+        sys.exit(0)
+
+    for hv_type in enabled_hvs:
+        hv = GetHypervisor(hv_type)
+
+        try:
+            instances += hv.ListInstances()
+        except HypervisorError as err:
+            sys.stderr.write("W: unable to list %s instances: %s\n" %
+                             (hv_type, str(err)))
+
+    if instances:
+        sys.stdout.write("W: The following Ganeti instances will be"
+                         " terminated abnormally if you %s this system:\n" %
+                         action)
+        for instance in sorted(instances):
+            sys.stdout.write("   - %s\n" % instance)
+
+        try:
+            response = raw_input("Type YES to %s the system: " % action)
+        except KeyboardInterrupt:
+            sigh(action, hostname)
+
+        if response.lower().strip() != "yes":
+            sigh(action, hostname)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    if not sys.stdin.isatty():
+        sys.exit(0)
+
+    main()

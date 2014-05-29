@@ -1,0 +1,63 @@
+# Ganeti debconf templates
+# Copyright (C) 2014 Debian Ganeti Packaging Team <pkg-ganeti-devel@lists.alioth.debian.org>
+# This file is distributed under the same license as the ganeti package.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ganeti\n"
+"Report-Msgid-Bugs-To: ganeti@packages.debian.org\n"
+"POT-Creation-Date: 2014-04-08 08:41+0200\n"
+"PO-Revision-Date: 2014-03-06 20:00+0200\n"
+"Last-Translator: Apollon Oikonomopoulos <apoikos@debian.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid "Abort ${package} removal?"
+msgstr "Διακοπή απεγκατάστασης του ${package};"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"You are attempting to remove ${package}, but it seems that the running "
+"Ganeti version is still ${version}."
+msgstr ""
+"Επιχειρείτε να αφαιρέσετε το πακέτο ${package}, ωστόσο φαίνεται ότι η έκδοση "
+"του Ganeti που τρέχει είναι ακόμα η ${version}."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+#, fuzzy
+#| msgid ""
+#| "This can happen if you upgrade the ganeti package to a new minor version, "
+#| "but have not run `gnt-cluster upgrade' yet. Removing ${package} will "
+#| "cause Ganeti to stop functioning correctly."
+msgid ""
+"This can happen if you upgrade the ganeti package to a new minor version, "
+"but have not run \"gnt-cluster upgrade\" yet. Removing ${package} will cause "
+"Ganeti to stop functioning correctly."
+msgstr ""
+"Αυτό μπορεί να συμβαίνει επειδή αναβαθμίσατε το πακέτο ganeti σε νέα έκδοση, "
+"αλλά δεν έχετε ακόμα εκτελέσει `gnt-cluster upgrade'. Αν απεγκαταστήσετε το "
+"${package}, το Ganeti δε θα λειτουργεί σωστά."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+#, fuzzy
+#| msgid ""
+#| "It is highly recommended to abort removal now and upgrade your cluster "
+#| "before removing ${package}."
+msgid ""
+"It is highly recommended to abort the removal now and upgrade the cluster "
+"before removing ${package}."
+msgstr ""
+"Σας συνιστούμε να διακόψετε τώρα την απεγκατάσταση και να αναβαθμίσετε το "
+"cluster σας πρωτού απεγκαταστήσετε το ${package}."

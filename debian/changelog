@@ -1,0 +1,641 @@
+ganeti (2.10.4-1~bpo70+1) wheezy-backports; urgency=medium
+
+  * Rebuild for wheezy-backports.
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Wed, 21 May 2014 12:32:27 +0300
+
+ganeti (2.10.4-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz):
+    + Support restricted migration in hbal
+    + Fix for the --shared-file-storage-dir of gnt-cluster modify
+    + Fail in replace-disks if attaching disks fails
+    + Set IFF_ONE_QUEUE on created tap interfaces for KVM
+    + Small fixes and enhancements in the build system
+    + Various documentation fixes
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Fri, 16 May 2014 09:48:05 +0300
+
+ganeti (2.10.3-1) unstable; urgency=medium
+
+  [ Apollon Oikonomopoulos ]
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz):
+    + Fix filtering of pending jobs with -o id
+    + Make RAPI API calls more symmetric
+    + Make parsing of old cluster configuration more robust
+    + Fix wrong output of gnt-instance info after migrations
+    + Fix reserved PCI slots for KVM hotplugging
+    + Use runtime hypervisor parameters to calculate bockdevice options for KVM
+    + Fix high node daemon load during disk sync if the sync is paused manually
+    + Improve opportunistic locking during instance creation
+    + Make watcher submit queries low priority
+    + Add reason parameter to RAPI client functions
+    + Fix failing gnt-node list-drbd command
+    + Properly display fake job locks in gnt-debug.
+    + small fixes in documentation
+  * Drop 0001-Fix-specification-of-TIDiskParams.patch, merged upstream
+  * Update debconf templates and package descriptions (Closes: #741404)
+    + Update Greek translation to match the new templates
+  * control.in: add missing dependencies, already present in debian/control
+
+  [ Debconf translations ]
+  * Danish (Joe Hansen, closes: #744899)
+  * Japanese (Victory, closes: #743904)
+  * Russian (Yuri Kozlov, closes: #744272)
+  * Portuguese (Americo Monteiro, closes: #745146)
+  * French (Julien Patriarca, closes: #744361)
+  * Spanish (Camaleon, closes: #745429)
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Tue, 22 Apr 2014 16:15:41 +0300
+
+ganeti (2.10.2-2) unstable; urgency=high
+
+  * Fix broken extstorage support (upstream commit b26a275a0, closes: #742699)
+  * Urgency set to high; together with 2.10.2-1, this is an important bugfix
+    release.
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Thu, 27 Mar 2014 16:18:57 +0200
+
+ganeti (2.10.2-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz):
+    + Fix conflict between virtio + spice or soundhw
+    + accept relative paths in gnt-cluster copyfile
+    + Introduce shutdown timeout for 'xm shutdown' command
+    + Improve RAPI detection of the watcher
+  * Add molly-guard helper script to prevent accidental shutdown/reboot of
+    nodes with running instances. ganeti now Suggests: molly-guard.
+  * ganeti.postinst fixes:
+    + Silence daemon-util errors
+    + Do not double-start ganeti upon upgrade
+    + Fix a bug where the Haskell daemons would not be restarted properly on
+      upgrade (affecting upgrades from 2.10 and on only).
+  * ganeti-2.10: add dependency on python-fdsend, required for KVM NIC
+    hotplugging to work.
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Wed, 26 Mar 2014 09:58:14 +0200
+
+ganeti (2.10.1-1) unstable; urgency=medium
+
+  * New upstream stable release
+    + For new features and changes since 2.9.x, see
+      http://docs.ganeti.org/ganeti/2.10/html/news.html or NEWS.gz.
+    + Support multiple co-existing versions and cluster-wide upgrades, see
+      http://docs.ganeti.org/ganeti/2.10/html/design-upgrade.html
+  * Build-Depend on m4 (required upstream)
+  * New binary packages:
+    + ganeti-2.10: Python code and scripts for Ganeti 2.10
+    + ganeti-haskell-2.10: Haskell binaries for Ganeti 2.10. ganeti-haskell no
+      longer exists.
+    + ganeti-htools-2.10: Haskell tools for Ganeti 2.10
+  * Generate debian/control and most debhelper files from templates for the
+    given Ganeti version.
+  * ganeti-htools is now intended only for standalone use and conflicts with
+    ganeti, which now depends on ganeti-htools-2.10 and includes all htools
+    functionality.
+  * debian/watch: look for stable 2.10 releases
+  * postinst: restart the ganeti service only when needed, i.e. when the
+    actual running version has changed.
+  * Prompt (using debconf) to abort removal of versioned packages when they
+    are still in use (e.g. before `gnt-cluster upgrade' is run).
+    + ganeti-haskell-2.10, ganeti-htools-2.10 and ganeti-2.10 now depend on
+      debconf | debconf-2.0.
+    + Build-depend on po-debconf.
+    + Add debconf templates and translation template.
+    + Add Greek debconf translation.
+    + Override lintian's no-debconf-config tag, since we are using debconf
+      only to prompt interactively on removal (no actual configuration is
+      done).
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Thu, 06 Mar 2014 18:00:05 +0200
+
+ganeti (2.9.5-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz):
+    + Fix overflow problem in hbal that caused it to break when waiting for
+      jobs for more than 10 minutes.
+    + Make hbal properly handle non-LVM storage.
+    + Properly export and import NIC parameters, and do so in a backwards
+      compatible way.
+    + Fix net-common script in case of routed mode.
+    + Improve documentation.
+    
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Wed, 26 Feb 2014 14:11:38 +0200
+
+ganeti (2.9.4-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz).
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Mon, 10 Feb 2014 16:57:55 +0200
+
+ganeti (2.9.3-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz)
+    + Supports the blktap2 Xen driver. Be sure to install blktap-dkms if you
+      want to use file-backed instances on Xen 4.0.1+ (closes: #686823).
+    + Drop debian/patches/FTBFS_with_sphinx_1.2.patch (merged upstream).
+  * Update package description to also mention KVM.
+  * Suggest blktap-dkms for blktap2 compatibility.
+  * debian/watch: use the new downloads.ganeti.org distribution point and
+    verify upstream GPG signatures.
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Tue, 28 Jan 2014 11:52:11 +0200
+
+ganeti (2.9.2-2) unstable; urgency=medium
+
+  * Add patch fixing FTBFS with python-sphinx 1.2. Thanks to Andreas Moog!
+    (closes: #733181)
+  * Drop Recommends on qemu-system-x86, since it does not provide /usr/bin/kvm
+    anymore.
+  * Do not pass --enable-htools-rapi to configure, the option has been removed
+    upstream since 2.8.
+  * Bump standards to 3.9.5 (no changes needed).
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Fri, 27 Dec 2013 10:38:05 +0200
+
+ganeti (2.9.2-1) unstable; urgency=medium
+
+  * New upstream bugfix release (see /usr/share/doc/ganeti/NEWS.gz)
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Sun, 15 Dec 2013 19:47:41 +0200
+
+ganeti (2.9.1-1) unstable; urgency=low
+
+  * New upstream version
+  * postinst: remove the ganeti-mond user when upgrading from previous versions
+  * (Build-)Depends: OR with wheezy's names for iproute and kvm to ease
+    backports
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Mon, 18 Nov 2013 08:13:22 +0200
+
+ganeti (2.8.2-1) unstable; urgency=medium
+
+  * New upstream bugfix release
+    + Urgency set to medium, as this is a bugfix-only release and it fixes a
+      serious bug with DRBD during live migrations.
+  * Build Haskell binaries with read-only relocations (fixes hardening-no-relro
+    lintian warning).
+  * Do not emit an error message in postinst if /var/lib/ganeti/queue/archive
+    does not exist.
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Fri, 08 Nov 2013 10:53:59 +0200
+
+ganeti (2.8.1-1) unstable; urgency=low
+
+  * New upstream version (closes: #726502)
+  * Specify additional extstorage provider search paths:
+    + /srv/ganeti/extstorage
+    + /usr/local/lib/ganeti/extstorage
+    + /usr/lib/ganeti/extstorage
+    + /usr/share/ganeti/extstorage
+  * Recommend ganeti-htools (instead of Suggest) and break older htools versions
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Thu, 17 Oct 2013 23:16:36 +0300
+
+ganeti (2.8.0-1) unstable; urgency=low
+
+  [ Iustin Pop ]
+  * Remove myself from uploaders
+
+  [ Apollon Oikonomopoulos ]
+  * New upstream version (Closes: #721824)
+  * Replace forgotten iproute dependency with iproute2
+  * Build-Depend on libghc-snap-server-dev for the new ganeti-mond
+  * Ship ganeti-mond and ganeti-luxid in ganeti-haskell
+  * Require python version >= 2.6
+  * Enable user separation
+    + Add postinst/postrm templates and generator script
+    + Update logrotate snippet to use su root root due to logdir permissions
+    + Update job queue archive permissions in postinst if necessary
+  * Disable the test suite during build
+    + Currently broken due to the user separation
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Mon, 30 Sep 2013 14:29:51 +0300
+
+ganeti (2.7.1-3) unstable; urgency=low
+
+  * Remove Recommends: xen-linux-system-686 as the package has been replaced by
+    xen-linux-system-686-pae
+  * Ditto for Suggests: drbd8-module-source. DRBD has been available in all
+    stock kernels since squeeze
+  * ganeti-doc breaks ganeti2 due to the doc-base manifest (Closes: #718553)
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Wed, 31 Jul 2013 13:35:04 +0300
+
+ganeti (2.7.1-2) unstable; urgency=low
+
+  * Build-Depend on bash-completion and use dh_bash-completion
+  * Fix binary-arch FTBFS (Closes: #718231)
+    - Switch ganeti-haskell and ganeti-htools to dh_install only
+    - Do not run dh_sphinxdoc when building binary-arch packages
+    - Have dh_install ignore ganeti-haskell and ganeti-htools files when
+      building binary-indep packages
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Mon, 29 Jul 2013 09:42:21 +0300
+
+ganeti (2.7.1-1) unstable; urgency=low
+
+  * New upstream version
+  * Rebuild the sphinx documentation and use dh_sphinxdoc (Closes: #718026)
+  * Drop the following patches already merged upstream:
+    - 0001-daemon-util-pass-oknodo-at-rotate_logs.patch
+    - 0001-daemon-util-provide-rotate_logs-and-rotate_all_logs-.patch
+    - fix-ganeti-cleaner-in-crontab.patch
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Sun, 28 Jul 2013 04:59:44 +0300
+
+ganeti (2.7.0-2) unstable; urgency=low
+
+  * Rename ganeti2 to ganeti
+    - Transition using a dummy ganeti2 package
+  * Add dependencies on python-bitarray and python-ipaddr (Closes: #717296)
+  * ganeti-haskell Replaces & Breaks older ganeti2 packages (Closes: #717242)
+  * Build system refactoring
+    - Use the dh sequencer and cleanup debian/rules
+    - Switch from dh_pysupport to dh_python2
+    - Run the upstream test suite during build
+      o Add a patch to disable running `local' checks
+  * Provide the /etc/logrotate.d/ganeti snippet
+    - Include 2 patches, merged upstream, implementing the logrotate helper.
+  * Ship the majority of the Python code in a private module under
+    /usr/share/ganeti
+  * Ship the RAPI client as a separate package (python-ganeti-rapi)
+  * Ship the HTML documentation as ganeti-doc
+    - Depend on libjs-underscore instead of embedding a copy
+  * Update standards version to 3.9.4 and compat to 9
+    - No changes needed, see #688251 for not adding Built-Using
+  * Update the Vcs-* fields to use anonscm.debian.org
+  * Add Apollon Oikonomopoulos <apoikos@gmail.com> to the Uploaders list
+  * Require Python version 2.5 or newer
+  * Convert debian/copyright to Format 1.0
+  * Backport upstream commit 927840bc, fixing a stale check against
+    ganeti-master-cleaner from the crontab.
+
+ -- Apollon Oikonomopoulos <apoikos@gmail.com>  Fri, 12 Jul 2013 20:32:31 +0300
+
+ganeti (2.7.0-1) unstable; urgency=low
+
+  * New upstream version
+    - Fix compatibility with newer ghc (Closes: #713754)
+    - No longer require lvm vg on non-vm-capable nodes (Closes: #650664)
+  * Add dependency on fping: this is needed now by the master-ip-setup
+    script (Closes: #705005)
+  * Update Xen recommends to be version-independent (Closes: #696133)
+  * Remove outdated fix-no-kvm.patch
+  * Suggest ganeti-htools
+  * Split other haskell components in the ganeti-haskell package
+  * Enable restricted commands
+
+ -- Guido Trotter <ultrotter@debian.org>  Thu, 11 Jul 2013 13:27:18 +0200
+
+ganeti (2.6.2-2) experimental; urgency=low
+
+  * Fix dependencies for Template Haskell: according to DHG, need to
+    depend on ghc-ghci
+
+ -- Iustin Pop <iustin@debian.org>  Thu, 14 Feb 2013 19:54:49 +0100
+
+ganeti (2.6.2-1) experimental; urgency=low
+
+  * New upstream version (skipped 2.6.0/2.6.1 due to Wheezy freeze)
+  * Uploading to experimental in order to avoid potential problems when
+    updating the Wheezy package (which is 2.5.2-based)
+  * Sync speed is now configurable in 2.6, see the disk parameters
+    documentation (Closes: #599445)
+
+ -- Iustin Pop <iustin@debian.org>  Wed, 13 Feb 2013 10:59:49 +0100
+
+ganeti (2.5.2-1) unstable; urgency=low
+
+  * New upstream bug-fix version
+    - fixed KVM start and live migration with a custom keymap (Closes: #676930)
+    - fixed compatibility with KVM versions that don't support enabling multiple
+      boot devices (Closes: #624256)
+    - fixed bash-isms in kvm-ifup tool
+    - fixed parallel build mode
+  * Fixed dh_installinit invocation, which created invalid update-rc.d
+    calls in postinst/configure (Closes: #677674)
+
+ -- Iustin Pop <iustin@debian.org>  Thu, 26 Jul 2012 20:26:09 +0200
+
+ganeti (2.5.1-1) unstable; urgency=low
+
+  * New upstream bug-fix version:
+  * fixes compatibility with newer LVM versions
+  * `tools/lvmstrap` recognises kernel 3.x
+  * OS scripts environment includes a PATH
+  * fixed hooks abort handling (regression from 2.4) and improved error
+    display
+  * and a few other minor cosmetic fixes
+
+ -- Iustin Pop <iustin@debian.org>  Fri, 11 May 2012 20:39:01 +0200
+
+ganeti (2.5.0-2) unstable; urgency=low
+
+  * Fix Build-Depends (no more separate -Indep depends, add iproute)
+    (Closes: #671981)
+
+ -- Iustin Pop <iustin@debian.org>  Tue, 08 May 2012 22:34:10 +0200
+
+ganeti (2.5.0-1) unstable; urgency=low
+
+  * New significant upstream release; this integrates the htools source
+    code and as such it superseedes the ganeti-htools standalone source
+    package
+  * There are a number of incompatible changes at the API level, see the
+    upstream NEWS file
+
+ -- Iustin Pop <iustin@debian.org>  Sun, 06 May 2012 14:01:00 +0200
+
+ganeti (2.4.5-2) unstable; urgency=low
+
+  * Backport patch to support KVM versions 1.0 and later
+  * Standards version 3.9.3 (no changes needed)
+
+ -- Iustin Pop <iustin@debian.org>  Sat, 24 Mar 2012 20:59:10 +0100
+
+ganeti (2.4.5-1) unstable; urgency=low
+
+  * New upstream versions (again, many bugs fixed)
+
+ -- Iustin Pop <iustin@debian.org>  Wed, 09 Nov 2011 04:37:12 +0900
+
+ganeti (2.4.2-1) unstable; urgency=low
+
+  * New upstream version (fixing many bugs, see the upstream NEWS file)
+  * Standards version 3.9.2 (no changes needed)
+
+ -- Iustin Pop <iustin@debian.org>  Wed, 29 Jun 2011 21:34:26 +0200
+
+ganeti (2.4.1-1) unstable; urgency=low
+
+  * New upstream version (many changes, please read the NEWS file for the
+    2.4 beta and rc releases)
+  * Needs ganeti-htools 0.3.0 or newer, so added conflicts with older
+    versions
+
+ -- Iustin Pop <iustin@debian.org>  Thu, 10 Mar 2011 19:52:44 +0100
+
+ganeti (2.3.1-1) experimental; urgency=low
+
+  * New upstream version (Closes: #597957, #607679)
+  * Remove obsolete patches integrated upstream
+
+ -- Iustin Pop <iustin@debian.org>  Sun, 09 Jan 2011 19:01:15 +0100
+
+ganeti (2.2.1-1) experimental; urgency=low
+
+  * New upstream version(s), uploading to experimental during the Squeeze
+    freeze
+  * Standards version 3.9.1 (no changes needed)
+  * Fixed case of special values in gnt-backup(8) (Closes: #596347)
+
+ -- Iustin Pop <iustin@debian.org>  Sun, 24 Oct 2010 17:10:15 +0200
+
+ganeti (2.1.6-1) unstable; urgency=low
+
+  * New upstream version(s)
+  * Standard version 3.9.0 (no changes needed)
+
+ -- Iustin Pop <iustin@debian.org>  Sat, 17 Jul 2010 19:18:07 +0200
+
+ganeti (2.1.2.1-2) unstable; urgency=low
+
+  * Ship the defaults file provided by upstream (Closes: #579452)
+  * Fix debian/rules clean target
+
+ -- Iustin Pop <iustin@debian.org>  Thu, 27 May 2010 00:24:33 +0200
+
+ganeti (2.1.2.1-1) unstable; urgency=low
+
+  * New upstream version
+  * Remove a number of patches, integrated upstream (watcher hooks, check-man,
+    cfgupgrade12)
+  * Update recommends for new sid versions and package names
+
+ -- Iustin Pop <iustin@debian.org>  Sun, 23 May 2010 23:46:38 +0200
+
+ganeti (2.1.1-1) unstable; urgency=low
+
+  * New upstream version
+  * Remove patches imported upstream
+  * Import cfgupgrade12 from upstream git
+  * Add patch to remove old ssconf file on upgrade
+  * Import a new patch for check-man issues
+  * Import watcher warnings patch from upstream
+  * Update doc-base for 2.1's sphinx documentation
+  * Replace embedded jquery with external dependency
+  * Update NEWS file for 1.2 to 2.1 upgrade
+
+ -- Iustin Pop <iustin@debian.org>  Sat, 17 Apr 2010 21:36:59 +0200
+
+ganeti (2.0.6-2) unstable; urgency=low
+
+  * Cherry-pick three patches from upstream:
+  * Fix two potentially endless loops in http library
+  * KVM: Fix unintended qemu-level bridging of nics
+  * Fix python 2.6.5 compatibility
+
+ -- Iustin Pop <iustin@debian.org>  Thu, 11 Mar 2010 19:22:17 +0100
+
+ganeti (2.0.6-1) unstable; urgency=low
+
+  * New upstream version (Closes: #568105, thanks Elmar Hoffmann!)
+  * The new version fixes some minor bugs (no new features)
+  * Standards version 3.8.4 (no changes needed)
+  * Fix NEWS.Debian lintian warnings
+  * Add a patch to fix wrong docbook man output
+  * Change my address to @debian.org and remove DM-Upload-Allowed
+
+ -- Iustin Pop <iustin@debian.org>  Tue, 09 Feb 2010 20:13:26 +0100
+
+ganeti (2.0.5-1) unstable; urgency=high
+
+  * New upstream version, fixing CVE-2009-4261 (thus the high urgency)
+  * Also fixes a small bug related to gnt-node list during instance removal
+  * Include RAPI documentation
+
+ -- Iustin Pop <iusty@k1024.org>  Thu, 17 Dec 2009 22:53:08 +0100
+
+ganeti (2.0.4-1) unstable; urgency=low
+
+  * New Upstream Version
+  * The new version fixes quite a number of upstream bugs and adds a number of
+    new features, see the upstream NEWS file
+  * Update to standards version 3.8.3 (no changes needed)
+  * Switch to source format 3.0 (quilt) and drop quilt rules/depencency
+  * Add doc-base files for the main html docs we ship
+  * Add patch to call hostname with "--fqdn" to workaround recent changes which
+    always strip the domain name
+
+ -- Iustin Pop <iusty@k1024.org>  Fri, 04 Dec 2009 20:23:45 +0100
+
+ganeti (2.0.3-1) unstable; urgency=low
+
+  * New Upstream Version
+  * The new upstream fixes "Ganeti doesn't detect export failures"
+    (Closes: #538818)
+  * Note that the 2.0.2 has disk changes which can create issues in some
+    corner-cases, see http://code.google.com/p/ganeti/wiki/UpgradeNotes for
+    details
+
+ -- Iustin Pop <iusty@k1024.org>  Sat, 08 Aug 2009 20:50:59 +0200
+
+ganeti (2.0.1-3) unstable; urgency=low
+
+  * Fix the startup-with-1.2-config (Closes: #539303)
+  * Patch the initscript to fix insserv dependencies
+
+ -- Iustin Pop <iusty@k1024.org>  Tue, 04 Aug 2009 21:28:35 +0200
+
+ganeti (2.0.1-2) unstable; urgency=low
+
+  * Allow kvm instead of xen-linux-system-*
+  * Use xen-linux-system-2.6.26-2-* rather than xen-linux-system-2.6.26-1-*.
+  * Substitute ssh with openssh-client, openssh-server
+  * Add git-buildpackage configuration (as debian/gbp.conf)
+
+ -- Guido Trotter <ultrotter@debian.org>  Sun, 26 Jul 2009 12:08:36 +0200
+
+ganeti (2.0.1-1) unstable; urgency=low
+
+  [ Iustin Pop ]
+  * Packaged ganeti 2.0 and switched the binary package name to ganeti2
+  * Renamed package to ganeti2, since migration from ganeti 1.2.x to 2.0.x
+    is not automatic (and needs cluster shutdown)
+  * Remove Leonardo (l@lmello.eu.org) from the Uploaders list, since he
+    wasn't active in a long while
+  * Fix "ganeti (HVM mode) default expected kernel:
+    /usr/lib/xen/boot/hvmloader in lenny not exist" (Closes: #528618);
+    note that this is a fix that works for unstable, not Lenny
+
+  [ Guido Trotter ]
+  * Remove build-dependency on docbook-utils (docs are built upstream)
+
+ -- Guido Trotter <ultrotter@debian.org>  Sat, 25 Jul 2009 13:36:06 +0200
+
+ganeti (1.2.7-1) unstable; urgency=low
+
+  * New Upstream Version
+  * Standard version 3.8.1 (no changes needed)
+  * Fix a couple of non-critical lintian warnings (directory in /var/run,
+    debian/copyright has old format, etc.)
+
+ -- Iustin Pop <iusty@k1024.org>  Thu, 07 May 2009 07:58:32 +0200
+
+ganeti (1.2.6-3) unstable; urgency=low
+
+  * Cherry-pick commit 2461 from upstream, fixing (yet again, hopefully
+    for the last time) compatibility with twisted 8.1 (Closes: #510965)
+  * Fix the watch regexp to ignore non-stable releases
+
+ -- Iustin Pop <iusty@k1024.org>  Tue, 10 Feb 2009 20:02:46 +0100
+
+ganeti (1.2.6-2) unstable; urgency=low
+
+  * Update recommends for the current packages in unstable and
+    testing (Closes: #474452)
+
+ -- Iustin Pop <iusty@k1024.org>  Wed, 10 Dec 2008 09:47:27 +0100
+
+ganeti (1.2.6-1) unstable; urgency=low
+
+  * New upstream release (bugfixes and a couple of small new features)
+  * Include the batcher example file
+
+ -- Iustin Pop <iusty@k1024.org>  Wed, 08 Oct 2008 08:52:59 +0200
+
+ganeti (1.2.5-1) unstable; urgency=low
+
+  * New upstream release, fixing compatibility with the current versions of
+    twisted (Closes: #487752)
+  * Fix watch file (was picking up other archives too)
+  * Fix some lintian warnings about debian/copyright
+  * Remove dependency on fping (new upstream removes all uses of fping)
+  * Add DM-Upload-Allowed: yes to the control file
+  * Add a recommend on ganeti-instance-deboostrap, now that it is packaged
+
+ -- Iustin Pop <iusty@k1024.org>  Wed, 23 Jul 2008 09:24:07 +0200
+
+ganeti (1.2.4-2) unstable; urgency=low
+
+  * Check new policy and bump up standards version
+  * Depend on python-openssl rather than python-pyopenssl
+
+ -- Guido Trotter <ultrotter@debian.org>  Sun, 15 Jun 2008 09:05:37 +0100
+
+ganeti (1.2.4-1) unstable; urgency=low
+
+  * New upstream release
+  * Change the default iallocator search path to support 'local' allocators
+  * Ship the 'dumb' instance allocator
+  * Call dh_pysupport in 'install' rather than 'binary-install'
+  * Remove 'cronjob-check-executable.patch' included upstream
+
+ -- Guido Trotter <ultrotter@debian.org>  Sat, 14 Jun 2008 15:57:27 +0100
+
+ganeti (1.2.3-2) unstable; urgency=low
+
+  * Fix 'crontab should check for executable presence' (Closes: #466611)
+
+ -- Iustin Pop <iusty@k1024.org>  Fri, 22 Feb 2008 08:25:44 +0100
+
+ganeti (1.2.3-1) unstable; urgency=low
+
+  * New upstream version
+
+ -- Guido Trotter <ultrotter@debian.org>  Wed, 20 Feb 2008 12:56:08 +0000
+
+ganeti (1.2.2-2) unstable; urgency=medium
+
+  * Move mdadm from depends to recommends: it's only useful with drbd0.7
+  * Actually install example cron job as /etc/cron.d/ganeti
+    The example cron job was copied to the wrong place and thus ignored.
+  * Urgency medium because it was important for the cronjob to be there.
+
+ -- Guido Trotter <ultrotter@debian.org>  Wed, 13 Feb 2008 18:06:57 +0000
+
+ganeti (1.2.2-1) unstable; urgency=low
+
+  [ Iustin Pop ]
+  * Switch python modules from hand-crafted to pysupport
+  * Add the Vcs-Svn and Vcs-Browser control fields
+  * Remove the no-start of the daemon(s) on upgrades since we need to restart
+    if the source code has changed; the daemons will not do anything if the
+    node is not joined to a cluster
+  * Extend the OS search path with /usr/share/ganeti/os in order to accommodate
+    arch all OS packages
+
+  [ Guido Trotter ]
+  * New upstream version
+  * Add the option of drbd8-module-source to suggests
+  * Make drbd8 the first choice in recommends/suggests
+  * Add the Homepage control field
+
+  [ Leonardo Rodrigues de Mello ]
+  * Fix dependency on SimpleJSON
+
+ -- Guido Trotter <ultrotter@debian.org>  Wed, 30 Jan 2008 15:21:13 +0100
+
+ganeti (1.2.0-1) unstable; urgency=low
+
+  [ Guido Trotter ]
+  * New upstream release
+  * Remove manpage patch, which has been included upstream
+  * Bump up Standards Version (no changes needed)
+
+  [ Leonardo Rodrigues de Mello ]
+  * Fix dependency on xen-linux-system to allow the amd64 version.
+
+ -- Guido Trotter <ultrotter@debian.org>  Thu, 06 Dec 2007 13:34:17 +0000
+
+ganeti (1.2~b3-1) unstable; urgency=low
+
+  * Initial Release (closes: #440359)
+  * Start off from leonardo's experimental packages
+  * Change maintainer to the Debian Ganeti Team
+  * Use ganeti's native cron and init.d files for debian
+  * Make os and export paths FHS compliant
+  * ganeti is arch: all, not any
+
+ -- Guido Trotter <ultrotter@debian.org>  Wed, 28 Nov 2007 14:33:07 +0000

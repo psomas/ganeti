@@ -1,0 +1,24 @@
+From: Apollon Oikonomopoulos <apoikos@gmail.com>
+Date: Fri, 12 Jul 2013 22:11:26 +0300
+Subject: Disable local checks during build
+
+check-local runs a series of tests clearly intended for the local developer's
+machines that give false positives e.g. because of the presense of debian/.
+
+Forwarded: no
+Last-Update: 2013-07-12
+---
+ Makefile.in |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -3142,7 +3142,7 @@
+ 	       exit 1; } >&2
+ check-am: all-am
+ 	$(MAKE) $(AM_MAKEFLAGS) $(check_SCRIPTS)
+-	$(MAKE) $(AM_MAKEFLAGS) check-TESTS check-local
++	$(MAKE) $(AM_MAKEFLAGS) check-TESTS
+ check: check-am
+ all-am: Makefile $(SCRIPTS) $(MANS) $(DATA)
+ installdirs:

@@ -1,0 +1,8 @@
+Document: ganeti
+Title: Ganeti manual
+Abstract: This manual describes installation, administration and general use aspects of Ganeti
+Section: System/Administration
+
+Format: HTML
+Index: /usr/share/doc/ganeti-doc/html/index.html
+Files: /usr/share/doc/ganeti-doc/html/*.html

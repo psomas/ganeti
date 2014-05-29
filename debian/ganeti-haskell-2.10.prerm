@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ]; then
+	. /usr/share/debconf/confmodule
+
+	if [ /usr/lib/ganeti/default -ef /usr/lib/ganeti/2.10 ]; then
+	       db_version 2.0
+	       db_fset ganeti-haskell-2.10/abort-removal seen false
+	       db_subst ganeti-haskell-2.10/abort-removal version 2.10
+	       db_subst ganeti-haskell-2.10/abort-removal package ganeti-haskell-2.10
+	       db_input critical ganeti-haskell-2.10/abort-removal
+	       db_go
+	       db_get ganeti-haskell-2.10/abort-removal
+
+	       if [ "$RET" = "true" ]; then
+		       echo "Aborting removal on user request"
+		       exit 1;
+	       fi
+	fi
+fi
+
+#DEBHELPER#

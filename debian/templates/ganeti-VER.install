@@ -1,0 +1,5 @@
+usr/share/ganeti/@version@
+usr/lib/ganeti/@version@/usr/lib/ganeti
+usr/lib/ganeti/@version@/usr/sbin/ganeti-cleaner
+usr/lib/ganeti/@version@/usr/sbin/ganeti-listrunner
+debian/molly-guard-helper usr/share/ganeti/@version@/

@@ -1,0 +1,3 @@
+# We only use debconf during prerm to interactively abort installation of
+# packages that are still in use.
+ganeti-@version@: no-debconf-config

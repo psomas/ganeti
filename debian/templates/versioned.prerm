@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ]; then
+	. /usr/share/debconf/confmodule
+
+	if [ /usr/lib/ganeti/default -ef /usr/lib/ganeti/@version@ ]; then
+	       db_version 2.0
+	       db_fset @package@/abort-removal seen false
+	       db_subst @package@/abort-removal version @version@
+	       db_subst @package@/abort-removal package @package@
+	       db_input critical @package@/abort-removal
+	       db_go
+	       db_get @package@/abort-removal
+
+	       if [ "$RET" = "true" ]; then
+		       echo "Aborting removal on user request"
+		       exit 1;
+	       fi
+	fi
+fi
+
+#DEBHELPER#

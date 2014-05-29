@@ -1,0 +1,3 @@
+usr/bin/h*
+usr/share/man/man1/h*
+usr/lib/ganeti/iallocators/hail

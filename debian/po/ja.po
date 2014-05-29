@@ -1,0 +1,55 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the ganeti package.
+# victory <victory.deb@gmail.com>, 2014.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ganeti\n"
+"Report-Msgid-Bugs-To: ganeti@packages.debian.org\n"
+"POT-Creation-Date: 2014-04-08 08:41+0200\n"
+"PO-Revision-Date: 2014-04-08 15:41+0900\n"
+"Last-Translator: victory <victory.deb@gmail.com>\n"
+"Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid "Abort ${package} removal?"
+msgstr "${package} の削除を中止しますか?"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"You are attempting to remove ${package}, but it seems that the running "
+"Ganeti version is still ${version}."
+msgstr ""
+"${package} を削除しようとしていますが、まだ Ganeti バージョン ${version} を実"
+"行中のようです。"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"This can happen if you upgrade the ganeti package to a new minor version, "
+"but have not run \"gnt-cluster upgrade\" yet. Removing ${package} will cause "
+"Ganeti to stop functioning correctly."
+msgstr ""
+"これは ganeti パッケージを番号の小さい新しいバージョンにアップグレードし、"
+"「gnt-cluster upgrade」を実行していない場合に起きることがあります。${package} "
+"を削除すると Ganeti は正常に機能しなくなります。"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:1001
+msgid ""
+"It is highly recommended to abort the removal now and upgrade the cluster "
+"before removing ${package}."
+msgstr ""
+"削除をここで中止し、${package} を削除する前にクラスタをアップグレードすること"
+"を強く勧めます。"

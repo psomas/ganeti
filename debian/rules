@@ -1,0 +1,143 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+VER = $(shell cat vcs-version | sed -r 's/v([0-9]+\.[0-9]+)(\..*)/\1/')
+
+GNT_USERGROUP_PREFIX="gnt-"
+
+%:
+	dh $@ --with python2,sphinxdoc,bash_completion
+
+debian/control: debian/control.in vcs-version
+	sed -s 's/#VER#/$(VER)/g' debian/control.in > debian/control
+
+genfiles:
+	for file in debian/templates/*-VER*; do \
+		fname="$$(echo $$file | sed -e 's#VER#$(VER)#' -e 's#templates/##')"; \
+		sed -e 's/@version@/$(VER)/g' $$file >"$$fname"; \
+	done
+
+	for package in ganeti-haskell-$(VER) ganeti-htools-$(VER) ganeti-$(VER); do \
+		for file in debian/templates/versioned.*; do \
+			kind="$$(echo $$file | sed -r 's#.*\.(.*)#\1#')"; \
+			sed -e "s/@package@/$$package/g" \
+			    -e 's/@version@/$(VER)/g' \
+			    "$$file" > "debian/$${package}.$${kind}"; \
+		done; \
+	done
+
+override_dh_auto_configure:
+	./configure \
+	  --prefix=/usr \
+	  --localstatedir=/var \
+	  --sysconfdir=/etc \
+	  --with-export-dir=/var/lib/ganeti/export \
+	  --with-iallocator-search-path=/usr/local/lib/ganeti/iallocators,/usr/lib/ganeti/iallocators \
+	  --with-os-search-path=/srv/ganeti/os,/usr/local/lib/ganeti/os,/usr/lib/ganeti/os,/usr/share/ganeti/os \
+	  --with-extstorage-search-path=/srv/ganeti/extstorage,/usr/local/lib/ganeti/extstorage,/usr/lib/ganeti/extstorage,/usr/share/ganeti/extstorage \
+	  --docdir=/usr/share/doc/ganeti \
+	  --enable-restricted-commands \
+	  --disable-symlinks \
+	  --with-user-prefix=$(GNT_USERGROUP_PREFIX) \
+	  --with-group-prefix=$(GNT_USERGROUP_PREFIX)
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	# this is not removed by make distclean :(
+	rm -f ganeti
+
+	rm -f debian/ganeti.init
+	rm -f debian/ganeti.cron.d
+	rm -f debian/ganeti.default
+	rm -f debian/ganeti.postinst
+	rm -f debian/ganeti.postrm
+	if [ -d doc/html.orig ]; then \
+		rm -rf doc/html; \
+		mv doc/html.orig doc/html; \
+	fi
+	dh_auto_clean
+
+override_dh_auto_build:
+	dh_auto_build
+
+	# Rebuild the sphinx documentation
+	mv doc/html doc/html.orig
+	$(MAKE) doc/html
+
+	# Generate postinst and postrm scripts
+	$(CURDIR)/debian/genscript.py postinst "$(CURDIR)" | \
+		sed -f "$(CURDIR)/autotools/replace_vars.sed" \
+		    -e "s#@VER@#$(VER)#g" >"$(CURDIR)/debian/ganeti.postinst"
+	$(CURDIR)/debian/genscript.py postrm "$(CURDIR)" >"$(CURDIR)/debian/ganeti.postrm"
+
+override_dh_install-indep:
+	dh_install --fail-missing -pganeti-$(VER) -Xsbin/ganeti-confd -Xganeti/mon-collector \
+		-Xganeti/default -Xbin/h -Xman1/h -Xsbin/ganeti-mond -Xsbin/ganeti-luxid -Xhail
+	dh_install --fail-missing -i -Nganeti-$(VER) -Xganeti/$(VER)
+
+	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/ganeti.init
+	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/ganeti.cron.d
+	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/ganeti.default
+
+	# Dummy Python module for the RAPI client
+	# Add missing bits to ganeti and python-ganeti-rapi.
+	cp $(CURDIR)/debian/tmp/usr/share/ganeti/$(VER)/ganeti/rapi/client.py \
+	   $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/rapi/
+	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/__init__.py
+	touch $(CURDIR)/debian/python-ganeti-rapi/usr/share/pyshared/ganeti/rapi/__init__.py
+
+override_dh_python2:
+	dh_python2
+
+	# /usr/share/ganeti/<VER> is not in the default search path of dh_python2
+	dh_python2 -pganeti-$(VER) usr/share/ganeti/$(VER)
+
+override_dh_installinit:
+	dh_installinit --error-handler=true --no-restart-on-upgrade -i -- defaults 20 80
+
+override_dh_compress:
+	dh_compress
+
+	# Compress version-specific manpages, not automatically detected by dh_compress
+	for package in ganeti-$(VER) ganeti-htools-$(VER); do \
+		(cd $(CURDIR)/debian/$$package && \
+			find usr/share/ganeti/$(VER)/root/usr/share/man -type f) | \
+			xargs dh_compress -p$$package; \
+	done
+
+	# Fix the symlinks under /usr/share/man to point to the compressed
+	# files. The symlinks are shipped in the ganeti package, and because
+	# they are indirect links through /etc, they would not be detected by
+	# dh_compress anyway.
+	for file in $$(find $(CURDIR)/debian/ganeti/usr/share/man \
+			    $(CURDIR)/debian/ganeti-htools/usr/share/man \
+			    -type l); do \
+		target=$$(readlink "$$file"); \
+		rm "$$file"; \
+		ln -sf "$${target}.gz" "$${file}.gz"; \
+	done
+
+override_dh_link:
+	# Fix the links in ganeti-htools to refer directly to the version at hand
+	for file in $$(find $(CURDIR)/debian/ganeti-htools/usr -type l); do \
+		target="$$(readlink "$$file" | sed -r -e 's#/usr/(lib|share)/ganeti/default/#/usr/\1/ganeti/$(VER)/#')"; \
+		ln -sf "$$target" "$$file"; \
+	done
+
+	# Now let dh_link fix all symlinks
+	dh_link
+
+# Disable dh_sphinxdoc for binary-arch, as it will raise an error
+override_dh_sphinxdoc-arch:
+
+# Disable the test suite, as it requires the daemon users to be present
+# at build time.
+override_dh_auto_test:
+
+
+.PHONY: override_dh_auto_configure override_dh_auto_clean override_dh_auto_build \
+	override_dh_installinit override_dh_install-indep override_dh_sphinxdoc-arch \
+	override_dh_auto_test override_dh_compress override_dh_python2 \
+	override_dh_link genfiles

@@ -1,0 +1,13 @@
+Template: ganeti-haskell-2.10/abort-removal
+Type: boolean
+Default: true
+_Description: Abort ${package} removal?
+ You are attempting to remove ${package}, but it seems that the running Ganeti
+ version is still ${version}.
+ .
+ This can happen if you upgrade the ganeti package to a new minor version, but
+ have not run `gnt-cluster upgrade' yet. Removing ${package} will cause Ganeti to
+ stop functioning correctly.
+ .
+ It is highly recommended to abort removal now and upgrade your cluster before
+ removing ${package}.

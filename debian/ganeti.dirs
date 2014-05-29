@@ -1,0 +1,6 @@
+etc/ganeti
+etc/molly-guard/run.d
+usr/lib/ganeti/iallocators
+usr/share/ganeti/extstorage
+var/lib/ganeti
+var/log/ganeti

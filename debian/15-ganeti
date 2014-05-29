@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# 15-ganeti -- detect if there are running ganeti(7) instances
+#
+# Copyright (c) 2014 Apollon Oikonomopoulos <apoikos@debian.org>
+#
+# Released under the terms of the GNU General Public License version 2 or later.
+
+HELPER="/usr/share/ganeti/default/molly-guard-helper"
+
+[ -x "$HELPER" ] && exec "$HELPER"

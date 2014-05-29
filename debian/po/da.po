@@ -1,0 +1,55 @@
+# Danish translation ganeti.
+# Copyright (C) 2014 ganeti og nedenstående oversættere.
+# This file is distributed under the same license as the ganeti package.
+# Joe Hansen <joedalton2@yahoo.dk>, 2014.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ganeti\n"
+"Report-Msgid-Bugs-To: ganeti@packages.debian.org\n"
+"POT-Creation-Date: 2014-04-08 08:41+0200\n"
+"PO-Revision-Date: 2014-03-21 23:51+0200\n"
+"Last-Translator: Joe Hansen <joedalton2@yahoo.dk>\n"
+"Language-Team: Danish <debian-l10n-danish@lists.debian.org>\n"
+"Language: da\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid "Abort ${package} removal?"
+msgstr "Om fjernelse af ${package}?"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"You are attempting to remove ${package}, but it seems that the running "
+"Ganeti version is still ${version}."
+msgstr ""
+"Du forsøger at fjerne ${package}, men det ser ud til, at den kørende "
+"Ganetiversion stadig er ${version}."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"This can happen if you upgrade the ganeti package to a new minor version, "
+"but have not run \"gnt-cluster upgrade\" yet. Removing ${package} will cause "
+"Ganeti to stop functioning correctly."
+msgstr ""
+"Dette kan ske, hvis du opgraderer pakken ganeti til en ny mindre version, "
+"men endnu ikke har kørt »gnt-cluster upgrade«. Fjernelse af ${package} "
+"vil medføre at Ganeti stopper med at fungere korrekt."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"It is highly recommended to abort the removal now and upgrade the cluster "
+"before removing ${package}."
+msgstr ""
+"Det anbefales på det kraftigste at afbryde fjernelsen nu og opgradere "
+"klyngen før fjernelse af ${package}."

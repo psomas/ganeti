@@ -1,0 +1,24 @@
+Description: The upgrade from Ganeti 1.2 makes the init script abort with
+ ugly messages, so we edit the init script to exit early in this case.
+Forwarded: no
+Author: Iustin Pop <iusty@k1024.org>
+Last-Update: 2009-12-04
+--- a/doc/examples/ganeti.initd.in
++++ b/doc/examples/ganeti.initd.in
+@@ -68,6 +68,16 @@
+ }
+ 
+ start_all() {
++    for fname in \
++        "@LOCALSTATEDIR@/lib/ganeti/ssconf_hypervisor"
++    do
++        if [ -f "$fname" ]; then
++            log_end_msg 0
++            log_warning_msg "Configuration not upgraded to 2.0, will not run."
++            exit 1
++        fi
++    done
++
+     if ! $DAEMON_UTIL check-config; then
+         log_warning_msg "Incomplete configuration, will not run."
+         exit 0

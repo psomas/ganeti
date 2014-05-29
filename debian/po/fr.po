@@ -1,0 +1,57 @@
+# Translation to french of Ganeti debconf templates.
+# Copyright (C) 2014, French l10n team <debian-l10n-french@lists.debian.org>
+# This file is distributed under the same license as the ganeti package.
+#
+# Julien Patriarca <leatherface@debian.org>, 2014.
+msgid ""
+msgstr ""
+"Project-Id-Version: ganeti\n"
+"Report-Msgid-Bugs-To: ganeti@packages.debian.org\n"
+"POT-Creation-Date: 2014-04-08 08:41+0200\n"
+"PO-Revision-Date: 2014-04-08 10:16+0200\n"
+"Last-Translator:  <oliver.c.hamm@gmail.com>\n"
+"Language-Team: FRENCH <debian-l10n-french@lists.debian.org>\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Lokalize 1.4\n"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid "Abort ${package} removal?"
+msgstr "Faut-il abandonner la suppression de ${package} ?"
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"You are attempting to remove ${package}, but it seems that the running "
+"Ganeti version is still ${version}."
+msgstr ""
+"Vous êtes en train d'essayer de supprimer ${package}, mais il semble que la "
+"version installée de Ganeti soit toujours ${version}."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"This can happen if you upgrade the ganeti package to a new minor version, "
+"but have not run \"gnt-cluster upgrade\" yet. Removing ${package} will cause "
+"Ganeti to stop functioning correctly."
+msgstr ""
+"Cela peut arriver si vous mettez à jour le paquet ganeti vers une nouvelle "
+"version mineure, sans avoir au préalable lancé « gnt-cluster upgrade ». La "
+"suppression de ${package} empêchera Ganeti de fonctionner correctement."
+
+#. Type: boolean
+#. Description
+#: ../templates/versioned.templates:2001
+msgid ""
+"It is highly recommended to abort the removal now and upgrade the cluster "
+"before removing ${package}."
+msgstr ""
+"Il est fortement recommandé d'abandonner la suppression maintenant et de "
+"mettre à jour la grappe avant de désinstaller ${package}."

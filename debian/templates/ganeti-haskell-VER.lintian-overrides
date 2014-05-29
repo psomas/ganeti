@@ -1,0 +1,8 @@
+ganeti-haskell-@version@: hardening-no-fortify-functions usr/lib/ganeti/@version@/usr/sbin/ganeti-confd
+ganeti-haskell-@version@: hardening-no-fortify-functions usr/lib/ganeti/@version@/usr/sbin/ganeti-luxid
+ganeti-haskell-@version@: hardening-no-fortify-functions usr/lib/ganeti/@version@/usr/sbin/ganeti-mond
+ganeti-haskell-@version@: hardening-no-fortify-functions usr/lib/ganeti/@version@/usr/lib/ganeti/mon-collector
+
+# We only use debconf during prerm to interactively abort installation of
+# packages that are still in use.
+ganeti-haskell-@version@: no-debconf-config

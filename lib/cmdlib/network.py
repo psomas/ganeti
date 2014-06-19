@@ -455,8 +455,7 @@ class NetworkQuery(QueryBase):
           netparams = group.networks.get(net_uuid, None)
           if netparams:
             info = (group.name, netparams[constants.NIC_MODE],
-                    netparams[constants.NIC_LINK],
-                    netparams[constants.NIC_VLAN])
+                    netparams[constants.NIC_LINK])
 
             network_to_groups[net_uuid].append(info)
 

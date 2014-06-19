@@ -115,8 +115,7 @@ fieldsMap =
 
 -- | Given a network's UUID, this function lists all connections from
 -- the network to nodegroups including the respective mode and links.
-getGroupConnections ::
-  ConfigData -> String -> [(String, String, String, String)]
+getGroupConnections :: ConfigData -> String -> [(String, String, String)]
 getGroupConnections cfg network_uuid =
   mapMaybe (getGroupConnection network_uuid)
   ((Map.elems . fromContainer . configNodegroups) cfg)
@@ -125,14 +124,13 @@ getGroupConnections cfg network_uuid =
 -- a tuple of the group's name, the mode and the link by which the
 -- network is connected to the group. Returns 'Nothing' if the network
 -- is not connected to the group.
-getGroupConnection ::
-  String -> NodeGroup -> Maybe (String, String, String, String)
+getGroupConnection :: String -> NodeGroup -> Maybe (String, String, String)
 getGroupConnection network_uuid group =
   let networks = fromContainer . groupNetworks $ group
   in case Map.lookup network_uuid networks of
     Nothing -> Nothing
     Just net ->
-      Just (groupName group, getNicMode net, getNicLink net, getNicVlan net)
+      Just (groupName group, getNicMode net, getNicLink net)
 
 -- | Retrieves the network's mode and formats it human-readable,
 -- also in case it is not available.
@@ -140,15 +138,10 @@ getNicMode :: PartialNicParams -> String
 getNicMode nic_params =
   maybe "-" nICModeToRaw $ nicpModeP nic_params
 
--- | Retrieves the network's vlan and formats it human-readable, also in
+-- | Retrieves the network's link and formats it human-readable, also in
 -- case it it not available.
 getNicLink :: PartialNicParams -> String
 getNicLink nic_params = fromMaybe "-" (nicpLinkP nic_params)
-
--- | Retrieves the network's link and formats it human-readable, also in
--- case it it not available.
-getNicVlan :: PartialNicParams -> String
-getNicVlan nic_params = fromMaybe "-" (nicpVlanP nic_params)
 
 -- | Retrieves the network's instances' names.
 getInstances :: ConfigData -> String -> [String]

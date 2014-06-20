@@ -533,7 +533,7 @@ class LUInstanceSnapshot(LogicalUnit):
     This checks that the instance is in the cluster and is not running.
 
     """
-    instance = self.cfg.GetInstanceInfo(self.op.instance_name)
+    instance = self.cfg.GetInstanceInfo(self.op.instance_uuid)
     assert instance is not None, \
       "Cannot retrieve locked instance %s" % self.op.instance_name
     CheckNodeOnline(self, instance.primary_node, "Instance primary node"
@@ -556,7 +556,6 @@ class LUInstanceSnapshot(LogicalUnit):
     inst = self.instance
     node_uuid = inst.primary_node
     for idx, disk, snapshot_name in self.snapshots:
-      self.cfg.SetDiskID(disk, node_uuid)
       feedback_fn("Taking a snapshot of instance...")
       result = self.rpc.call_blockdev_snapshot(node_uuid,
                                                (disk, inst),

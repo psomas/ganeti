@@ -376,7 +376,7 @@ instance Arbitrary OpCodes.OpCode where
       "OP_NETWORK_QUERY" ->
         OpCodes.OpNetworkQuery <$> genFieldsNE <*> arbitrary <*> genNamesNE
       "OP_INSTANCE_SNAPSHOT" ->
-        OpCodes.OpInstanceSnapshot <$> genFQDN <*> arbitrary
+        OpCodes.OpInstanceSnapshot <$> genFQDN <*> return Nothing <*> arbitrary
       "OP_RESTRICTED_COMMAND" ->
         OpCodes.OpRestrictedCommand <$> arbitrary <*> genNodeNamesNE <*>
           return Nothing <*> genNameNE

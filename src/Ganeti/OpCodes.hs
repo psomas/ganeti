@@ -474,6 +474,7 @@ $(genOpCode "OpCode"
      [t| () |],
      OpDoc.opInstanceSnapshot,
      [ pInstanceName
+     , pInstanceUuid
      , pInstSnaps
      ],
      "instance_name")

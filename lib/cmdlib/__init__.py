@@ -97,6 +97,7 @@ from ganeti.cmdlib.instance_operation import \
   LUInstanceStartup, \
   LUInstanceShutdown, \
   LUInstanceReinstall, \
+  LUInstanceSnapshot, \
   LUInstanceReboot, \
   LUInstanceConsole
 from ganeti.cmdlib.instance_query import \

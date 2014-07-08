@@ -341,6 +341,10 @@ opInstanceChangeGroup :: String
 opInstanceChangeGroup =
   "Moves an instance to another node group."
 
+opInstanceSnapshot :: String
+opInstanceSnapshot =
+  "Takes snapshot of requested instance's disks (only for ext template)."
+
 opGroupAdd :: String
 opGroupAdd =
   "Add a node group to the cluster."

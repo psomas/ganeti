@@ -1266,7 +1266,7 @@ Job result:
 .. _rapi-res-instances-instance_name-reinstall:
 
 ``/2/instances/[instance_name]/reinstall``
-++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++
 
 Installs the operating system again.
 
@@ -1579,6 +1579,33 @@ Body parameters:
 Job result:
 
 .. opcode_result:: OP_INSTANCE_SET_PARAMS
+
+
+.. _rapi-res-instances-instance_name-snapshot:
+
+``/2/instances/[instance_name]/snapshot``
++++++++++++++++++++++++++++++++++++++++++
+
+Takes snapshot of an instance's disk (must be ext template).
+
+.. rapi_resource_details:: /2/instances/[instance_name]/snapshot
+
+
+.. _rapi-res-instances-instance_name-snapshot+put:
+
+``PUT``
+~~~~~~~
+
+Returns a job ID.
+
+Body parameters:
+
+.. opcode_params:: OP_INSTANCE_SNAPSHOT
+   :exclude: instance_name
+
+Job result:
+
+.. opcode_result:: OP_INSTANCE_SNAPSHOT
 
 
 .. _rapi-res-instances-instance_name-console:

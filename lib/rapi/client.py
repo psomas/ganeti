@@ -933,6 +933,23 @@ class GanetiRapiClient(object): # pylint: disable=R0904
                              ("/%s/instances/%s/modify" %
                               (GANETI_RAPI_VERSION, instance)), query, body)
 
+  def SnapshotInstance(self, instance, **kwargs):
+    """Takes snapshot of instance's disks.
+
+    More details for parameters can be found in the RAPI documentation.
+
+    @type instance: string
+    @param instance: Instance name
+    @rtype: string
+    @return: job id
+
+    """
+    body = kwargs
+
+    return self._SendRequest(HTTP_PUT,
+                             ("/%s/instances/%s/snapshot" %
+                              (GANETI_RAPI_VERSION, instance)), None, body)
+
   def ActivateInstanceDisks(self, instance, ignore_size=None, reason=None):
     """Activates an instance's disks.
 

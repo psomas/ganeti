@@ -51,6 +51,7 @@ from ganeti.cmdlib.instance_storage import StartInstanceDisks, \
   ShutdownInstanceDisks
 from ganeti.cmdlib.instance_utils import BuildInstanceHookEnvByObject, \
   CheckInstanceBridgesExist, CheckNodeFreeMemory, CheckNodeHasOS
+from ganeti.cmdlib.instance import GetItemFromContainer
 
 
 class LUInstanceStartup(LogicalUnit):
@@ -507,3 +508,67 @@ class LUInstanceConsole(NoHooksLU):
 
     return GetInstanceConsole(self.cfg.GetClusterInfo(), self.instance,
                               self.cfg.GetNodeInfo(self.instance.primary_node))
+
+
+class LUInstanceSnapshot(LogicalUnit):
+  """Take a snapshot of the instance.
+
+  """
+  HPATH = "instance-snapshot"
+  HTYPE = constants.HTYPE_INSTANCE
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self._ExpandAndLockInstance()
+
+  def BuildHooksEnv(self):
+    """Build hooks env.
+
+    This runs on master, primary and secondary nodes of the instance.
+
+    """
+    return BuildInstanceHookEnvByObject(self, self.instance)
+
+  def BuildHooksNodes(self):
+    """Build hooks nodes.
+
+    """
+    nl = [self.cfg.GetMasterNode()] + list(self.instance.all_nodes)
+    return (nl, nl)
+
+  def CheckPrereq(self):
+    """Check prerequisites.
+
+    This checks that the instance is in the cluster and is not running.
+
+    """
+    instance = self.cfg.GetInstanceInfo(self.op.instance_uuid)
+    assert instance is not None, \
+      "Cannot retrieve locked instance %s" % self.op.instance_name
+    CheckNodeOnline(self, instance.primary_node, "Instance primary node"
+                    " offline, cannot snapshot")
+
+    self.snapshots = []
+    for ident, params in self.op.disks:
+      idx, disk = GetItemFromContainer(ident, 'disk', instance.disks)
+      snapshot_name = params.get("snapshot_name", None)
+      if not snapshot_name:
+        raise errors.OpPrereqError("No snapshot_name passed for disk %s", ident)
+      self.snapshots.append((idx, disk, snapshot_name))
+
+    self.instance = instance
+
+  def Exec(self, feedback_fn):
+    """Take a snapshot of the instance the instance.
+
+    """
+    inst = self.instance
+    node_uuid = inst.primary_node
+    for idx, disk, snapshot_name in self.snapshots:
+      feedback_fn("Taking a snapshot of instance...")
+      result = self.rpc.call_blockdev_snapshot(node_uuid,
+                                               (disk, inst),
+                                               snapshot_name,
+                                               None)
+      result.Raise("Could not take a snapshot for instance %s disk/%d %s"
+                   " on node %s" % (inst, idx, disk.uuid, inst.primary_node))

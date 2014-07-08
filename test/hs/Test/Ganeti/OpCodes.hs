@@ -112,6 +112,14 @@ instance (Arbitrary a) => Arbitrary (SetParamsMods a) where
                     , SetParamsNew        <$> arbitrary
                     ]
 
+instance Arbitrary ISnapParams where
+  arbitrary = ISnapParams <$> genNameNE
+
+instance (Arbitrary a) => Arbitrary (SetSnapParams a) where
+  arbitrary = oneof [ pure SetSnapParamsEmpty
+                    , SetSnapParamsValid <$> arbitrary
+                    ]
+
 instance Arbitrary ExportTarget where
   arbitrary = oneof [ ExportTargetLocal <$> genNodeNameNE
                     , ExportTargetRemote <$> pure []
@@ -367,6 +375,8 @@ instance Arbitrary OpCodes.OpCode where
         OpCodes.OpNetworkDisconnect <$> genNameNE <*> genNameNE
       "OP_NETWORK_QUERY" ->
         OpCodes.OpNetworkQuery <$> genFieldsNE <*> arbitrary <*> genNamesNE
+      "OP_INSTANCE_SNAPSHOT" ->
+        OpCodes.OpInstanceSnapshot <$> genFQDN <*> return Nothing <*> arbitrary
       "OP_RESTRICTED_COMMAND" ->
         OpCodes.OpRestrictedCommand <$> arbitrary <*> genNodeNamesNE <*>
           return Nothing <*> genNameNE

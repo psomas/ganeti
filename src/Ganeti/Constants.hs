@@ -2326,6 +2326,9 @@ idiskProvider = "provider"
 idiskAccess :: String
 idiskAccess = "access"
 
+idiskSnapshotName :: String
+idiskSnapshotName = "snapshot_name"
+
 idiskParamsTypes :: Map String VType
 idiskParamsTypes =
   Map.fromList [(idiskSize, VTypeSize),
@@ -2336,6 +2339,7 @@ idiskParamsTypes =
                 (idiskMetavg, VTypeString),
                 (idiskProvider, VTypeString),
                 (idiskAccess, VTypeString),
+                (idiskSnapshotName, VTypeString),
                 (idiskName, VTypeMaybeString)]
 
 idiskParams :: FrozenSet String

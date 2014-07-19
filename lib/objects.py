@@ -1340,6 +1340,7 @@ class ExtStorage(ConfigObject):
     "detach_script",
     "setinfo_script",
     "verify_script",
+    "snapshot_script",
     "supported_parameters",
     ]
 

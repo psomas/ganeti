@@ -3046,7 +3046,7 @@ def BlockdevGrow(disk, amount, dryrun, backingstore, excl_stor):
     _Fail("Failed to grow block device: %s", err, exc=True)
 
 
-def BlockdevSnapshot(disk):
+def BlockdevSnapshot(disk, snap_name, snap_size):
   """Create a snapshot copy of a block device.
 
   This function is called recursively, and the snapshot is actually created
@@ -3054,6 +3054,10 @@ def BlockdevSnapshot(disk):
 
   @type disk: L{objects.Disk}
   @param disk: the disk to be snapshotted
+  @type snap_name: string
+  @param snap_name: the name of the snapshot
+  @type snap_size: int
+  @param snap_size: the size of the snapshot
   @rtype: string
   @return: snapshot disk ID as (vg, lv)
 
@@ -3069,11 +3073,11 @@ def BlockdevSnapshot(disk):
     if not disk.children:
       _Fail("DRBD device '%s' without backing storage cannot be snapshotted",
             disk.unique_id)
-    return BlockdevSnapshot(disk.children[0])
+    return BlockdevSnapshot(disk.children[0], snap_name, snap_size)
   elif disk.dev_type == constants.DT_PLAIN:
-    return _DiskSnapshot(disk)
+    return _DiskSnapshot(disk, snap_name, snap_size)
   elif disk.dev_type == constants.DT_EXT:
-    return _DiskSnapshot(disk)
+    return _DiskSnapshot(disk, snap_name, snap_size)
   else:
     _Fail("Cannot snapshot block device '%s' of type '%s'",
           disk.logical_id, disk.dev_type)

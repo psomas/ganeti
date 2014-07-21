@@ -2161,7 +2161,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     self._SaveKVMRuntime(instance, kvm_runtime)
     self._ExecuteKVMRuntime(instance, kvm_runtime, kvmhelp)
 
-  def _CallMonitorCommand(self, instance_name, command, timeout=None):
+  @classmethod
+  def _CallMonitorCommand(cls, instance_name, command, timeout=None):
     """Invoke a command on the instance monitor.
 
     """
@@ -2181,7 +2182,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
              (utils.ShellQuote(command),
               timeout_cmd,
               constants.SOCAT_PATH,
-              utils.ShellQuote(self._InstanceMonitor(instance_name))))
+              utils.ShellQuote(cls._InstanceMonitor(instance_name))))
 
     result = utils.RunCmd(socat)
     if result.failed:
@@ -2258,9 +2259,10 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if (int(v_major), int(v_min)) < (1, 0):
       raise errors.HotplugError("Hotplug not supported for qemu versions < 1.0")
 
-  def _CallHotplugCommands(self, name, cmds):
+  @classmethod
+  def _CallHotplugCommands(cls, instance_name, cmds):
     for c in cmds:
-      self._CallMonitorCommand(name, c)
+      cls._CallMonitorCommand(instance_name, c)
       time.sleep(1)
 
   def _VerifyHotplugCommand(self, instance_name, device, dev_type,
@@ -2308,7 +2310,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     elif dev_type == constants.HOTPLUG_TARGET_NIC:
       (tap, fd) = _OpenTap()
       self._ConfigureNIC(instance, seq, device, tap)
-      self._PassTapFd(instance, fd, device)
+      self._HMPPassFd(instance.name, [fd], kvm_devid)
       cmds = ["netdev_add tap,id=%s,fd=%s" % (kvm_devid, kvm_devid)]
       args = "virtio-net-pci,bus=pci.0,addr=%s,mac=%s,netdev=%s,id=%s" % \
                (hex(device.pci), device.mac, kvm_devid, kvm_devid)
@@ -2361,22 +2363,19 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       device.pci = self.HotDelDevice(instance, dev_type, device, _, seq)
       self.HotAddDevice(instance, dev_type, device, _, seq)
 
-  def _PassTapFd(self, instance, fd, nic):
+  @classmethod
+  def _HMPPassFd(cls, instance_name, fds, kvm_devid):
     """Pass file descriptor to kvm process via monitor socket using SCM_RIGHTS
 
+    Wrapper of MonitorSocket.GetFd()
+
     """
-    # TODO: factor out code related to unix sockets.
-    #       squash common parts between monitor and qmp
-    kvm_devid = _GenerateDeviceKVMId(constants.HOTPLUG_TARGET_NIC, nic)
-    command = "getfd %s\n" % kvm_devid
-    fds = [fd]
-    logging.info("%s", fds)
+    mon = MonitorSocket(cls._InstanceMonitor(instance_name))
     try:
-      monsock = MonitorSocket(self._InstanceMonitor(instance.name))
-      monsock.connect()
-      fdsend.sendfds(monsock.sock, command, fds=fds)
+      mon.connect()
+      mon.GetFd(fds, kvm_devid)
     finally:
-      monsock.close()
+      mon.close()
 
   @classmethod
   def _ParseKVMVersion(cls, text):

@@ -34,6 +34,8 @@ import optparse
 import logging
 import time
 from cStringIO import StringIO
+from bitarray import bitarray
+from base64 import b64encode, b64decode
 
 from ganeti import constants
 from ganeti import serializer
@@ -134,10 +136,29 @@ def UpgradeIPolicy(ipolicy, default_ipolicy, isgroup):
   _FillIPolicySpecs(default_ipolicy, ipolicy)
 
 
+# pylint: disable=E1101
 def UpgradeNetworks(config_data):
-  networks = config_data.get("networks", None)
+  networks = config_data.get("networks", {})
   if not networks:
     config_data["networks"] = {}
+  for nobj in networks.values():
+    for key in ("reservations", "ext_reservations"):
+      r = nobj[key]
+      if options.tob64:
+        try:
+          b = bitarray(r)
+          nobj[key] = b64encode(b.tobytes())
+        except ValueError:
+          print("No 01 network found! Probably already in base64.")
+      if options.to01:
+        try:
+          b = bitarray(r)
+          print("01 network found! Do nothing.")
+        except ValueError:
+          b = bitarray()
+          b.frombytes(b64decode(r))
+          nobj[key] = b.to01()
+      print("%s: %s -> %s" % (nobj["name"], r, nobj[key]))
 
 
 def UpgradeCluster(config_data):
@@ -454,6 +475,47 @@ def DowngradeAll(config_data):
   DowngradeInstances(config_data)
 
 
+def FixTcpUdpPortPool(config_data):
+  used_ports = set()
+  for iobj in config_data["instances"].values():
+    network_port = iobj.get("network_port", None)
+    if network_port is not None:
+      used_ports.add(network_port)
+    disks = iobj["disks"]
+    for dobj in disks:
+      if dobj["dev_type"] == constants.DT_DRBD8:
+        drbd_port = dobj["logical_id"][2]
+        used_ports.add(drbd_port)
+
+  sorted_used_ports = sorted(used_ports)
+  if len(sorted_used_ports) == 0:
+    highest_used_port = constants.FIRST_DRBD_PORT - 1
+    tcpudp_port_pool = set()
+  else:
+    highest_used_port = sorted_used_ports[-1]
+    all_ports = set(range(constants.FIRST_DRBD_PORT, highest_used_port + 1))
+    tcpudp_port_pool = all_ports - set(sorted_used_ports)
+
+  try:
+    old_highest_used_port = config_data["cluster"]["highest_used_port"]
+    old_tcpudp_port_pool = set(config_data["cluster"]["tcpudp_port_pool"])
+  except KeyError:
+    old_highest_used_port = None
+    old_tcpudp_port_pool = set()
+
+  if options.dry_run:
+    added_ports = tcpudp_port_pool - old_tcpudp_port_pool
+    removed_ports = old_tcpudp_port_pool - tcpudp_port_pool
+    print("highest_used_port: %s -> %s" %
+          (old_highest_used_port, highest_used_port))
+    print("tcpudp_port_pool + : %s" % added_ports)
+    print("tcpudp_port_pool - : %s" % removed_ports)
+
+  if options.fix_pool:
+    config_data["cluster"]["highest_used_port"] = highest_used_port
+    config_data["cluster"]["tcpudp_port_pool"] = list(tcpudp_port_pool)
+
+
 def main():
   """Main program.
 
@@ -485,6 +547,15 @@ def main():
   parser.add_option("--downgrade",
                     help="Downgrade to the previous stable version",
                     action="store_true", dest="downgrade", default=False)
+  parser.add_option("--tob64",
+                    help="Change to base64 encoded networks",
+                    action="store_true", dest="tob64", default=False)
+  parser.add_option("--to01",
+                    help="Change to non encoded networks (01 bitarrays)",
+                    action="store_true", dest="to01", default=False)
+  parser.add_option("--fix-pool",
+                    help="Whether to fix tcpudp_port_pool",
+                    action="store_true", dest="fix_pool", default=False)
   (options, args) = parser.parse_args()
 
   # We need to keep filenames locally because they might be renamed between
@@ -584,6 +655,8 @@ def main():
   else:
     raise Error("Configuration version %d.%d.%d not supported by this tool" %
                 (config_major, config_minor, config_revision))
+
+  FixTcpUdpPortPool(config_data)
 
   try:
     logging.info("Writing configuration file to %s", options.CONFIG_DATA_PATH)

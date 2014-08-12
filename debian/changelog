@@ -1,3 +1,23 @@
+snf-ganeti (2.10.7+snap1+b64v1+ext1+lockfix1+ifdown1+backports1-1~wheezy) unstable; urgency=low
+
+   * snap extends snapshot support for the ext disk template (separate LU)
+   * b64 saves networks' bitarrays in a more compact representation
+   * ext
+     + allows cache, heads, cyls arbitrary params to reach kvm command
+   * lockfix is a workaround for Issue #621
+   * ifdown supports networking deconfiguration/cleanup for the KVM hypervisor
+   * backports is a set of patches backported from later branches
+     + Make disk.name and disk.uuid available in bdev
+     + Add migration capabilities as an hvparam
+     + Make access optional IDISK_PARAM
+     + Support access=userspace for the ext disk template
+     + Allow NICs with routed mode and no IP
+     + Export logical_id info to hooks env
+     + Support gnt-backup export for the ext disk template
+     + Support disk hot-add even when chroot or SM are used
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Wed, 13 Aug 2014 01:46:45 +0300
+
 snf-ganeti (2.10.4-1~wheezy) unstable; urgency=low
 
   * Rebuild from latest Ganeti stable-2.10 branch

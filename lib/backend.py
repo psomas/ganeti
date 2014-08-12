@@ -58,6 +58,7 @@ from ganeti import hypervisor
 from ganeti import constants
 from ganeti.storage import bdev
 from ganeti.storage import drbd
+from ganeti.storage import extstorage
 from ganeti.storage import filestorage
 from ganeti import objects
 from ganeti import ssconf
@@ -3000,7 +3001,7 @@ def DiagnoseExtStorage(top_dirs=None):
         break
       for name in f_names:
         es_path = utils.PathJoin(dir_name, name)
-        status, es_inst = bdev.ExtStorageFromDisk(name, base_dir=dir_name)
+        status, es_inst = extstorage.ExtStorageFromDisk(name, base_dir=dir_name)
         if status:
           diagnose = ""
           parameters = es_inst.supported_parameters
@@ -3045,7 +3046,7 @@ def BlockdevGrow(disk, amount, dryrun, backingstore, excl_stor):
     _Fail("Failed to grow block device: %s", err, exc=True)
 
 
-def BlockdevSnapshot(disk):
+def BlockdevSnapshot(disk, snap_name, snap_size):
   """Create a snapshot copy of a block device.
 
   This function is called recursively, and the snapshot is actually created
@@ -3053,25 +3054,32 @@ def BlockdevSnapshot(disk):
 
   @type disk: L{objects.Disk}
   @param disk: the disk to be snapshotted
+  @type snap_name: string
+  @param snap_name: the name of the snapshot
+  @type snap_size: int
+  @param snap_size: the size of the snapshot
   @rtype: string
   @return: snapshot disk ID as (vg, lv)
 
   """
+  def _DiskSnapshot(disk, snap_name=None, snap_size=None):
+    r_dev = _RecursiveFindBD(disk)
+    if r_dev is not None:
+      return r_dev.Snapshot(snap_name=snap_name, snap_size=snap_size)
+    else:
+      _Fail("Cannot find block device %s", disk)
+
   if disk.dev_type == constants.DT_DRBD8:
     if not disk.children:
       _Fail("DRBD device '%s' without backing storage cannot be snapshotted",
             disk.unique_id)
-    return BlockdevSnapshot(disk.children[0])
+    return BlockdevSnapshot(disk.children[0], snap_name, snap_size)
   elif disk.dev_type == constants.DT_PLAIN:
-    r_dev = _RecursiveFindBD(disk)
-    if r_dev is not None:
-      # FIXME: choose a saner value for the snapshot size
-      # let's stay on the safe side and ask for the full size, for now
-      return r_dev.Snapshot(disk.size)
-    else:
-      _Fail("Cannot find block device %s", disk)
+    return _DiskSnapshot(disk, snap_name, snap_size)
+  elif disk.dev_type == constants.DT_EXT:
+    return _DiskSnapshot(disk, snap_name, snap_size)
   else:
-    _Fail("Cannot snapshot non-lvm block device '%s' of type '%s'",
+    _Fail("Cannot snapshot block device '%s' of type '%s'",
           disk.logical_id, disk.dev_type)
 
 

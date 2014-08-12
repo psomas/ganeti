@@ -39,9 +39,11 @@ module Ganeti.OpParams
   , DiskAccess(..)
   , INicParams(..)
   , IDiskParams(..)
+  , ISnapParams(..)
   , RecreateDisksInfo(..)
   , DdmOldChanges(..)
   , SetParamsMods(..)
+  , SetSnapParams(..)
   , ExportTarget(..)
   , pInstanceName
   , pInstanceUuid
@@ -90,14 +92,16 @@ module Ganeti.OpParams
   , pSkipChecks
   , pIgnoreErrors
   , pOptGroupName
-  , pDiskParams
+  , pGroupDiskParams
   , pHvState
   , pDiskState
   , pIgnoreIpolicy
   , pHotplug
   , pHotplugIfPossible
+  , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
+  , pInstSnaps
   , pDiskTemplate
   , pOptDiskTemplate
   , pFileDriver
@@ -352,7 +356,14 @@ $(buildObject "IDiskParams" "idisk"
   , optionalField $ simpleField C.idiskVg     [t| NonEmptyString |]
   , optionalField $ simpleField C.idiskMetavg [t| NonEmptyString |]
   , optionalField $ simpleField C.idiskName   [t| NonEmptyString |]
+  , optionalField $ simpleField C.idiskProvider [t| NonEmptyString |]
+  , optionalField $ simpleField C.idiskAccess   [t| NonEmptyString |]
+  , andRestArguments "opaque"
   ])
+
+-- | Disk snapshot definition.
+$(buildObject "ISnapParams" "idisk"
+  [ simpleField C.idiskSnapshotName [t| NonEmptyString |]])
 
 -- | Disk changes type for OpInstanceRecreateDisks. This is a bit
 -- strange, because the type in Python is something like Either
@@ -421,6 +432,24 @@ instance (JSON a) => JSON (SetParamsMods a) where
   showJSON (SetParamsDeprecated v) = showJSON v
   showJSON (SetParamsNew v) = showJSON v
   readJSON = readSetParams
+
+-- | Instance snapshot params
+data SetSnapParams a
+  = SetSnapParamsEmpty
+  | SetSnapParamsValid (NonEmpty (Int, a))
+    deriving (Eq, Show)
+
+readSetSnapParams :: (JSON a) => JSValue -> Text.JSON.Result (SetSnapParams a)
+readSetSnapParams (JSArray []) = return SetSnapParamsEmpty
+readSetSnapParams v =
+  case readJSON v::Text.JSON.Result [(Int, JSValue)] of
+    Text.JSON.Ok _ -> liftM SetSnapParamsValid $ readJSON v
+    _ -> fail "Cannot parse snapshot params."
+
+instance (JSON a) => JSON (SetSnapParams a) where
+  showJSON SetSnapParamsEmpty = showJSON ()
+  showJSON (SetSnapParamsValid v) = showJSON v
+  readJSON = readSetSnapParams
 
 -- | Custom type for target_node parameter of OpBackupExport, which
 -- varies depending on mode. FIXME: this uses an [JSValue] since
@@ -535,6 +564,10 @@ pInstances =
   defaultField [| [] |] $
   simpleField "instances" [t| [NonEmptyString] |]
 
+-- | Whether to remove disks.
+pKeepDisks :: Field
+pKeepDisks = defaultFalse "keep_disks"
+
 pOutputFields :: Field
 pOutputFields =
   withDoc "Selected output fields" $
@@ -544,6 +577,12 @@ pName :: Field
 pName =
   withDoc "A generic name" $
   simpleField "name" [t| NonEmptyString |]
+
+-- | List of instance snaps.
+pInstSnaps :: Field
+pInstSnaps =
+  renameField "instSnaps" $
+  simpleField "disks" [t| SetSnapParams ISnapParams |]
 
 pForce :: Field
 pForce =
@@ -610,8 +649,8 @@ pClusterOsParams =
   optionalField $
   simpleField "osparams" [t| GenericContainer String (JSObject JSValue) |]
 
-pDiskParams :: Field
-pDiskParams =
+pGroupDiskParams :: Field
+pGroupDiskParams =
   withDoc "Disk templates' parameter defaults" .
   optionalField $
   simpleField "diskparams"

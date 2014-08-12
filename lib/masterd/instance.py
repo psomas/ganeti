@@ -1158,7 +1158,9 @@ class ExportInstanceHelper(object):
     self._removed_snaps = [False] * len(instance.disks)
 
   def CreateSnapshots(self):
-    """Creates an LVM snapshot for every disk of the instance.
+    """Creates a snapshot for every disk of the instance.
+
+    Currently support drbd, plain and ext disk templates.
 
     """
     assert not self._snap_disks
@@ -1173,7 +1175,9 @@ class ExportInstanceHelper(object):
 
       # result.payload will be a snapshot of an lvm leaf of the one we
       # passed
-      result = self._lu.rpc.call_blockdev_snapshot(src_node, (disk, instance))
+      result = self._lu.rpc.call_blockdev_snapshot(src_node,
+                                                   (disk, instance),
+                                                   None, None)
       new_dev = False
       msg = result.fail_msg
       if msg:
@@ -1185,8 +1189,14 @@ class ExportInstanceHelper(object):
                             " result '%s'", idx, src_node_name, result.payload)
       else:
         disk_id = tuple(result.payload)
-        disk_params = constants.DISK_LD_DEFAULTS[constants.DT_PLAIN].copy()
-        new_dev = objects.Disk(dev_type=constants.DT_PLAIN, size=disk.size,
+        # Snapshot is currently supported for ExtStorage and LogicalVolume.
+        # In case disk is of type drbd the snapshot will be of type plain.
+        if disk.dev_type == constants.DT_EXT:
+          dev_type = constants.DT_EXT
+        else:
+          dev_type = constants.DT_PLAIN
+        disk_params = constants.DISK_LD_DEFAULTS[dev_type].copy()
+        new_dev = objects.Disk(dev_type=dev_type, size=disk.size,
                                logical_id=disk_id, iv_name=disk.iv_name,
                                params=disk_params)
 

@@ -208,8 +208,9 @@ def _ComputeNics(op, cluster, default_ip, cfg, ec_id):
       nic_ip = ip
 
     # TODO: check the ip address for uniqueness
-    if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip:
-      raise errors.OpPrereqError("Routed nic mode requires an ip address",
+    if nic_mode == constants.NIC_MODE_ROUTED and not nic_ip and not net:
+      raise errors.OpPrereqError("Routed nic mode requires an ip address"
+                                 " if not attached to a network",
                                  errors.ECODE_INVAL)
 
     # MAC address verification
@@ -691,9 +692,9 @@ class LUInstanceCreate(LogicalUnit):
       vcpus=self.be_full[constants.BE_VCPUS],
       nics=NICListToTuple(self, self.nics),
       disk_template=self.op.disk_template,
-      disks=[(d[constants.IDISK_NAME], d.get("uuid", ""),
-              d[constants.IDISK_SIZE], d[constants.IDISK_MODE])
-             for d in self.disks],
+      # Note that self.disks here is not a list with objects.Disk
+      # but with dicts as returned by ComputeDisks.
+      disks=self.disks,
       bep=self.be_full,
       hvp=self.hv_full,
       hypervisor_name=self.op.hypervisor,
@@ -1221,18 +1222,19 @@ class LUInstanceCreate(LogicalUnit):
     # Check disk access param to be compatible with specified hypervisor
     node_info = self.cfg.GetNodeInfo(self.op.pnode_uuid)
     node_group = self.cfg.GetNodeGroup(node_info.group)
-    disk_params = self.cfg.GetGroupDiskParams(node_group)
-    access_type = disk_params[self.op.disk_template].get(
+    group_disk_params = self.cfg.GetGroupDiskParams(node_group)
+    group_access_type = group_disk_params[self.op.disk_template].get(
       constants.RBD_ACCESS, constants.DISK_KERNELSPACE
     )
-
-    if not IsValidDiskAccessModeCombination(self.op.hypervisor,
-                                            self.op.disk_template,
-                                            access_type):
-      raise errors.OpPrereqError("Selected hypervisor (%s) cannot be"
-                                 " used with %s disk access param" %
-                                 (self.op.hypervisor, access_type),
-                                  errors.ECODE_STATE)
+    for dsk in self.disks:
+      access_type = dsk.get(constants.IDISK_ACCESS, group_access_type)
+      if not IsValidDiskAccessModeCombination(self.op.hypervisor,
+                                              self.op.disk_template,
+                                              access_type):
+        raise errors.OpPrereqError("Selected hypervisor (%s) cannot be"
+                                   " used with %s disk access param" %
+                                   (self.op.hypervisor, access_type),
+                                    errors.ECODE_STATE)
 
     # Verify instance specs
     spindle_use = self.be_full.get(constants.BE_SPINDLE_USE, None)
@@ -2368,7 +2370,7 @@ class LUInstanceSetParams(LogicalUnit):
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
 
-  def _VerifyDiskModification(self, op, params, excl_stor):
+  def _VerifyDiskModification(self, op, params, excl_stor, group_access_type):
     """Verifies a disk modification.
 
     """
@@ -2391,6 +2393,17 @@ class LUInstanceSetParams(LogicalUnit):
 
       CheckSpindlesExclusiveStorage(params, excl_stor, True)
 
+      # Check disk access param (only for specific disks)
+      if self.instance.disk_template in constants.DTS_HAVE_ACCESS:
+        access_type = params.get(constants.IDISK_ACCESS, group_access_type)
+        if not IsValidDiskAccessModeCombination(self.instance.hypervisor,
+                                                self.instance.disk_template,
+                                                access_type):
+          raise errors.OpPrereqError("Selected hypervisor (%s) cannot be"
+                                     " used with %s disk access param" %
+                                     (self.instance.hypervisor, access_type),
+                                      errors.ECODE_STATE)
+
     elif op == constants.DDM_MODIFY:
       if constants.IDISK_SIZE in params:
         raise errors.OpPrereqError("Disk size change not possible, use"
@@ -2400,6 +2413,11 @@ class LUInstanceSetParams(LogicalUnit):
       # Changing arbitrary parameters is allowed only for ext disk template",
       if self.instance.disk_template != constants.DT_EXT:
         utils.ForceDictType(params, constants.MODIFIABLE_IDISK_PARAMS_TYPES)
+      else:
+        # We have to check that 'access' parameter can not be modified
+        if constants.IDISK_ACCESS in params:
+          raise errors.OpPrereqError("Disk 'access' parameter change is"
+                                     " not possible", errors.ECODE_INVAL)
 
       name = params.get(constants.IDISK_NAME, None)
       if name is not None and name.lower() == constants.VALUE_NONE:
@@ -2612,9 +2630,10 @@ class LUInstanceSetParams(LogicalUnit):
 
     elif new_mode == constants.NIC_MODE_ROUTED:
       ip = params.get(constants.INIC_IP, old_ip)
-      if ip is None:
+      if ip is None and not new_net_uuid:
         raise errors.OpPrereqError("Cannot set the NIC IP address to None"
-                                   " on a routed NIC", errors.ECODE_INVAL)
+                                   " on a routed NIC if not attached to a"
+                                   " network", errors.ECODE_INVAL)
 
     elif new_mode == constants.NIC_MODE_OVS:
       # TODO: check OVS link
@@ -2781,9 +2800,18 @@ class LUInstanceSetParams(LogicalUnit):
                                       self.instance.all_nodes).values()
       )
 
+    # Get the group access type
+    node_info = self.cfg.GetNodeInfo(self.instance.primary_node)
+    node_group = self.cfg.GetNodeGroup(node_info.group)
+    group_disk_params = self.cfg.GetGroupDiskParams(node_group)
+    group_access_type = group_disk_params[self.instance.disk_template].get(
+      constants.RBD_ACCESS, constants.DISK_KERNELSPACE
+    )
+
     # Check disk modifications. This is done here and not in CheckArguments
     # (as with NICs), because we need to know the instance's disk template
-    ver_fn = lambda op, par: self._VerifyDiskModification(op, par, excl_stor)
+    ver_fn = lambda op, par: self._VerifyDiskModification(op, par, excl_stor,
+                                                          group_access_type)
     if self.instance.disk_template == constants.DT_EXT:
       self._CheckMods("disk", self.op.disks, {}, ver_fn)
     else:
@@ -3421,6 +3449,8 @@ class LUInstanceSetParams(LogicalUnit):
     (anno_disk,) = AnnotateDiskParams(self.instance, [root], self.cfg)
     for node_uuid, disk in anno_disk.ComputeNodeTree(
                              self.instance.primary_node):
+      if self.op.keep_disks and disk.dev_type is constants.DT_EXT:
+        continue
       msg = self.rpc.call_blockdev_remove(node_uuid, (disk, self.instance)) \
               .fail_msg
       if msg:

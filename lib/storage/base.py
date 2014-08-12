@@ -72,7 +72,8 @@ class BlockDev(object):
   after assembly we'll have our correct major/minor.
 
   """
-  def __init__(self, unique_id, children, size, params, dyn_params):
+  # pylint: disable=W0613
+  def __init__(self, unique_id, children, size, params, dyn_params, *args):
     self._children = children
     self.dev_path = None
     self.unique_id = unique_id
@@ -111,7 +112,7 @@ class BlockDev(object):
 
   @classmethod
   def Create(cls, unique_id, children, size, spindles, params, excl_stor,
-             dyn_params):
+             dyn_params, *args):
     """Create the device.
 
     If the device cannot be created, it will return None
@@ -184,6 +185,22 @@ class BlockDev(object):
 
     """
     raise NotImplementedError
+
+  def Snapshot(self, snap_name, snap_size):
+    """Creates a snapshot of the block device.
+
+    Currently this is used only during LUInstanceExport.
+
+    @type snap_name: string
+    @param snap_name: The name of the snapshot.
+    @type snap_size: int
+    @param snap_size: The size of the snapshot.
+    @rtype: tuple
+    @return: The logical id of the newly created disk.
+
+    """
+    ThrowError("Snapshot is not supported for disk %s of type %s.",
+               self.unique_id, self.__class__.__name__)
 
   def SetSyncParams(self, params):
     """Adjust the synchronization parameters of the mirror.

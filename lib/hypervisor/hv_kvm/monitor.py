@@ -131,10 +131,6 @@ class MonitorSocket(object):
 
     """
     self.monitor_filename = monitor_filename
-    self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    # We want to fail if the server doesn't send a complete message
-    # in a reasonable amount of time
-    self.sock.settimeout(self._SOCKET_TIMEOUT)
     self._connected = False
 
   def _check_socket(self):
@@ -150,13 +146,16 @@ class MonitorSocket(object):
     if not stat.S_ISSOCK(sock_stat.st_mode):
       raise errors.HypervisorError("Monitor socket is not a socket")
 
-  def _check_connection(self):
+  def _check_connection(self, reconnect=False):
     """Make sure that the connection is established.
 
     """
-    if not self._connected:
+    if not self._connected and not reconnect:
       raise errors.ProgrammerError("To use a MonitorSocket you need to first"
                                    " invoke connect() on it")
+
+    if not self._connected and reconnect:
+      self.connect()
 
   def connect(self):
     """Connects to the monitor.
@@ -173,6 +172,10 @@ class MonitorSocket(object):
 
     # Check file existance/stuff
     try:
+      self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+      # We want to fail if the server doesn't send a complete message
+      # in a reasonable amount of time
+      self.sock.settimeout(self._SOCKET_TIMEOUT)
       self.sock.connect(self.monitor_filename)
     except EnvironmentError:
       raise errors.HypervisorError("Can't connect to qmp socket")
@@ -185,6 +188,7 @@ class MonitorSocket(object):
 
     """
     self.sock.close()
+    self._connected = False
 
   def GetFd(self, fds, kvm_devid):
     """Pass file descriptor to kvm process via monitor socket using SCM_RIGHTS

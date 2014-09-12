@@ -419,6 +419,40 @@ class QmpConnection(MonitorSocket):
 
       return response[self._RETURN_KEY]
 
+  def CheckDiskHotaddSupport(self):
+    """Check if disk hotplug is possible
+
+    Hotplug is *not* supported in case:
+     - fdsend module is missing
+     - add-fd and blockdev-add qmp commands are not supported
+
+    """
+    if not fdsend:
+      raise errors.HotplugError("Cannot hot-add Disk."
+                                " fdsend python module is missing.")
+    if "add-fd" not in self.supported_commands:
+      raise errors.HotplugError("add-fd qmp command is not supported")
+
+    if "blockdev-add" not in self.supported_commands:
+      raise errors.HotplugError("blockdev-add qmp command is not supported")
+
+  def CheckNicHotaddSupport(self):
+    """Check if NIC hotplug is possible
+
+    Hotplug is *not* supported in case:
+     - fdsend module is missing
+     - getfd and netdev_add qmp commands are not supported
+
+    """
+    if not fdsend:
+      raise errors.HotplugError("Cannot hot-add NIC."
+                                " fdsend python module is missing.")
+    if "getfd" not in self.supported_commands:
+      raise errors.HotplugError("getfd qmp command is not supported")
+
+    if "netdev_add" not in self.supported_commands:
+      raise errors.HotplugError("netdev_add qmp command is not supported")
+
   def GetFd(self, fd, fdname):
     """Wrapper around getfd qmp command
 

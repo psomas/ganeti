@@ -43,6 +43,8 @@ try:
 except ImportError:
   fdsend = None
 
+from bitarray import bitarray
+
 from ganeti import errors
 from ganeti import utils
 from ganeti import serializer
@@ -430,6 +432,41 @@ class QmpConnection(MonitorSocket):
         continue
 
       return response[self._RETURN_KEY]
+
+  def GetPCIDevices(self):
+    """Get the devices of the first PCI bus of a runnung instance.
+
+    """
+    self._check_connection()
+    pci = self.Execute("query-pci")
+    bus = pci[0]
+    devices = bus["devices"]
+    return devices
+
+  def SearchPCIDevice(self, device, devid):
+    """Search for a specific device of a running instance.
+
+    It will match the PCI slot of the device and the id currently
+    obtained by _GenerateDeviceKVMId().
+
+    """
+    for d in self.GetPCIDevices():
+      if d["qdev_id"] == devid and d["slot"] == device.pci:
+        return True
+
+    return False
+
+  def GetFreePCISlot(self):
+    """Get the first available PCI slot of a runnung instance.
+
+    """
+    slots = bitarray(32)
+    slots.setall(False) # pylint: disable=E1101
+    for d in self.GetPCIDevices():
+      slot = d["slot"]
+      slots[slot] = True
+
+    return utils.GetFreeSlot(slots)
 
   def CheckDiskHotaddSupport(self):
     """Check if disk hotplug is possible

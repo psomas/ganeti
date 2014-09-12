@@ -107,6 +107,22 @@ _RUNTIME_ENTRY = {
 _MIGRATION_CAPS_DELIM = ":"
 
 
+def _with_qmp(fn):
+  """Wrapper used on hotplug related methods"""
+  def wrapper(self, instance, *args, **kwargs):
+    """Open a QmpConnection, run the wrapped method and the close it"""
+    if not hasattr(self, "qmp"):
+      self.qmp = QmpConnection(self._InstanceQmpMonitor(instance.name))
+
+    self.qmp._check_connection(reconnect=True)
+    try:
+      ret = fn(self, instance, *args, **kwargs)
+    finally:
+      self.qmp.close()
+    return ret
+  return wrapper
+
+
 def _GetDriveURI(disk, link, uri, qmp=None):
   """Helper function to get the drive uri to be used in --drive kvm option
 

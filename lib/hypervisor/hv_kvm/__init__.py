@@ -1568,13 +1568,12 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     if not kvm_nics:
       kvm_cmd.extend(["-net", "none"])
     else:
-      (nic_model, vnet_hdr,
-       virtio_net_queues, tap_extra,
-       nic_extra) = self._GetNetworkDeviceFeatures(up_hvp, devlist, kvmhelp)
+      features, tap_extra, nic_extra = \
+          self._GetNetworkDeviceFeatures(up_hvp, devlist, kvmhelp)
+      nic_model = features["driver"]
       kvm_supports_netdev = self._NETDEV_RE.search(kvmhelp)
       for nic_seq, nic in enumerate(kvm_nics):
-        tapname, nic_tapfds = OpenTap(vnet_hdr=vnet_hdr,
-                                      virtio_net_queues=virtio_net_queues)
+        tapname, nic_tapfds, _ = OpenTap(features=features)
         tapfds.extend(nic_tapfds)
         taps.append(tapname)
         tapfd = "%s%s" % ("fds=" if len(nic_tapfds) > 1 else "fd=",

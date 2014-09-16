@@ -546,13 +546,14 @@ def TestInstanceModify(instance):
   elif default_hv == constants.HT_KVM and \
     qa_config.TestEnabled("instance-device-hotplug"):
     args.extend([
-      ["--net", "-1:add", "--hotplug"],
-      ["--net", "-1:modify,mac=aa:bb:cc:dd:ee:ff", "--hotplug", "--force"],
-      ["--net", "-1:remove", "--hotplug"],
+      ["--net", "-1:add", "--hotplug-if-possible"],
+      ["--net", "-1:modify,mac=aa:bb:cc:dd:ee:ff",
+       "--hotplug-if-possible", "--force"],
+      ["--net", "-1:remove", "--hotplug-if-possible"],
       ])
     args.extend([
-      ["--disk", "-1:add,size=1G", "--hotplug"],
-      ["--disk", "-1:remove", "--hotplug"],
+      ["--disk", "-1:add,size=1G", "--hotplug-if-possible"],
+      ["--disk", "-1:remove", "--hotplug-if-possible"],
       ])
 
   for alist in args:

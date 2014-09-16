@@ -47,6 +47,8 @@ import select
 import logging
 import signal
 
+from bitarray import bitarray
+
 from ganeti import errors
 from ganeti import constants
 from ganeti import compat
@@ -72,6 +74,10 @@ from ganeti.utils.x509 import *
 _VALID_SERVICE_NAME_RE = re.compile("^[-_.a-zA-Z0-9]{1,128}$")
 
 UUID_RE = re.compile(constants.UUID_REGEX)
+
+# Constant bitarray that reflects to a free slot
+# Use it with bitarray.search()
+_AVAILABLE_SLOT = bitarray("0")
 
 
 def ForceDictType(target, key_types, allowed_values=None):
@@ -862,3 +868,35 @@ def ValidateDeviceNames(kind, container):
                                    errors.ECODE_NOTUNIQUE)
       else:
         valid.append(name)
+
+
+def GetFreeSlot(slots, slot=None, reserve=False):
+  """Helper method to get first available slot in a bitarray
+
+  @type slots: bitarray
+  @param slots: the bitarray to operate on
+  @type slot: integer
+  @param slot: if given we check whether the slot is free
+  @type reserve: boolean
+  @param reserve: whether to reserve the first available slot or not
+  @return: the idx of the (first) available slot
+  @raise errors.OpPrereqError: If all slots in a bitarray are occupied
+    or the given slot is not free.
+
+  """
+  if slot is not None:
+    assert slot < len(slots)
+    if slots[slot]:
+      raise errors.OpPrereqError("Slots %d occupied" % slot, errors.ECODE_NORES)
+
+  else:
+    avail = slots.search(_AVAILABLE_SLOT, 1)
+    if not avail:
+      raise errors.OpPrereqError("All slots occupied", errors.ECODE_NORES)
+
+    slot = int(avail[0])
+
+  if reserve:
+    slots[slot] = True
+
+  return slot

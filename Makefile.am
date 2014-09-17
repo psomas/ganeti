@@ -81,6 +81,7 @@ tools_pythondir = $(versionedsharedir)
 clientdir = $(pkgpythondir)/client
 cmdlibdir = $(pkgpythondir)/cmdlib
 hypervisordir = $(pkgpythondir)/hypervisor
+hypervisor_hv_kvmdir = $(pkgpythondir)/hypervisor/hv_kvm
 storagedir = $(pkgpythondir)/storage
 httpdir = $(pkgpythondir)/http
 masterddir = $(pkgpythondir)/masterd
@@ -174,6 +175,7 @@ DIRS = \
 	lib/confd \
 	lib/http \
 	lib/hypervisor \
+	lib/hypervisor/hv_kvm \
 	lib/impexpd \
 	lib/masterd \
 	lib/rapi \
@@ -414,9 +416,11 @@ hypervisor_PYTHON = \
 	lib/hypervisor/hv_base.py \
 	lib/hypervisor/hv_chroot.py \
 	lib/hypervisor/hv_fake.py \
-	lib/hypervisor/hv_kvm.py \
 	lib/hypervisor/hv_lxc.py \
 	lib/hypervisor/hv_xen.py
+
+hypervisor_hv_kvm_PYTHON = \
+	lib/hypervisor/hv_kvm/__init__.py
 
 storage_PYTHON = \
 	lib/storage/__init__.py \
@@ -1539,6 +1543,7 @@ all_python_code = \
 	$(client_PYTHON) \
 	$(cmdlib_PYTHON) \
 	$(hypervisor_PYTHON) \
+	$(hypervisor_hv_kvm_PYTHON) \
 	$(storage_PYTHON) \
 	$(rapi_PYTHON) \
 	$(server_PYTHON) \

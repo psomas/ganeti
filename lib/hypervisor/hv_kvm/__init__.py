@@ -234,6 +234,11 @@ def _UpgradeSerializedRuntime(serialized_runtime):
     if "uuid" not in nic:
       nic["uuid"] = utils.NewUUID()
 
+  for disk_entry in serialized_disks:
+    # Add empty uri entry
+    if len(disk_entry) < 3:
+      disk_entry += ("", )
+
   return kvm_cmd, serialized_nics, hvparams, serialized_disks
 
 

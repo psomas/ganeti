@@ -1,3 +1,29 @@
+snf-ganeti (2.10.8+snap1+b64v1+ext1+lockfix1+ifdown1+qmp1+bpo2-1~wheezy) unstable; urgency=low
+
+  * snap extends snapshot support for the ext disk template (separate LU)
+  * b64 saves networks' bitarrays in a more compact representation
+  * ext
+    + allows cache, heads, cyls arbitrary params to reach kvm command
+  * lockfix is a workaround for Issue #621
+  * ifdown supports networking deconfiguration/cleanup for the KVM hypervisor
+  * qmp replace HMP with QMP commands during hotplug
+  * bpo is a set of patches backported from later branches
+    + Make name and uuid Disk attributes reach bdev (2.11)
+    + IDiskParams fixes (2.11)
+    + Proper support for the --cdrom option (2.12)
+    + Add migration capabilities as an hvparam (2.13)
+    + Convert hv_kvm to a package (2.12)
+    + Extend QMP support (2.12)
+    + Add access to IDiskParams (2.13)
+    + Support userspace access for ExtStorage (2.13)
+    + Allow NICs with routed mode and no IP (2.13)
+    + Add support for KVM multiqueue virtio-net (2.12)
+    + Support Snapshot() for the ExtStorage interface (2.13)
+    + Support disk hotplug even with chroot or SM (2.13)
+    + Some refactor wrt NICs at the HV level (2.12)
+
+ -- Dimitris Aragiorgis <dimara@grnet.gr>  Wed, 24 Sep 2014 18:34:29 +0300
+
 snf-ganeti (2.10.7-1~wheezy) unstable; urgency=low
 
   * Rebuild from latest Ganeti stable-2.10 branch

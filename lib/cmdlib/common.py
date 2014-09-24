@@ -1221,7 +1221,7 @@ def IsValidDiskAccessModeCombination(hv, disk_template, mode):
     return True
 
   if (hv == constants.HT_KVM and
-      disk_template == constants.DT_RBD and
+      disk_template in constants.DTS_HAVE_ACCESS and
       mode == constants.DISK_USERSPACE):
     return True
 

@@ -412,6 +412,37 @@ def ReinstallInstance(opts, args):
     return constants.EXIT_FAILURE
 
 
+def SnapshotInstance(opts, args):
+  """Snapshot an instance.
+
+  @param opts: the command line options selected by the user
+  @type args: list
+  @param args: should contain only one element, the name of the
+      instance to be reinstalled
+  @rtype: int
+  @return: the desired exit code
+
+  """
+  instance_name = args[0]
+  inames = _ExpandMultiNames(_EXPAND_INSTANCES, [instance_name])
+  if not inames:
+    raise errors.OpPrereqError("Selection filter does not match any instances",
+                               errors.ECODE_INVAL)
+  multi_on = len(inames) > 1
+  jex = JobExecutor(verbose=multi_on, opts=opts)
+  for instance_name in inames:
+    op = opcodes.OpInstanceSnapshot(instance_name=instance_name,
+                                    disks=opts.disks)
+    jex.QueueJob(instance_name, op)
+
+  results = jex.WaitOrShow(not opts.submit_only)
+
+  if compat.all(map(compat.fst, results)):
+    return constants.EXIT_SUCCESS
+  else:
+    return constants.EXIT_FAILURE
+
+
 def RemoveInstance(opts, args):
   """Remove an instance.
 
@@ -438,7 +469,8 @@ def RemoveInstance(opts, args):
 
   op = opcodes.OpInstanceRemove(instance_name=instance_name,
                                 ignore_failures=opts.ignore_failures,
-                                shutdown_timeout=opts.shutdown_timeout)
+                                shutdown_timeout=opts.shutdown_timeout,
+                                keep_disks=opts.keep_disks)
   SubmitOrSend(op, opts, cl=cl)
   return 0
 
@@ -1353,6 +1385,7 @@ def SetInstanceParams(opts, args):
                                    disks=disks,
                                    hotplug=opts.hotplug,
                                    hotplug_if_possible=opts.hotplug_if_possible,
+                                   keep_disks=opts.keep_disks,
                                    disk_template=opts.disk_template,
                                    remote_node=opts.node,
                                    pnode=opts.new_primary_node,
@@ -1540,10 +1573,14 @@ commands = {
      m_pri_node_tags_opt, m_sec_node_tags_opt, m_inst_tags_opt, SELECT_OS_OPT]
     + SUBMIT_OPTS + [DRY_RUN_OPT, PRIORITY_OPT, OSPARAMS_OPT],
     "[-f] <instance>", "Reinstall a stopped instance"),
+  "snapshot": (
+    SnapshotInstance, [ArgInstance(min=1, max=1)],
+    [DISK_OPT, SUBMIT_OPT, DRY_RUN_OPT],
+    "<instance>", "Snapshot an instance's disk(s)"),
   "remove": (
     RemoveInstance, ARGS_ONE_INSTANCE,
     [FORCE_OPT, SHUTDOWN_TIMEOUT_OPT, IGNORE_FAILURES_OPT] + SUBMIT_OPTS
-    + [DRY_RUN_OPT, PRIORITY_OPT],
+    + [DRY_RUN_OPT, PRIORITY_OPT, KEEPDISKS_OPT],
     "[-f] <instance>", "Shuts down the instance and removes it"),
   "rename": (
     RenameInstance,
@@ -1565,7 +1602,7 @@ commands = {
      OSPARAMS_OPT, DRY_RUN_OPT, PRIORITY_OPT, NWSYNC_OPT, OFFLINE_INST_OPT,
      ONLINE_INST_OPT, IGNORE_IPOLICY_OPT, RUNTIME_MEM_OPT,
      NOCONFLICTSCHECK_OPT, NEW_PRIMARY_OPT, HOTPLUG_OPT,
-     HOTPLUG_IF_POSSIBLE_OPT],
+     HOTPLUG_IF_POSSIBLE_OPT, KEEPDISKS_OPT],
     "<instance>", "Alters the parameters of an instance"),
   "shutdown": (
     GenericManyOps("shutdown", _ShutdownInstance), [ArgInstance()],

@@ -221,7 +221,7 @@ $(genOpCode "OpCode"
      , pClusterBeParams
      , pOsHvp
      , pClusterOsParams
-     , pDiskParams
+     , pGroupDiskParams
      , pCandidatePoolSize
      , pUidPool
      , pAddUids
@@ -479,6 +479,14 @@ $(genOpCode "OpCode"
      , pTempOsParams
      ],
      "instance_name")
+  , ("OpInstanceSnapshot",
+     [t| () |],
+     OpDoc.opInstanceSnapshot,
+     [ pInstanceName
+     , pInstanceUuid
+     , pInstSnaps
+     ],
+     "instance_name")
   , ("OpInstanceRemove",
      [t| () |],
      OpDoc.opInstanceRemove,
@@ -486,6 +494,7 @@ $(genOpCode "OpCode"
      , pInstanceUuid
      , pShutdownTimeout
      , pIgnoreFailures
+     , pKeepDisks
      ],
      "instance_name")
   , ("OpInstanceRename",
@@ -668,6 +677,7 @@ $(genOpCode "OpCode"
      , pIpConflictsCheck
      , pHotplug
      , pHotplugIfPossible
+     , pKeepDisks
      ],
      "instance_name")
   , ("OpInstanceGrowDisk",
@@ -697,7 +707,7 @@ $(genOpCode "OpCode"
      [ pGroupName
      , pNodeGroupAllocPolicy
      , pGroupNodeParams
-     , pDiskParams
+     , pGroupDiskParams
      , pHvState
      , pDiskState
      , withDoc "Group-wide ipolicy specs" pIpolicy
@@ -725,7 +735,7 @@ $(genOpCode "OpCode"
      [ pGroupName
      , pNodeGroupAllocPolicy
      , pGroupNodeParams
-     , pDiskParams
+     , pGroupDiskParams
      , pHvState
      , pDiskState
      , withDoc "Group-wide ipolicy specs" pIpolicy
@@ -976,6 +986,7 @@ opSummaryVal OpNodeMigrate { opNodeName = s } = Just (fromNonEmpty s)
 opSummaryVal OpNodeEvacuate { opNodeName = s } = Just (fromNonEmpty s)
 opSummaryVal OpInstanceCreate { opInstanceName = s } = Just s
 opSummaryVal OpInstanceReinstall { opInstanceName = s } = Just s
+opSummaryVal OpInstanceSnapshot { opInstanceName = s } = Just s
 opSummaryVal OpInstanceRemove { opInstanceName = s } = Just s
 -- FIXME: instance rename should show both names; currently it shows none
 -- opSummaryVal OpInstanceRename { opInstanceName = s } = Just s

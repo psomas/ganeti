@@ -32,6 +32,7 @@
 """
 
 import os
+import re
 import logging
 import shutil
 import tempfile
@@ -676,6 +677,16 @@ def IsBelowDir(root, other_path):
     prepared_root = "%s%s" % (norm_root, os.sep)
 
   return os.path.commonprefix([prepared_root, norm_other]) == prepared_root
+
+
+URL_RE = re.compile(r'(https?|ftps?)://')
+
+
+def IsUrl(path):
+  """Check whether a path is a HTTP URL.
+
+  """
+  return URL_RE.match(path)
 
 
 def PathJoin(*args):

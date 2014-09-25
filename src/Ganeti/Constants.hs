@@ -904,6 +904,11 @@ dtsBlock =
 dtsLvm :: FrozenSet String
 dtsLvm = diskTemplates `ConstantUtils.difference` dtsNotLvm
 
+-- | The set of lvm-based disk templates
+dtsHaveAccess :: FrozenSet String
+dtsHaveAccess = ConstantUtils.mkSet $
+  map Types.diskTemplateToRaw [DTRbd, DTExt]
+
 -- * Drbd
 
 drbdHmacAlg :: String
@@ -1329,6 +1334,9 @@ esActionSetinfo = "setinfo"
 esActionVerify :: String
 esActionVerify = "verify"
 
+esActionSnapshot :: String
+esActionSnapshot = "snapshot"
+
 esScriptCreate :: String
 esScriptCreate = esActionCreate
 
@@ -1350,6 +1358,9 @@ esScriptSetinfo = esActionSetinfo
 esScriptVerify :: String
 esScriptVerify = esActionVerify
 
+esScriptSnapshot :: String
+esScriptSnapshot = esActionSnapshot
+
 esScripts :: FrozenSet String
 esScripts =
   ConstantUtils.mkSet [esScriptAttach,
@@ -1358,7 +1369,8 @@ esScripts =
                        esScriptGrow,
                        esScriptRemove,
                        esScriptSetinfo,
-                       esScriptVerify]
+                       esScriptVerify,
+                       esScriptSnapshot]
 
 esParametersFile :: String
 esParametersFile = "parameters.list"
@@ -1517,6 +1529,9 @@ hvKvmFloppyImagePath = "floppy_image_path"
 hvKvmMachineVersion :: String
 hvKvmMachineVersion = "machine_version"
 
+hvKvmMigrationCaps :: String
+hvKvmMigrationCaps = "migration_caps"
+
 hvKvmPath :: String
 hvKvmPath = "kvm_path"
 
@@ -1619,6 +1634,9 @@ hvVga = "vga"
 hvVhostNet :: String
 hvVhostNet = "vhost_net"
 
+hvVirtioNetQueues :: String
+hvVirtioNetQueues = "virtio_net_queues"
+
 hvVifScript :: String
 hvVifScript = "vif_script"
 
@@ -1699,6 +1717,7 @@ hvsParameterTypes = Map.fromList
   , (hvKvmFlag,                         VTypeString)
   , (hvKvmFloppyImagePath,              VTypeString)
   , (hvKvmMachineVersion,               VTypeString)
+  , (hvKvmMigrationCaps,                VTypeString)
   , (hvKvmPath,                         VTypeString)
   , (hvKvmSpiceAudioCompr,              VTypeBool)
   , (hvKvmSpiceBind,                    VTypeString)
@@ -1733,6 +1752,7 @@ hvsParameterTypes = Map.fromList
   , (hvUseLocaltime,                    VTypeBool)
   , (hvVga,                             VTypeString)
   , (hvVhostNet,                        VTypeBool)
+  , (hvVirtioNetQueues,                 VTypeInt)
   , (hvVifScript,                       VTypeString)
   , (hvVifType,                         VTypeString)
   , (hvViridian,                        VTypeBool)
@@ -2316,6 +2336,12 @@ idiskVg = "vg"
 idiskProvider :: String
 idiskProvider = "provider"
 
+idiskAccess :: String
+idiskAccess = "access"
+
+idiskSnapshotName :: String
+idiskSnapshotName = "snapshot_name"
+
 idiskParamsTypes :: Map String VType
 idiskParamsTypes =
   Map.fromList [(idiskSize, VTypeSize),
@@ -2325,6 +2351,8 @@ idiskParamsTypes =
                 (idiskVg, VTypeString),
                 (idiskMetavg, VTypeString),
                 (idiskProvider, VTypeString),
+                (idiskAccess, VTypeString),
+                (idiskSnapshotName, VTypeString),
                 (idiskName, VTypeMaybeString)]
 
 idiskParams :: FrozenSet String
@@ -3668,6 +3696,7 @@ hvcDefaults =
           , (hvSecurityDomain,                  PyValueEx "")
           , (hvKvmFlag,                         PyValueEx "")
           , (hvVhostNet,                        PyValueEx False)
+          , (hvVirtioNetQueues,                 PyValueEx (1 :: Int))
           , (hvKvmUseChroot,                    PyValueEx False)
           , (hvMemPath,                         PyValueEx "")
           , (hvRebootBehavior,                  PyValueEx instanceRebootAllowed)
@@ -3681,6 +3710,7 @@ hvcDefaults =
           , (hvVga,                             PyValueEx "")
           , (hvKvmExtra,                        PyValueEx "")
           , (hvKvmMachineVersion,               PyValueEx "")
+          , (hvKvmMigrationCaps,                PyValueEx "")
           , (hvVnetHdr,                         PyValueEx True)])
   , (Fake, Map.fromList [(hvMigrationMode, PyValueEx htMigrationLive)])
   , (Chroot, Map.fromList [(hvInitScript, PyValueEx "/ganeti-chroot")])
@@ -3772,7 +3802,9 @@ diskLdDefaults =
               , (ldpProtocol,      PyValueEx drbdDefaultNetProtocol)
               , (ldpResyncRate,    PyValueEx classicDrbdSyncSpeed)
               ])
-  , (DTExt, Map.empty)
+  , (DTExt, Map.fromList
+            [ (ldpAccess, PyValueEx diskKernelspace)
+            ])
   , (DTFile, Map.empty)
   , (DTPlain, Map.fromList [(ldpStripes, PyValueEx lvmStripecount)])
   , (DTRbd, Map.fromList
@@ -3804,7 +3836,9 @@ diskDtDefaults =
                    , (drbdProtocol,      PyValueEx drbdDefaultNetProtocol)
                    , (drbdResyncRate,    PyValueEx classicDrbdSyncSpeed)
                    ])
-  , (DTExt,        Map.empty)
+  , (DTExt,        Map.fromList
+                   [ (rbdAccess, PyValueEx diskKernelspace)
+                   ])
   , (DTFile,       Map.empty)
   , (DTPlain,      Map.fromList [(lvStripes, PyValueEx lvmStripecount)])
   , (DTRbd,        Map.fromList

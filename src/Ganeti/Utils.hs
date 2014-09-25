@@ -75,9 +75,12 @@ module Ganeti.Utils
   , recombineEithers
   , resolveAddr
   , setOwnerAndGroupFromNames
+  , b64StringToBitString
+  , bitStringToB64String
   ) where
 
-import Data.Char (toUpper, isAlphaNum, isDigit, isSpace)
+import Data.Char
+       (toUpper, isAlphaNum, isDigit, isSpace, intToDigit, digitToInt)
 import Data.Function (on)
 import Data.List
 import qualified Data.Map as M
@@ -94,6 +97,12 @@ import System.IO
 import System.Exit
 import System.Posix.Files
 import System.Time
+
+import qualified Data.ByteString as BS
+import Data.ByteString.Base64 (decodeLenient, encode)
+import qualified Data.ByteString.Char8 as BSC
+import Data.Word (Word8)
+import Numeric (showIntAtBase, readInt)
 
 -- * Debug functions
 
@@ -531,3 +540,34 @@ setOwnerAndGroupFromNames filename daemon dGroup = do
   let uid = fst ents M.! daemon
   let gid = snd ents M.! dGroup
   setOwnerAndGroup filename uid gid
+
+type BitString = String
+
+-- | Base 64 encoded String to BitString
+wordsToBitString :: [Word8] -> BitString
+wordsToBitString =
+    concatMap (padBits . wordToBits)
+  where
+    wordToBits = flip (showIntAtBase 2 intToDigit) ""
+    padBits bs = replicate (8 - length bs) '0' ++ bs
+
+decodeB64String :: String -> [Word8]
+decodeB64String = BS.unpack . decodeLenient . BSC.pack
+
+b64StringToBitString :: String -> BitString
+b64StringToBitString = wordsToBitString . decodeB64String
+
+-- | A BitString to Base 64 encoded String
+bitStringToWords :: BitString -> [Word8]
+bitStringToWords [] = []
+bitStringToWords bs =
+    bitStringToWord c : bitStringToWords rest
+  where
+    bitStringToWord = fst . head . readInt 2 (const True) digitToInt
+    (c, rest) = splitAt 8 bs
+
+encodeB64String :: [Word8] -> String
+encodeB64String = BSC.unpack . encode . BS.pack
+
+bitStringToB64String :: BitString -> String
+bitStringToB64String  = encodeB64String . bitStringToWords

@@ -73,10 +73,17 @@ vg
    The LVM volume group. This works only for LVM and DRBD devices.
 
 metavg
-   This options specifies a different VG for the metadata device. This
+   This option specifies a different VG for the metadata device. This
    works only for DRBD devices. If not specified, the default metavg
    of the node-group (possibly inherited from the cluster-wide settings)
    will be used.
+
+access
+   If 'userspace', instance will access this disk directly without going
+   through a block device, avoiding expensive context switches with
+   kernel space. This option works only for RBD, Gluster and ExtStorage
+   devices. If not specified, the default access of the node-group (possibly
+   inherited from the cluster-wide settings) will be used.
 
 When creating ExtStorage disks, also arbitrary parameters can be passed,
 to the ExtStorage provider. Those parameters are passed as additional
@@ -787,6 +794,16 @@ machine\_version
     machine version (due to e.g. outdated drivers). In case it's not set
     the default version supported by your version of kvm is used.
 
+migration\_caps
+    Valid for the KVM hypervisor.
+
+    Enable specific migration capabilities by providing a ":" separated
+    list of supported capabilites. QEMU version 1.7.0 defines
+    x-rdma-pin-all, auto-converge, zero-blocks, and xbzrle. Please note
+    that while a combination of xbzrle and auto-converge might speed up
+    the migration process significantly, the first may cause BSOD on
+    Windows8r2 instances running on drbd.
+
 kvm\_path
     Valid for the KVM hypervisor.
 
@@ -804,6 +821,25 @@ vnet\_hdr
     when dealing with broken or malicious virtio-net drivers.
 
     It is set to ``true`` by default.
+
+virtio\_net\_queues
+    Valid for the KVM hypervisor.
+
+    Set a number of queues (file descriptors) for tap device to
+    parallelize packets sending or receiving. Tap devices will be
+    created with MULTI_QUEUE (IFF_MULTI_QUEUE) support. This only
+    works with KVM paravirtual nics (virtio-net) and the maximum
+    number of queues is limited to ``8``. Tehnically this is an
+    extension of ``vnet_hdr`` which must be enabled for multiqueue
+    support.
+
+    If set to ``1`` queue, it effectively disables multiqueue support
+    on the tap and virio-net devices.
+
+    For instances it is necessary to manually set number of queues (on
+    Linux using: ``ethtool -L ethX combined $queues``).
+
+    It is set to ``1`` by default.
 
 The ``-O (--os-parameters)`` option allows customisation of the OS
 parameters. The actual parameter names and values depends on the OS
@@ -1187,8 +1223,9 @@ by ballooning it up or down to the new value.
 The ``--disk add:size=*SIZE*,[options..]`` option adds a disk to the
 instance, and ``--disk *N*:add:size=*SIZE*,[options..]`` will add a disk
 to the the instance at a specific index. The available options are the
-same as in the **add** command(``spindles``, ``mode``, ``name``, ``vg``,
-``metavg``). Per default, gnt-instance waits for the disk mirror to sync.
+same as in the **add** command (``spindles``, ``mode``, ``name``, ``vg``,
+``metavg`` and ``access``). Per default, gnt-instance waits for the disk
+mirror to sync.
 If you do not want this behavior, use the ``--no-wait-for-sync`` option.
 When adding an ExtStorage disk, the ``provider=*PROVIDER*`` option is
 also mandatory and specifies the ExtStorage provider. Also, for
@@ -1239,12 +1276,13 @@ during this operation are ignored.
 If ``--hotplug`` is given any disk and NIC modifications will take
 effect without the need of actual reboot. Please note that this feature
 is currently supported only for KVM hypervisor and there are some
-restrictions: a) KVM versions >= 1.0 support it b) instances with chroot
-or uid pool security model do not support disk hotplug c) RBD disks with
-userspace access mode can not be hotplugged (yet) d) if hotplug fails
-(for any reason) a warning is printed but execution is continued e)
-for existing NIC modification interactive verification is needed unless
-``--force`` option is passed.
+restrictions: a) NIC/Disk hot-remove should work for QEMU versions >= 1.0
+b) instances with chroot or pool/user security model support disk
+hot-add only for QEMU version > 1.7 where add-fd QMP command exists c) For
+the previous case as well as for NIC hot-add, python-fdsend package must
+be installed d) if hotplug fails (for any reason) a warning is printed
+but execution is continued e) for existing NIC modification interactive
+verification is needed unless ``--force`` option is passed.
 
 If ``--hotplug-if-possible`` is given then ganeti won't abort in case
 hotplug is not supported. It will continue execution and modification
@@ -1256,6 +1294,22 @@ options.
 
 Most of the changes take effect at the next restart. If the instance is
 running, there is no effect on the instance.
+
+
+SNAPSHOT
+^^^^^^^^
+
+| **snapshot**
+| {\--disk=*ID*:snapshot_name=*VAL*
+| [\--submit]
+| {*instance*}
+
+This only works for instances with ext disk template. It eventualla runs
+the snapshot script of the corresponding extstorage provider.
+The ``--disk 0:snapshot_name=snap1`` will take snapshot of the first disk
+by exporting snapshot name (via VOL_SNAPSHOT_NAME) and disk related info
+to the script environment. *ID* can be a disk index, name or UUID.
+
 
 REINSTALL
 ^^^^^^^^^

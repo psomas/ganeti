@@ -171,6 +171,12 @@ class MonitorSocket(object):
     if not self._connected:
       self._connect()
 
+  def is_connected(self):
+    """Return whether there is a connection to the socket or not.
+
+    """
+    return self._connected
+
   def _connect(self):
     """Connects to the monitor.
 
@@ -207,6 +213,26 @@ class MonitorSocket(object):
   def _close(self):
     self.sock.close()
     self._connected = False
+
+
+def _ensure_connection(fn):
+  """Decorator that wraps MonitorSocket external methods"""
+  def wrapper(*args, **kwargs):
+    """Ensure proper connect/close and exception propagation"""
+    mon = args[0]
+    already_connected = mon.is_connected()
+    mon.connect()
+    try:
+      ret = fn(*args, **kwargs)
+    finally:
+      # In general this decorator wraps external methods.
+      # Here we close the connection only if we initiated it before,
+      # to protect us from using the socket after closing it
+      # in case we invoke a decorated method internally by accident.
+      if not already_connected:
+        mon.close()
+    return ret
+  return wrapper
 
 
 class QmpConnection(MonitorSocket):
@@ -432,14 +458,13 @@ class QmpConnection(MonitorSocket):
 
       return response[self._RETURN_KEY]
 
+  @_ensure_connection
   def HotAddNic(self, nic, devid, tapfds=None, vhostfds=None, features=None):
     """Hot-add a NIC
 
     First pass the tapfds, then netdev_add and then device_add
 
     """
-    self._check_connection()
-
     if tapfds is None:
       tapfds = []
     if vhostfds is None:
@@ -453,7 +478,7 @@ class QmpConnection(MonitorSocket):
     fdnames = []
     for i, fd in enumerate(tapfds):
       fdname = "%s-%d" % (devid, i)
-      self.GetFd(fd, fdname)
+      self._GetFd(fd, fdname)
       fdnames.append(fdname)
 
     arguments = {
@@ -465,7 +490,7 @@ class QmpConnection(MonitorSocket):
       fdnames = []
       for i, fd in enumerate(vhostfds):
         fdname = "%s-vhost-%d" % (devid, i)
-        self.GetFd(fd, fdname)
+        self._GetFd(fd, fdname)
         fdnames.append(fdname)
 
       arguments.update({
@@ -489,14 +514,15 @@ class QmpConnection(MonitorSocket):
         })
     self.Execute("device_add", arguments)
 
+  @_ensure_connection
   def HotDelNic(self, devid):
     """Hot-del a NIC
 
     """
-    self._check_connection()
     self.Execute("device_del", {"id": devid})
     self.Execute("netdev_del", {"id": devid})
 
+  @_ensure_connection
   def HotAddDisk(self, disk, devid, uri):
     """Hot-add a disk
 
@@ -505,11 +531,9 @@ class QmpConnection(MonitorSocket):
     Then use blockdev-add and then device_add.
 
     """
-    self._check_connection()
-
     if os.path.exists(uri):
       fd = os.open(uri, os.O_RDWR)
-      fdset = self.AddFd(fd)
+      fdset = self._AddFd(fd)
       os.close(fd)
       filename = "/dev/fdset/%s" % fdset
     else:
@@ -531,7 +555,7 @@ class QmpConnection(MonitorSocket):
     self.Execute("blockdev-add", arguments)
 
     if fdset is not None:
-      self.RemoveFdset(fdset)
+      self._RemoveFdset(fdset)
 
     arguments = {
       "driver": "virtio-blk-pci",
@@ -542,6 +566,7 @@ class QmpConnection(MonitorSocket):
     }
     self.Execute("device_add", arguments)
 
+  @_ensure_connection
   def HotDelDisk(self, devid):
     """Hot-del a Disk
 
@@ -549,12 +574,11 @@ class QmpConnection(MonitorSocket):
     be invoked from HMP.
 
     """
-    self._check_connection()
     self.Execute("device_del", {"id": devid})
     #TODO: uncomment when drive_del gets implemented in upstream qemu
     # self.Execute("drive_del", {"id": devid})
 
-  def GetPCIDevices(self):
+  def _GetPCIDevices(self):
     """Get the devices of the first PCI bus of a running instance.
 
     """
@@ -564,6 +588,7 @@ class QmpConnection(MonitorSocket):
     devices = bus["devices"]
     return devices
 
+  @_ensure_connection
   def HasPCIDevice(self, device, devid):
     """Check if a specific device exists or not on a running instance.
 
@@ -571,24 +596,26 @@ class QmpConnection(MonitorSocket):
     obtained by _GenerateDeviceKVMId().
 
     """
-    for d in self.GetPCIDevices():
+    for d in self._GetPCIDevices():
       if d["qdev_id"] == devid and d["slot"] == device.pci:
         return True
 
     return False
 
+  @_ensure_connection
   def GetFreePCISlot(self):
     """Get the first available PCI slot of a running instance.
 
     """
     slots = bitarray(self._QEMU_PCI_SLOTS)
     slots.setall(False) # pylint: disable=E1101
-    for d in self.GetPCIDevices():
+    for d in self._GetPCIDevices():
       slot = d["slot"]
       slots[slot] = True
 
     return utils.GetFreeSlot(slots)
 
+  @_ensure_connection
   def CheckDiskHotAddSupport(self):
     """Check if disk hotplug is possible
 
@@ -609,6 +636,7 @@ class QmpConnection(MonitorSocket):
     if "blockdev-add" not in self.supported_commands:
       _raise("blockdev-add qmp command is not supported")
 
+  @_ensure_connection
   def CheckNicHotAddSupport(self):
     """Check if NIC hotplug is possible
 
@@ -629,7 +657,7 @@ class QmpConnection(MonitorSocket):
     if "netdev_add" not in self.supported_commands:
       _raise("netdev_add qmp command is not supported")
 
-  def GetFd(self, fd, fdname):
+  def _GetFd(self, fd, fdname):
     """Wrapper around the getfd qmp command
 
     Use fdsend to send an fd to a running process via SCM_RIGHTS and then use
@@ -652,7 +680,7 @@ class QmpConnection(MonitorSocket):
       logging.info("Passing fd %s via SCM_RIGHTS failed: %s", fd, err)
       raise
 
-  def AddFd(self, fd):
+  def _AddFd(self, fd):
     """Wrapper around add-fd qmp command
 
     Use fdsend to send fd to a running process via SCM_RIGHTS and then add-fd
@@ -678,7 +706,7 @@ class QmpConnection(MonitorSocket):
 
     return fdset
 
-  def RemoveFdset(self, fdset):
+  def _RemoveFdset(self, fdset):
     """Wrapper around remove-fd qmp command
 
     Remove the file descriptor previously passed. After qemu has dup'd the fd

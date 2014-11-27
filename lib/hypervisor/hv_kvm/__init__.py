@@ -1552,11 +1552,20 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       nic_model = features["driver"]
       kvm_supports_netdev = self._NETDEV_RE.search(kvmhelp)
       for nic_seq, nic in enumerate(kvm_nics):
-        tapname, nic_tapfds, _ = OpenTap(features=features)
+        tapname, nic_tapfds, nic_vhostfds = OpenTap(features=features)
         tapfds.extend(nic_tapfds)
+        tapfds.extend(nic_vhostfds)
         taps.append(tapname)
         tapfd = "%s%s" % ("fds=" if len(nic_tapfds) > 1 else "fd=",
                           ":".join(str(fd) for fd in nic_tapfds))
+
+        if nic_vhostfds:
+          vhostfd = "%s%s" % (",vhostfds="
+                              if len(nic_vhostfds) > 1 else ",vhostfd=",
+                              ":".join(str(fd) for fd in nic_vhostfds))
+        else:
+          vhostfd = ""
+
         if kvm_supports_netdev:
           nic_val = "%s,mac=%s" % (nic_model, nic.mac)
           try:
@@ -1568,8 +1577,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
           except errors.HotplugError:
             netdev = "netdev%d" % nic_seq
           nic_val += (",netdev=%s%s" % (netdev, nic_extra))
-          tap_val = ("type=tap,id=%s,%s%s" %
-                     (netdev, tapfd, tap_extra))
+          tap_val = ("type=tap,id=%s,%s%s%s" %
+                     (netdev, tapfd, vhostfd, tap_extra))
           kvm_cmd.extend(["-netdev", tap_val, "-device", nic_val])
         else:
           nic_val = "nic,vlan=%s,macaddr=%s,model=%s" % (nic_seq,

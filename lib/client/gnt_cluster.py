@@ -2152,7 +2152,8 @@ commands = {
   "list-tags": (
     ListTags, ARGS_NONE, [], "", "List the tags of the cluster"),
   "add-tags": (
-    AddTags, [ArgUnknown()], [TAG_SRC_OPT, PRIORITY_OPT] + SUBMIT_OPTS,
+    AddTags, [ArgUnknown()],
+    [TAG_SRC_OPT, PRIORITY_OPT, DRY_RUN_OPT] + SUBMIT_OPTS,
     "tag...", "Add tags to the cluster"),
   "remove-tags": (
     RemoveTags, [ArgUnknown()], [TAG_SRC_OPT, PRIORITY_OPT] + SUBMIT_OPTS,

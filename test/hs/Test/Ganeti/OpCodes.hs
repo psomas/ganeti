@@ -101,7 +101,8 @@ instance Arbitrary INicParams where
 instance Arbitrary IDiskParams where
   arbitrary = IDiskParams <$> arbitrary <*> arbitrary <*>
               genMaybe genNameNE <*> genMaybe genNameNE <*>
-              genMaybe genNameNE <*> genMaybe genNameNE
+              genMaybe genNameNE <*> genMaybe genNameNE <*>
+              genMaybe genNameNE <*> genMaybe genNameNE <*> genAndRestArguments
 
 instance Arbitrary RecreateDisksInfo where
   arbitrary = oneof [ pure RecreateDisksAll
@@ -118,6 +119,14 @@ instance (Arbitrary a) => Arbitrary (SetParamsMods a) where
   arbitrary = oneof [ pure SetParamsEmpty
                     , SetParamsDeprecated <$> arbitrary
                     , SetParamsNew        <$> arbitrary
+                    ]
+
+instance Arbitrary ISnapParams where
+  arbitrary = ISnapParams <$> genNameNE
+
+instance (Arbitrary a) => Arbitrary (SetSnapParams a) where
+  arbitrary = oneof [ pure SetSnapParamsEmpty
+                    , SetSnapParamsValid <$> arbitrary
                     ]
 
 instance Arbitrary ExportTarget where
@@ -257,7 +266,7 @@ instance Arbitrary OpCodes.OpCode where
           arbitrary <*> genMaybe genNameNE <*> genMaybe (pure emptyJSObject)
       "OP_INSTANCE_REMOVE" ->
         OpCodes.OpInstanceRemove <$> genFQDN <*> return Nothing <*>
-          arbitrary <*> arbitrary
+          arbitrary <*> arbitrary <*> arbitrary
       "OP_INSTANCE_RENAME" ->
         OpCodes.OpInstanceRename <$> genFQDN <*> return Nothing <*>
           genNodeNameNE <*> arbitrary <*> arbitrary
@@ -299,7 +308,7 @@ instance Arbitrary OpCodes.OpCode where
           pure emptyJSObject <*> arbitrary <*> genMaybe genNodeNameNE <*>
           return Nothing <*> genMaybe genNodeNameNE <*> return Nothing <*>
           genMaybe genNameNE <*> pure emptyJSObject <*> arbitrary <*>
-          arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+          arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
       "OP_INSTANCE_GROW_DISK" ->
         OpCodes.OpInstanceGrowDisk <$> genFQDN <*> return Nothing <*>
           arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
@@ -375,6 +384,8 @@ instance Arbitrary OpCodes.OpCode where
         OpCodes.OpNetworkDisconnect <$> genNameNE <*> genNameNE
       "OP_NETWORK_QUERY" ->
         OpCodes.OpNetworkQuery <$> genFieldsNE <*> arbitrary <*> genNamesNE
+      "OP_INSTANCE_SNAPSHOT" ->
+        OpCodes.OpInstanceSnapshot <$> genFQDN <*> return Nothing <*> arbitrary
       "OP_RESTRICTED_COMMAND" ->
         OpCodes.OpRestrictedCommand <$> arbitrary <*> genNodeNamesNE <*>
           return Nothing <*> genNameNE

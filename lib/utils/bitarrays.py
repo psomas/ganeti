@@ -1,7 +1,7 @@
-#!/bin/bash
+#
 #
 
-# Copyright (C) 2011, 2012 Google Inc.
+# Copyright (C) 2014 Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,14 +27,47 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-source @PKGLIBDIR@/net-common
+"""Utility functions for managing bitarrays.
 
-# Execute the user-supplied network script, if applicable
-if [ -x "$CONF_DIR/kvm-ifup-custom" ]; then
-  exec $CONF_DIR/kvm-ifup-custom "$@"
-fi
+"""
 
-check
-setup_bridge
-setup_ovs
-setup_route
+
+from bitarray import bitarray
+
+from ganeti import errors
+
+# Constant bitarray that reflects to a free slot
+# Use it with bitarray.search()
+_AVAILABLE_SLOT = bitarray("0")
+
+
+def GetFreeSlot(slots, slot=None, reserve=False):
+  """Helper method to get first available slot in a bitarray
+
+  @type slots: bitarray
+  @param slots: the bitarray to operate on
+  @type slot: integer
+  @param slot: if given we check whether the slot is free
+  @type reserve: boolean
+  @param reserve: whether to reserve the first available slot or not
+  @return: the idx of the (first) available slot
+  @raise errors.OpPrereqError: If all slots in a bitarray are occupied
+    or the given slot is not free.
+
+  """
+  if slot is not None:
+    assert slot < len(slots)
+    if slots[slot]:
+      raise errors.GenericError("Slot %d occupied" % slot)
+
+  else:
+    avail = slots.search(_AVAILABLE_SLOT, 1)
+    if not avail:
+      raise errors.GenericError("All slots occupied")
+
+    slot = int(avail[0])
+
+  if reserve:
+    slots[slot] = True
+
+  return slot

@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/python
 #
 
-# Copyright (C) 2011, 2012 Google Inc.
+# Copyright (C) 2014 Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,14 +27,41 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-source @PKGLIBDIR@/net-common
 
-# Execute the user-supplied network script, if applicable
-if [ -x "$CONF_DIR/kvm-ifup-custom" ]; then
-  exec $CONF_DIR/kvm-ifup-custom "$@"
-fi
+"""Script for unittesting the bitarray utility functions"""
 
-check
-setup_bridge
-setup_ovs
-setup_route
+import unittest
+import testutils
+from bitarray import bitarray
+
+from ganeti import errors
+from ganeti.utils import bitarrays
+
+
+_FREE = bitarray("11100010")
+_FULL = bitarray("11111111")
+
+
+class GetFreeSlotTest(unittest.TestCase):
+  """Test function that finds a free slot in a bitarray"""
+
+  def testFreeSlot(self):
+    self.assertEquals(bitarrays.GetFreeSlot(_FREE), 3)
+
+  def testReservedSlot(self):
+    self.assertRaises(errors.GenericError,
+                      bitarrays.GetFreeSlot,
+                      _FREE, slot=1)
+
+  def testNoFreeSlot(self):
+    self.assertRaises(errors.GenericError,
+                      bitarrays.GetFreeSlot,
+                      _FULL)
+
+  def testGetAndReserveSlot(self):
+    self.assertEquals(bitarrays.GetFreeSlot(_FREE, slot=5, reserve=True), 5)
+    self.assertEquals(_FREE, bitarray("11100110"))
+
+
+if __name__ == "__main__":
+  testutils.GanetiTestProgram()

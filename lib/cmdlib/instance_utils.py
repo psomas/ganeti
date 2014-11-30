@@ -73,7 +73,7 @@ def BuildInstanceHookEnv(name, primary_node_name, secondary_node_names, os_type,
   @type disk_template: string
   @param disk_template: the disk template of the instance
   @type disks: list
-  @param disks: list of tuples (name, uuid, size, mode)
+  @param disks: list of disks (either objects.Disk or dict)
   @type bep: dict
   @param bep: the backend parameters for the instance
   @type hvp: dict
@@ -133,12 +133,8 @@ def BuildInstanceHookEnv(name, primary_node_name, secondary_node_names, os_type,
 
   if disks:
     disk_count = len(disks)
-    for idx, (name, uuid, size, mode) in enumerate(disks):
-      if name:
-        env["INSTANCE_DISK%d_NAME" % idx] = name
-      env["INSTANCE_DISK%d_UUID" % idx] = uuid
-      env["INSTANCE_DISK%d_SIZE" % idx] = size
-      env["INSTANCE_DISK%d_MODE" % idx] = mode
+    for idx, disk in enumerate(disks):
+      env.update(BuildDiskEnv(idx, disk))
   else:
     disk_count = 0
 
@@ -185,8 +181,7 @@ def BuildInstanceHookEnvByObject(lu, instance, override=None):
     "vcpus": bep[constants.BE_VCPUS],
     "nics": NICListToTuple(lu, instance.nics),
     "disk_template": instance.disk_template,
-    "disks": [(disk.name, disk.uuid, disk.size, disk.mode)
-              for disk in instance.disks],
+    "disks": instance.disks,
     "bep": bep,
     "hvp": hvp,
     "hypervisor_name": instance.hypervisor,
@@ -283,6 +278,9 @@ def RemoveDisks(lu, instance, target_node_uuid=None, ignore_failures=False):
     else:
       edata = device.ComputeNodeTree(instance.primary_node)
     for node_uuid, disk in edata:
+      if getattr(lu.op, "keep_disks", None):
+        if lu.op.keep_disks and disk.dev_type is constants.DT_EXT:
+          continue
       result = lu.rpc.call_blockdev_remove(node_uuid, (disk, instance))
       if result.fail_msg:
         lu.LogWarning("Could not remove disk %s on node %s,"
@@ -589,3 +587,105 @@ def _CheckOSVariant(os_obj, name):
 
   if variant not in os_obj.supported_variants:
     raise errors.OpPrereqError("Unsupported OS variant", errors.ECODE_INVAL)
+
+
+def BuildDiskLogicalIDEnv(idx, disk):
+  """Helper method to create hooks env related to disk's logical_id
+
+  @type idx: integer
+  @param idx: The index of the disk
+  @type disk: L{objects.Disk}
+  @param disk: The disk object
+
+  """
+  if disk.dev_type == constants.DT_PLAIN:
+    vg, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_VG" % idx: vg,
+      "INSTANCE_DISK%d_ID" % idx: name
+      }
+  elif disk.dev_type in (constants.DT_FILE, constants.DT_SHARED_FILE):
+    file_driver, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx: file_driver,
+      "INSTANCE_DISK%d_ID" % idx: name
+      }
+  elif disk.dev_type == constants.DT_BLOCK:
+    block_driver, adopt = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx: block_driver,
+      "INSTANCE_DISK%d_ID" % idx: adopt
+      }
+  elif disk.dev_type == constants.DT_RBD:
+    rbd, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_DRIVER" % idx: rbd,
+      "INSTANCE_DISK%d_ID" % idx: name
+      }
+  elif disk.dev_type == constants.DT_EXT:
+    provider, name = disk.logical_id
+    ret = {
+      "INSTANCE_DISK%d_PROVIDER" % idx: provider,
+      "INSTANCE_DISK%d_ID" % idx: name
+      }
+  elif disk.dev_type == constants.DT_DRBD8:
+    pnode, snode, port, pmin, smin, _ = disk.logical_id
+    data, meta = disk.children
+    data_vg, data_name = data.logical_id
+    meta_vg, meta_name = meta.logical_id
+    ret = {
+      "INSTANCE_DISK%d_PNODE" % idx: pnode,
+      "INSTANCE_DISK%d_SNODE" % idx: snode,
+      "INSTANCE_DISK%d_PORT" % idx: port,
+      "INSTANCE_DISK%d_PMINOR" % idx: pmin,
+      "INSTANCE_DISK%d_SMINOR" % idx: smin,
+      "INSTANCE_DISK%d_DATA_VG" % idx: data_vg,
+      "INSTANCE_DISK%d_DATA_ID" % idx: data_name,
+      "INSTANCE_DISK%d_META_VG" % idx: meta_vg,
+      "INSTANCE_DISK%d_META_ID" % idx: meta_name,
+      }
+  elif disk.dev_type == constants.DT_DISKLESS:
+    ret = {}
+  else:
+    ret = {}
+
+  ret.update({
+    "INSTANCE_DISK%d_DEV_TYPE" % idx: disk.dev_type,
+    "INSTANCE_DISK%d_TEMPLATE_NAME" % idx: disk.dev_type
+    })
+
+  return ret
+
+
+def BuildDiskEnv(idx, disk):
+  """Helper method to create disk's hooks env
+
+  @type idx: integer
+  @param idx: The index of the disk
+  @type disk: L{objects.Disk} or dict
+  @param disk: The disk object or a simple dict in case of LUInstanceCreate
+
+  """
+  ret = {}
+  # In case of LUInstanceCreate this runs in CheckPrereq where lu.disks
+  # is a list of dicts i.e the result of ComputeDisks
+  if isinstance(disk, dict):
+    uuid = disk.get("uuid", "")
+    name = disk.get(constants.IDISK_NAME, "")
+    size = disk.get(constants.IDISK_SIZE, "")
+    mode = disk.get(constants.IDISK_MODE, "")
+  elif isinstance(disk, objects.Disk):
+    uuid = disk.uuid
+    name = disk.name
+    size = disk.size
+    mode = disk.mode
+    ret.update(BuildDiskLogicalIDEnv(idx, disk))
+
+  # only name is optional here
+  if name:
+    ret["INSTANCE_DISK%d_NAME" % idx] = name
+  ret["INSTANCE_DISK%d_UUID" % idx] = uuid
+  ret["INSTANCE_DISK%d_SIZE" % idx] = size
+  ret["INSTANCE_DISK%d_MODE" % idx] = mode
+
+  return ret

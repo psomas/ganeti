@@ -575,6 +575,10 @@ def TSetParamsMods(fn):
              Comment("Deprecated")(TListOf(old_mod_item_fn)))
 
 
+def TSetSnapParams(fn):
+  return  TListOf(TItems([TOr(TInt, TString), fn]))
+
+
 TINicParams = \
     Comment("NIC parameters")(TDictOf(TElemOf(constants.INIC_PARAMS),
                                       TMaybe(TString)))
@@ -582,6 +586,11 @@ TINicParams = \
 TIDiskParams = \
     Comment("Disk parameters")(TDictOf(TNonEmptyString,
                                        TOr(TNonEmptyString, TInt)))
+
+TISnapParams = \
+    Comment("Snapshot parameters")(
+      TDictOf(TElemOf(constants.IDISK_SNAPSHOT_NAME),
+              TNonEmptyString))
 
 THypervisor = TElemOf(constants.HYPER_TYPES)
 TMigrationMode = TElemOf(constants.HT_MIGRATION_MODES)

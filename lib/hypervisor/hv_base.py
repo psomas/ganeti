@@ -51,9 +51,10 @@ import re
 import logging
 
 
-from ganeti import errors
-from ganeti import utils
 from ganeti import constants
+from ganeti import errors
+from ganeti import objects
+from ganeti import utils
 
 
 def _IsCpuMaskWellFormed(cpu_mask):
@@ -88,9 +89,15 @@ def _IsMultiCpuMaskWellFormed(cpu_mask):
 # Read the BaseHypervisor.PARAMETERS docstring for the syntax of the
 # _CHECK values
 
-# must be afile
+# must be a file
 _FILE_CHECK = (utils.IsNormAbsPath, "must be an absolute normalized path",
                os.path.isfile, "not found or not a file")
+
+# must be a file or a URL
+_FILE_OR_URL_CHECK = (lambda x: utils.IsNormAbsPath(x) or utils.IsUrl(x),
+                      "must be an absolute normalized path or a URL",
+                      lambda x: os.path.isfile(x) or utils.IsUrl(x),
+                      "not found or not a file or URL")
 
 # must be a directory
 _DIR_CHECK = (utils.IsNormAbsPath, "must be an absolute normalized path",
@@ -111,16 +118,24 @@ _MULTI_CPU_MASK_CHECK = (_IsMultiCpuMaskWellFormed,
 _NET_PORT_CHECK = (lambda x: 0 < x < 65535, "invalid port number",
                    None, None)
 
+# Check if number of queues is in safe range
+_VIRTIO_NET_QUEUES_CHECK = (lambda x: 0 < x < 9, "invalid number of queues",
+                            None, None)
+
 # Check that an integer is non negative
 _NONNEGATIVE_INT_CHECK = (lambda x: x >= 0, "cannot be negative", None, None)
 
 # nice wrappers for users
 REQ_FILE_CHECK = (True, ) + _FILE_CHECK
 OPT_FILE_CHECK = (False, ) + _FILE_CHECK
+REQ_FILE_OR_URL_CHECK = (True, ) + _FILE_OR_URL_CHECK
+OPT_FILE_OR_URL_CHECK = (False, ) + _FILE_OR_URL_CHECK
 REQ_DIR_CHECK = (True, ) + _DIR_CHECK
 OPT_DIR_CHECK = (False, ) + _DIR_CHECK
 REQ_NET_PORT_CHECK = (True, ) + _NET_PORT_CHECK
 OPT_NET_PORT_CHECK = (False, ) + _NET_PORT_CHECK
+REQ_VIRTIO_NET_QUEUES_CHECK = (True, ) + _VIRTIO_NET_QUEUES_CHECK
+OPT_VIRTIO_NET_QUEUES_CHECK = (False, ) + _VIRTIO_NET_QUEUES_CHECK
 REQ_CPU_MASK_CHECK = (True, ) + _CPU_MASK_CHECK
 OPT_CPU_MASK_CHECK = (False, ) + _CPU_MASK_CHECK
 REQ_MULTI_CPU_MASK_CHECK = (True, ) + _MULTI_CPU_MASK_CHECK
@@ -151,6 +166,79 @@ def ParamInSet(required, my_set):
   fn = lambda x: x in my_set
   err = ("The value must be one of: %s" % utils.CommaJoin(my_set))
   return (required, fn, err, None, None)
+
+
+def CreateNICEnv(instance_name, nic, tap, seq=None, instance_tags=None):
+  """Create environment variables for a specific NIC
+
+  This is needed during NIC ifup/ifdown scripts.
+  Since instance tags may change during NIC creation and removal
+  and because during cleanup the instance object is not available, we
+  pass them only upon NIC creation (instance startup/NIC hot-plugging).
+
+  """
+  env = {
+    "PATH": "%s:/sbin:/usr/sbin" % os.environ["PATH"],
+    "INSTANCE": instance_name,
+    "MAC": nic.mac,
+    "MODE": nic.nicparams[constants.NIC_MODE],
+    "INTERFACE_UUID": nic.uuid,
+  }
+
+  if nic.ip:
+    env["IP"] = nic.ip
+
+  if nic.name:
+    env["INTERFACE_NAME"] = nic.name
+
+  if nic.nicparams[constants.NIC_LINK]:
+    env["LINK"] = nic.nicparams[constants.NIC_LINK]
+
+  if constants.NIC_VLAN in nic.nicparams:
+    env["VLAN"] = nic.nicparams[constants.NIC_VLAN]
+
+  if nic.network:
+    n = objects.Network.FromDict(nic.netinfo)
+    env.update(n.HooksDict())
+
+  if instance_tags:
+    env["TAGS"] = " ".join(instance_tags)
+
+  # This should always be available except for old instances in the
+  # cluster without uuid indexed tap files.
+  if tap:
+    env["INTERFACE"] = tap
+
+  if seq:
+    env["INTERFACE_INDEX"] = str(seq)
+
+  if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:
+    env["BRIDGE"] = nic.nicparams[constants.NIC_LINK]
+
+  return env
+
+
+def ConfigureNIC(cmd, instance, seq, nic, tap):
+  """Run the network configuration script for a specified NIC
+
+  @type cmd: string
+  @param cmd: command to run
+  @type instance: instance object
+  @param instance: instance we're acting on
+  @type seq: int
+  @param seq: nic sequence number
+  @type nic: nic object
+  @param nic: nic we're acting on
+  @type tap: str
+  @param tap: the host's tap interface this NIC corresponds to
+
+  """
+  env = CreateNICEnv(instance.name, nic, tap, seq, instance.GetTags())
+  result = utils.RunCmd(cmd, env=env)
+  if result.failed:
+    raise errors.HypervisorError("Failed to configure interface %s: %s;"
+                                 " network configuration script output: %s" %
+                                 (tap, result.fail_reason, result.output))
 
 
 class BaseHypervisor(object):

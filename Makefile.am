@@ -81,6 +81,7 @@ tools_pythondir = $(versionedsharedir)
 clientdir = $(pkgpythondir)/client
 cmdlibdir = $(pkgpythondir)/cmdlib
 hypervisordir = $(pkgpythondir)/hypervisor
+hypervisor_hv_kvmdir = $(pkgpythondir)/hypervisor/hv_kvm
 storagedir = $(pkgpythondir)/storage
 httpdir = $(pkgpythondir)/http
 masterddir = $(pkgpythondir)/masterd
@@ -174,6 +175,7 @@ DIRS = \
 	lib/confd \
 	lib/http \
 	lib/hypervisor \
+	lib/hypervisor/hv_kvm \
 	lib/impexpd \
 	lib/masterd \
 	lib/rapi \
@@ -263,6 +265,7 @@ CLEANFILES = \
 	$(man_MANS) \
 	$(manhtml) \
 	tools/kvm-ifup \
+	tools/kvm-ifdown \
 	tools/vif-ganeti \
 	tools/net-common \
 	tools/users-setup \
@@ -419,9 +422,13 @@ hypervisor_PYTHON = \
 	lib/hypervisor/hv_base.py \
 	lib/hypervisor/hv_chroot.py \
 	lib/hypervisor/hv_fake.py \
-	lib/hypervisor/hv_kvm.py \
 	lib/hypervisor/hv_lxc.py \
 	lib/hypervisor/hv_xen.py
+
+hypervisor_hv_kvm_PYTHON = \
+	lib/hypervisor/hv_kvm/__init__.py \
+	lib/hypervisor/hv_kvm/monitor.py \
+	lib/hypervisor/hv_kvm/netdev.py
 
 storage_PYTHON = \
 	lib/storage/__init__.py \
@@ -431,6 +438,7 @@ storage_PYTHON = \
 	lib/storage/drbd.py \
 	lib/storage/drbd_info.py \
 	lib/storage/drbd_cmdgen.py \
+	lib/storage/extstorage.py \
 	lib/storage/filestorage.py
 
 rapi_PYTHON = \
@@ -495,7 +503,8 @@ utils_PYTHON = \
 	lib/utils/text.py \
 	lib/utils/version.py \
 	lib/utils/wrapper.py \
-	lib/utils/x509.py
+	lib/utils/x509.py \
+	lib/utils/bitarrays.py
 
 docinput = \
 	doc/admin.rst \
@@ -1123,6 +1132,7 @@ pkglib_python_basenames = \
 myexeclib_SCRIPTS = \
 	daemons/daemon-util \
 	tools/kvm-ifup \
+	tools/kvm-ifdown \
 	tools/vif-ganeti \
 	tools/net-common \
 	$(HS_MYEXECLIB_PROGS)
@@ -1161,6 +1171,7 @@ EXTRA_DIST = \
 	devel/upload \
 	devel/webserver \
 	tools/kvm-ifup.in \
+	tools/kvm-ifdown.in \
 	tools/vif-ganeti.in \
 	tools/net-common.in \
 	tools/vcluster-setup.in \
@@ -1485,6 +1496,7 @@ python_tests = \
 	test/py/ganeti.utils.version_unittest.py \
 	test/py/ganeti.utils.wrapper_unittest.py \
 	test/py/ganeti.utils.x509_unittest.py \
+	test/py/ganeti.utils.bitarrays_unittest.py \
 	test/py/ganeti.utils_unittest.py \
 	test/py/ganeti.vcluster_unittest.py \
 	test/py/ganeti.workerpool_unittest.py \
@@ -1559,6 +1571,7 @@ all_python_code = \
 	$(client_PYTHON) \
 	$(cmdlib_PYTHON) \
 	$(hypervisor_PYTHON) \
+	$(hypervisor_hv_kvm_PYTHON) \
 	$(storage_PYTHON) \
 	$(rapi_PYTHON) \
 	$(server_PYTHON) \
@@ -1636,6 +1649,10 @@ test/py/ganeti-cleaner_unittest.bash: daemons/ganeti-cleaner
 test/py/bash_completion.bash: doc/examples/bash_completion-debug
 
 tools/kvm-ifup: tools/kvm-ifup.in $(REPLACE_VARS_SED)
+	sed -f $(REPLACE_VARS_SED) < $< > $@
+	chmod +x $@
+
+tools/kvm-ifdown: tools/kvm-ifdown.in $(REPLACE_VARS_SED)
 	sed -f $(REPLACE_VARS_SED) < $< > $@
 	chmod +x $@
 

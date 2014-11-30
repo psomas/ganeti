@@ -185,6 +185,7 @@ An “ExtStorage provider” will have to provide the following methods:
 - Detach a disk from a given node
 - SetInfo to a disk (add metadata)
 - Verify its supported parameters
+- Snapshot a disk (currently used during gnt-backup export)
 
 The proposed ExtStorage interface borrows heavily from the OS
 interface and follows a one-script-per-function approach. An ExtStorage
@@ -197,6 +198,7 @@ provider is expected to provide the following scripts:
 - ``detach``
 - ``setinfo``
 - ``verify``
+- ``snapshot`` (optional)
 
 All scripts will be called with no arguments and get their input via
 environment variables. A common set of variables will be exported for
@@ -216,12 +218,24 @@ all commands, and some of them might have extra ones.
 ``VOL_METADATA``
   A string containing metadata to be set for the volume.
   This is exported only to the ``setinfo`` script.
+``VOL_CNAME``
+  The human readable name of the disk (if any).
+``VOL_SNAPSHOT_NAME``
+  The name of the volume's snapshot to be taken.
+  Available only to the `snapshot` script.
+``VOL_SNAPSHOT_SIZE``
+  The size of the volume's snapshot to be taken.
+  Available only to the `snapshot` script.
 
 All scripts except `attach` should return 0 on success and non-zero on
 error, accompanied by an appropriate error message on stderr. The
 `attach` script should return a string on stdout on success, which is
 the block device's full path, after it has been successfully attached to
 the host node. On error it should return non-zero.
+
+To keep backwards compatibility we let the ``snapshot`` script be
+optional. If present then the provider will support instance backup
+export as well.
 
 Implementation
 --------------
@@ -265,6 +279,48 @@ We will also introduce a new Ganeti client called `gnt-storage` which
 will be used to diagnose ExtStorage providers and show information about
 them, similarly to the way  `gnt-os diagose` and `gnt-os info` handle OS
 definitions.
+
+ExtStorage Interface support for userspace access
+=================================================
+
+Overview
+--------
+
+The ExtStorage Interface gets extended to cater for ExtStorage providers
+that support userspace access. This will allow the instances to access
+their external storage devices directly without going through a block
+device, avoiding expensive context switches with kernel space and the
+potential for deadlocks in low memory scenarios. The implementation
+should be backwards compatible and allow existing ExtStorage
+providers to work as is.
+
+Implementation
+--------------
+
+Since the implementation should be backwards compatible we are not going
+to add a new script in the set of scripts an ExtStorage provider should
+ship with. Instead, the 'attach' script, which is currently responsible
+to map the block device and return a valid device path, should also be
+responsible for providing the URIs that will be used by each
+hypervisor. Even though Ganeti currently allows userspace access only
+for the KVM hypervisor, we want the implementation to enable the
+extstorage providers to support more than one hypervisors for future
+compliance.
+
+More specifically, the 'attach' script will be allowed to return more
+than one line. The first line will contain as always the block device
+path. Each one of the extra lines will contain a URI to be used for the
+userspace access by a specific hypervisor. Each URI should be prefixed
+with the hypervisor it corresponds to (e.g. kvm:<uri>). The prefix will
+be case insensitive. If the 'attach' script doesn't return any extra
+lines, we assume that the ExtStorage provider doesn't support userspace
+access (this way we maintain backward compatibility with the existing
+'attach' scripts).
+
+The 'GetUserspaceAccessUri' method of the 'ExtStorageDevice' class will
+parse the output of the 'attach' script and if the provider supports
+userspace access for the requested hypervisor, it will use the
+corresponding URI instead of the block device itself.
 
 Long-term shared storage goals
 ==============================

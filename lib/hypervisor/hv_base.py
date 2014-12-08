@@ -209,7 +209,7 @@ def CreateNICEnv(instance_name, nic, tap, seq=None, instance_tags=None):
   if tap:
     env["INTERFACE"] = tap
 
-  if seq:
+  if seq is not None:
     env["INTERFACE_INDEX"] = str(seq)
 
   if nic.nicparams[constants.NIC_MODE] == constants.NIC_MODE_BRIDGED:

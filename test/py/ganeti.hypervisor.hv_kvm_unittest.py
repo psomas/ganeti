@@ -47,6 +47,8 @@ from ganeti import utils
 from ganeti import pathutils
 
 from ganeti.hypervisor import hv_kvm
+import ganeti.hypervisor.hv_kvm.netdev as netdev
+import ganeti.hypervisor.hv_kvm.monitor as monitor
 
 import testutils
 
@@ -71,6 +73,15 @@ class QmpStub(threading.Thread):
   _EMPTY_RESPONSE = {
     "return": [],
     }
+  _SUPPORTED_COMMANDS = {
+    "return": [
+      {"name": "command"},
+      {"name": "query-kvm"},
+      {"name": "eject"},
+      {"name": "query-status"},
+      {"name": "query-name"},
+    ]
+  }
 
   def __init__(self, socket_filename, server_responses):
     """Creates a QMP stub
@@ -84,7 +95,7 @@ class QmpStub(threading.Thread):
     """
     threading.Thread.__init__(self)
     self.socket_filename = socket_filename
-    self.script = server_responses
+    self.script = server_responses[:]
 
     self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     self.socket.bind(self.socket_filename)
@@ -101,6 +112,10 @@ class QmpStub(threading.Thread):
     # Expect qmp_capabilities and return an empty response
     conn.recv(4096)
     conn.send(self.encode_string(self._EMPTY_RESPONSE))
+
+    # Expect query-commands and return the list of supported commands
+    conn.recv(4096)
+    conn.send(self.encode_string(self._SUPPORTED_COMMANDS))
 
     while True:
       # We ignore the expected message, as the purpose of this object is not
@@ -162,37 +177,37 @@ class TestQmpMessage(testutils.GanetiTestCase):
 
 
 class TestQmp(testutils.GanetiTestCase):
+  REQUESTS = [
+    {"execute": "query-kvm", "arguments": []},
+    {"execute": "eject", "arguments": {"device": "ide1-cd0"}},
+    {"execute": "query-status", "arguments": []},
+    {"execute": "query-name", "arguments": []},
+    ]
+
+  SERVER_RESPONSES = [
+    # One message, one send()
+    '{"return": {"enabled": true, "present": true}}\r\n',
+
+    # Message sent using multiple send()
+    ['{"retur', 'n": {}}\r\n'],
+
+    # Multiple messages sent using one send()
+    '{"return": [{"name": "quit"}, {"name": "eject"}]}\r\n'
+    '{"return": {"running": true, "singlestep": false}}\r\n',
+    ]
+
+  EXPECTED_RESPONSES = [
+    {"enabled": True, "present": True},
+    {},
+    [{"name": "quit"}, {"name": "eject"}],
+    {"running": True, "singlestep": False},
+    ]
+
   def testQmp(self):
-    requests = [
-      {"execute": "query-kvm", "arguments": []},
-      {"execute": "eject", "arguments": {"device": "ide1-cd0"}},
-      {"execute": "query-status", "arguments": []},
-      {"execute": "query-name", "arguments": []},
-      ]
-
-    server_responses = [
-      # One message, one send()
-      '{"return": {"enabled": true, "present": true}}\r\n',
-
-      # Message sent using multiple send()
-      ['{"retur', 'n": {}}\r\n'],
-
-      # Multiple messages sent using one send()
-      '{"return": [{"name": "quit"}, {"name": "eject"}]}\r\n'
-      '{"return": {"running": true, "singlestep": false}}\r\n',
-      ]
-
-    expected_responses = [
-      {"return": {"enabled": True, "present": True}},
-      {"return": {}},
-      {"return": [{"name": "quit"}, {"name": "eject"}]},
-      {"return": {"running": True, "singlestep": False}},
-      ]
-
     # Set up the stub
     socket_file = tempfile.NamedTemporaryFile()
     os.remove(socket_file.name)
-    qmp_stub = QmpStub(socket_file.name, server_responses)
+    qmp_stub = QmpStub(socket_file.name, self.SERVER_RESPONSES)
     qmp_stub.start()
 
     # Set up the QMP connection
@@ -200,12 +215,32 @@ class TestQmp(testutils.GanetiTestCase):
     qmp_connection.connect()
 
     # Format the script
-    for request, expected_response in zip(requests, expected_responses):
-      response = qmp_connection.Execute(request)
-      msg = hv_kvm.QmpMessage(expected_response)
+    for request, expected_response in zip(self.REQUESTS,
+                                          self.EXPECTED_RESPONSES):
+      response = qmp_connection.Execute(request["execute"],
+                                        request["arguments"])
+      self.assertEqual(response, expected_response)
+      msg = hv_kvm.QmpMessage({"return": expected_response})
       self.assertEqual(len(str(msg).splitlines()), 1,
                        msg="Got multi-line message")
-      self.assertEqual(response, msg)
+
+    self.assertRaises(monitor.QmpCommandNotSupported,
+                      qmp_connection.Execute,
+                      "unsupported-command")
+
+  def testQmpContextManager(self):
+    # Set up the stub
+    socket_file = tempfile.NamedTemporaryFile()
+    os.remove(socket_file.name)
+    qmp_stub = QmpStub(socket_file.name, self.SERVER_RESPONSES)
+    qmp_stub.start()
+
+    # Test the context manager functionality
+    with hv_kvm.QmpConnection(socket_file.name) as qmp:
+      for request, expected_response in zip(self.REQUESTS,
+                                            self.EXPECTED_RESPONSES):
+        response = qmp.Execute(request["execute"], request["arguments"])
+        self.assertEqual(response, expected_response)
 
 
 class TestConsole(unittest.TestCase):
@@ -348,11 +383,11 @@ class TestGetTunFeatures(unittest.TestCase):
   def testWrongIoctl(self):
     tmpfile = tempfile.NamedTemporaryFile()
     # A file does not have the right ioctls, so this must always fail
-    result = hv_kvm._GetTunFeatures(tmpfile.fileno())
+    result = netdev._GetTunFeatures(tmpfile.fileno())
     self.assertTrue(result is None)
 
   def _FakeIoctl(self, features, fd, request, buf):
-    self.assertEqual(request, hv_kvm.TUNGETFEATURES)
+    self.assertEqual(request, netdev.TUNGETFEATURES)
 
     (reqno, ) = struct.unpack("I", buf)
     self.assertEqual(reqno, 0)
@@ -363,9 +398,9 @@ class TestGetTunFeatures(unittest.TestCase):
     tmpfile = tempfile.NamedTemporaryFile()
     fd = tmpfile.fileno()
 
-    for features in [0, hv_kvm.IFF_VNET_HDR]:
+    for features in [0, netdev.IFF_VNET_HDR]:
       fn = compat.partial(self._FakeIoctl, features)
-      result = hv_kvm._GetTunFeatures(fd, _ioctl=fn)
+      result = netdev._GetTunFeatures(fd, _ioctl=fn)
       self.assertEqual(result, features)
 
 
@@ -378,10 +413,10 @@ class TestProbeTapVnetHdr(unittest.TestCase):
     tmpfile = tempfile.NamedTemporaryFile()
     fd = tmpfile.fileno()
 
-    for flags in [0, hv_kvm.IFF_VNET_HDR]:
+    for flags in [0, netdev.IFF_VNET_HDR]:
       fn = compat.partial(self._FakeTunFeatures, fd, flags)
 
-      result = hv_kvm._ProbeTapVnetHdr(fd, _features_fn=fn)
+      result = netdev._ProbeTapVnetHdr(fd, _features_fn=fn)
       if flags == 0:
         self.assertFalse(result)
       else:
@@ -391,7 +426,7 @@ class TestProbeTapVnetHdr(unittest.TestCase):
     tmpfile = tempfile.NamedTemporaryFile()
     fd = tmpfile.fileno()
 
-    self.assertFalse(hv_kvm._ProbeTapVnetHdr(fd, _features_fn=lambda _: None))
+    self.assertFalse(netdev._ProbeTapVnetHdr(fd, _features_fn=lambda _: None))
 
 
 class TestGenerateDeviceKVMId(unittest.TestCase):

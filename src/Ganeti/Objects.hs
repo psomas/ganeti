@@ -70,6 +70,7 @@ module Ganeti.Objects
   , FilledIPolicy(..)
   , PartialIPolicy(..)
   , fillIPolicy
+  , GroupDiskParams
   , DiskParams
   , NodeGroup(..)
   , IpFamily(..)
@@ -274,6 +275,9 @@ instance UuidObject PartialNic where
 devType :: String
 devType = "dev_type"
 
+-- | The disk parameters type.
+type DiskParams = Container JSValue
+
 -- | The disk configuration type. This includes the disk type itself,
 -- for a more complete consistency. Note that since in the Python
 -- code-base there's no authoritative place where we document the
@@ -396,6 +400,7 @@ data Disk = Disk
   , diskMode       :: DiskMode
   , diskName       :: Maybe String
   , diskSpindles   :: Maybe Int
+  , diskParams     :: Maybe DiskParams
   , diskUuid       :: String
   } deriving (Show, Eq)
 
@@ -408,6 +413,7 @@ $(buildObjectSerialisation "Disk" $
   , defaultField [| DiskRdWr |] $ simpleField "mode" [t| DiskMode |]
   , optionalField $ simpleField "name" [t| String |]
   , optionalField $ simpleField "spindles" [t| Int |]
+  , optionalField $ simpleField "params" [t| DiskParams |]
   ]
   ++ uuidFields)
 
@@ -574,8 +580,8 @@ instance TagsObject Node where
 
 -- * NodeGroup definitions
 
--- | The disk parameters type.
-type DiskParams = Container (Container JSValue)
+-- | The cluster/group disk parameters type.
+type GroupDiskParams = Container DiskParams
 
 -- | A mapping from network UUIDs to nic params of the networks.
 type Networks = Container PartialNicParams
@@ -586,7 +592,7 @@ $(buildObject "NodeGroup" "group" $
   , simpleField "ndparams"     [t| PartialNDParams |]
   , simpleField "alloc_policy" [t| AllocPolicy     |]
   , simpleField "ipolicy"      [t| PartialIPolicy  |]
-  , simpleField "diskparams"   [t| DiskParams      |]
+  , simpleField "diskparams"   [t| GroupDiskParams |]
   , simpleField "networks"     [t| Networks        |]
   ]
   ++ timeStampFields
@@ -666,7 +672,7 @@ $(buildObject "Cluster" "cluster" $
   , simpleField "osparams"                [t| ClusterOsParams  |]
   , simpleField "nicparams"               [t| ClusterNicParams |]
   , simpleField "ndparams"                [t| FilledNDParams   |]
-  , simpleField "diskparams"              [t| DiskParams       |]
+  , simpleField "diskparams"              [t| GroupDiskParams  |]
   , simpleField "candidate_pool_size"     [t| Int              |]
   , simpleField "modify_etc_hosts"        [t| Bool             |]
   , simpleField "modify_ssh_setup"        [t| Bool             |]

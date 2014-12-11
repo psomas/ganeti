@@ -1391,6 +1391,24 @@ class R_2_instances_name_modify(baserlib.OpcodeResource):
       })
 
 
+class R_2_instances_name_snapshot(baserlib.OpcodeResource):
+  """/2/instances/[instance_name]/snapshot resource.
+
+  Implements an instance snapshot.
+
+  """
+  PUT_OPCODE = opcodes.OpInstanceSnapshot
+
+  def GetPutOpInput(self):
+    """Snapshot disks of an instance.
+
+    """
+    return (self.request_body, {
+        "instance_name": self.items[0],
+        "dry_run": self.dryRun(),
+      })
+
+
 class R_2_instances_name_disk_grow(baserlib.OpcodeResource):
   """/2/instances/[instance_name]/disk/[disk_index]/grow resource.
 

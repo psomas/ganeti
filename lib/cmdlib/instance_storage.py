@@ -385,6 +385,24 @@ def CheckRADOSFreeSpace():
   pass
 
 
+def ExtractDiskParams(disk, template_name):
+  """Extract disk parameters from the provided disk information."""
+  params = {}
+  # Only for the Ext template add disk_info to params
+  if template_name == constants.DT_EXT:
+    # FIXME: Check if the disk provider exists first
+    params[constants.IDISK_PROVIDER] = disk[constants.IDISK_PROVIDER]
+    for key in disk:
+      if key not in constants.IDISK_PARAMS:
+        params[key] = disk[key]
+  # Add IDISK_ACCESS param to disk params
+  if (template_name in constants.DTS_HAVE_ACCESS and
+      constants.IDISK_ACCESS in disk):
+    params[constants.IDISK_ACCESS] = disk[constants.IDISK_ACCESS]
+
+  return params
+
+
 def _GenerateDRBD8Branch(lu, primary_uuid, secondary_uuid, size, vgnames, names,
                          iv_name, p_minor, s_minor):
   """Generate a drbd8 device complete with its children.
@@ -500,17 +518,7 @@ def GenerateDiskTemplate(
     dev_type = template_name
 
     for idx, disk in enumerate(disk_info):
-      params = {}
-      # Only for the Ext template add disk_info to params
-      if template_name == constants.DT_EXT:
-        params[constants.IDISK_PROVIDER] = disk[constants.IDISK_PROVIDER]
-        for key in disk:
-          if key not in constants.IDISK_PARAMS:
-            params[key] = disk[key]
-      # Add IDISK_ACCESS param to disk params
-      if (template_name in constants.DTS_HAVE_ACCESS and
-          constants.IDISK_ACCESS in disk):
-        params[constants.IDISK_ACCESS] = disk[constants.IDISK_ACCESS]
+      params = ExtractDiskParams(disk, template_name)
       disk_index = idx + base_index
       size = disk[constants.IDISK_SIZE]
       feedback_fn("* disk %s, size %s" %

@@ -64,7 +64,7 @@ from ganeti.cmdlib.instance_storage import CreateDisks, \
   IsExclusiveStorageEnabledNodeUuid, CreateSingleBlockDev, ComputeDisks, \
   CheckRADOSFreeSpace, ComputeDiskSizePerVG, GenerateDiskTemplate, \
   StartInstanceDisks, ShutdownInstanceDisks, AssembleInstanceDisks, \
-  CheckSpindlesExclusiveStorage
+  CheckSpindlesExclusiveStorage, ExtractDiskParams
 from ganeti.cmdlib.instance_utils import BuildInstanceHookEnvByObject, \
   GetClusterDomainSecret, BuildInstanceHookEnv, NICListToTuple, \
   NICToTuple, CheckNodeNotDrained, RemoveInstance, CopyLockList, \
@@ -2288,12 +2288,11 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
       (absidx, item) = GetItemFromContainer(identifier, kind, container)
 
       if op == constants.DDM_REMOVE:
-        assert not params
 
         changes = [("%s/%s" % (kind, absidx), "remove")]
 
         if remove_fn is not None:
-          msg = remove_fn(absidx, item, private)
+          msg = remove_fn(absidx, item, private, params)
           if msg:
             changes.append(("%s/%s" % (kind, absidx), msg))
 
@@ -2369,12 +2368,8 @@ class LUInstanceSetParams(LogicalUnit):
       if key_types:
         utils.ForceDictType(params, key_types)
 
-      if op == constants.DDM_REMOVE:
-        if params:
-          raise errors.OpPrereqError("No settings should be passed when"
-                                     " removing a %s" % kind,
-                                     errors.ECODE_INVAL)
-      elif op in (constants.DDM_ADD, constants.DDM_MODIFY):
+
+      if op in (constants.DDM_ADD, constants.DDM_MODIFY, constants.DDM_REMOVE):
         item_fn(op, params)
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
@@ -3449,10 +3444,16 @@ class LUInstanceSetParams(LogicalUnit):
 
     return changes
 
-  def _RemoveDisk(self, idx, root, _):
+  def _RemoveDisk(self, idx, root, _, params):
     """Removes a disk.
 
     """
+    disk_params = ExtractDiskParams(params, self.instance.disk_template)
+    if root.params is None:
+      root.params = disk_params
+    else:
+      root.params.update(disk_params)
+
     hotmsg = ""
     if self.op.hotplug:
       hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
@@ -3539,7 +3540,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     return changes
 
-  def _RemoveNic(self, idx, nic, _):
+  def _RemoveNic(self, idx, nic, _, __):
     if self.op.hotplug:
       return self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
                                  constants.HOTPLUG_TARGET_NIC,

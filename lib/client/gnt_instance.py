@@ -1298,10 +1298,6 @@ def _ConvertNicDiskModifications(mods):
 
       assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
 
-    if action == constants.DDM_REMOVE and params:
-      raise errors.OpPrereqError("Not accepting parameters on removal",
-                                 errors.ECODE_INVAL)
-
     result.append((action, identifier, params))
 
   return result

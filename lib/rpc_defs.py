@@ -380,7 +380,7 @@ _BLOCKDEV_CALLS = [
     ("size", None, None),
     ], None, None,
     "Request wipe at given offset with given size of a block device"),
-  ("blockdev_remove", SINGLE, None, constants.RPC_TMO_NORMAL, [
+  ("blockdev_remove", SINGLE, None, constants.RPC_TMO_SLOW, [
     ("bdev", ED_SINGLE_DISK_DICT_DP, None),
     ], None, None, "Request removal of a given block device"),
   ("blockdev_pause_resume_sync", SINGLE, None, constants.RPC_TMO_NORMAL, [
@@ -393,7 +393,7 @@ _BLOCKDEV_CALLS = [
     ("on_primary", None, None),
     ("idx", None, None),
     ], None, None, "Request assembling of a given block device"),
-  ("blockdev_shutdown", SINGLE, None, constants.RPC_TMO_NORMAL, [
+  ("blockdev_shutdown", SINGLE, None, constants.RPC_TMO_SLOW, [
     ("disk", ED_SINGLE_DISK_DICT_DP, None),
     ], None, None, "Request shutdown of a given block device"),
   ("blockdev_addchildren", SINGLE, None, constants.RPC_TMO_NORMAL, [
@@ -401,19 +401,19 @@ _BLOCKDEV_CALLS = [
     ("ndevs", ED_DISKS_DICT_DP, None),
     ], None, None,
    "Request adding a list of children to a (mirroring) device"),
-  ("blockdev_removechildren", SINGLE, None, constants.RPC_TMO_NORMAL, [
+  ("blockdev_removechildren", SINGLE, None, constants.RPC_TMO_SLOW, [
     ("bdev", ED_SINGLE_DISK_DICT_DP, None),
     ("ndevs", ED_DISKS_DICT_DP, None),
     ], None, None,
    "Request removing a list of children from a (mirroring) device"),
-  ("blockdev_close", SINGLE, None, constants.RPC_TMO_NORMAL, [
+  ("blockdev_close", SINGLE, None, constants.RPC_TMO_SLOW, [
     ("instance_name", None, None),
     ("disks", ED_DISKS_DICT_DP, None),
     ], None, None, "Closes the given block devices"),
   ("blockdev_getdimensions", SINGLE, None, constants.RPC_TMO_NORMAL, [
     ("disks", ED_MULTI_DISKS_DICT_DP, None),
     ], None, None, "Returns size and spindles of the given disks"),
-  ("drbd_disconnect_net", MULTI, None, constants.RPC_TMO_NORMAL, [
+  ("drbd_disconnect_net", MULTI, None, constants.RPC_TMO_SLOW, [
     ("disks", ED_DISKS_DICT_DP, None),
     ], None, None,
    "Disconnects the network of the given drbd devices"),
